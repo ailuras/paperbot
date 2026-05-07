@@ -15,23 +15,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SKILL_ROOT = SCRIPT_DIR.parent
-# Try repo-relative data dir first (for git clones), fallback to workspace
-_REPO_DATA = SKILL_ROOT.parent / "data"
-_WORKSPACE_DATA = Path("~/.openclaw/workspace/paperdaily").expanduser()
-DEFAULT_DATA_DIR = _REPO_DATA if _REPO_DATA.is_dir() else _WORKSPACE_DATA
-
-def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    path = Path(config_path).expanduser() if config_path else (DEFAULT_DATA_DIR / "config.json")
-    with open(path) as f:
-        config = json.load(f)
-    data_file = Path(config["data_file"]).expanduser()
-    if not data_file.is_absolute():
-        data_file = (path.parent / data_file).resolve()
-    config["_data_dir"] = str(path.parent)
-    config["_data_file"] = str(data_file)
-    return config
+from common import atomic_write_json, load_config
 
 
 SELECT_FIELDS = ",".join([
@@ -54,17 +38,27 @@ class VenueScorer:
         if any(token in venue_lower for token in self.venue_blacklist):
             return 0
 
-        for tier in sorted((int(k) for k in self.tiers.keys())):
+        sorted_tiers = sorted((int(k) for k in self.tiers.keys()))
+        for tier in sorted_tiers:
             tier_config = self.tiers[str(tier)]
             acronyms = tier_config.get("acronyms", [])
-            if acronyms and re.search(r"\b(" + "|".join(re.escape(a) for a in acronyms) + r")\b", venue):
+            if acronyms and re.search(r"\b(" + "|".join(re.escape(a.lower()) for a in acronyms) + r")\b", venue_lower):
                 return tier
             for phrase in tier_config.get("phrases", []):
-                if phrase.lower() in venue_lower:
-                    if phrase == "Artificial Intelligence" and "tools with" in venue_lower:
+                phrase_lower = phrase.lower()
+                if phrase_lower in venue_lower:
+                    if self.has_more_specific_lower_tier_phrase(venue_lower, phrase_lower, tier, sorted_tiers):
                         continue
                     return tier
         return 0
+
+    def has_more_specific_lower_tier_phrase(self, venue_lower: str, phrase_lower: str, tier: int, sorted_tiers: List[int]) -> bool:
+        for lower_tier in (t for t in sorted_tiers if t > tier):
+            for lower_phrase in self.tiers[str(lower_tier)].get("phrases", []):
+                lower_phrase = lower_phrase.lower()
+                if phrase_lower in lower_phrase and lower_phrase in venue_lower and lower_phrase != phrase_lower:
+                    return True
+        return False
 
     def citation_score(self, citations: int) -> float:
         remaining = citations or 0
@@ -221,9 +215,7 @@ class PaperDatabase:
         raise SystemExit("Invalid database format, expected an array of papers.")
 
     def save(self, data: List[Dict[str, Any]]) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with self.path.open("w") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(self.path, data)
 
     @staticmethod
     def paper_keys(paper: Dict[str, Any]) -> List[str]:

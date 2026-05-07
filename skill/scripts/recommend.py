@@ -3,8 +3,9 @@
 Daily Paper Recommendation from scripts/papers.json based on strategy.
 
 Strategy:
-1. First paper (Quality Priority): Randomly select 1 paper with >= 5 score. If none, pick from last 30 days. If still none, random.
-2. Second & Third paper (Recency Priority): Randomly select 2 papers from the last 30 days. If insufficient, fallback to random history.
+1. Quality slots prefer papers at or above the configured score threshold.
+2. Remaining slots prefer papers inside the configured recent-publication window.
+3. Each slot falls back to broader unrecommended papers if its preferred pool is empty.
 """
 
 import argparse
@@ -13,49 +14,28 @@ import os
 import random
 import sys
 from datetime import date, datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-SKILL_ROOT = SCRIPT_DIR.parent
-_REPO_DATA = SKILL_ROOT.parent / "data"
-_WORKSPACE_DATA = Path("~/.openclaw/workspace/paperdaily").expanduser()
-DEFAULT_DATA_DIR = _REPO_DATA if _REPO_DATA.is_dir() else _WORKSPACE_DATA
+from common import atomic_write_json, load_config
 
 
-def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
-    path = Path(config_path).expanduser() if config_path else (DEFAULT_DATA_DIR / "config.json")
-    with open(path) as f:
-        config = json.load(f)
-    data_file = Path(config["data_file"]).expanduser()
-    if not data_file.is_absolute():
-        data_file = (path.parent / data_file).resolve()
-    config["_data_dir"] = str(path.parent)
-    config["_data_file"] = str(data_file)
-    return config
-
-
-CONFIG = load_config()
-DATA_FILE = CONFIG["_data_file"]
-
-def load_database() -> Optional[List[Dict]]:
-    if not os.path.isfile(DATA_FILE):
+def load_database(data_file: str) -> Optional[List[Dict]]:
+    if not os.path.isfile(data_file):
         return None
     try:
-        with open(DATA_FILE) as f:
+        with open(data_file) as f:
             data = json.load(f)
-    except (json.JSONDecodeError, IOError):
-        return None
+    except (json.JSONDecodeError, IOError) as exc:
+        raise SystemExit(f"Failed to read database: {exc}")
     if isinstance(data, dict):
         data = data.get("papers")
     if not isinstance(data, list) or not data:
         return None
     return data
 
-def save_database(data: List[Dict]) -> bool:
+def save_database(data: List[Dict], data_file: str) -> bool:
     try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        atomic_write_json(data_file, data)
         return True
     except IOError:
         return False
@@ -73,11 +53,19 @@ def paper_key(paper: Dict) -> str:
 def unrecommended(paper: Dict) -> bool:
     return paper.get("status") != "recommended" and not paper.get("recommended_at")
 
+
+def is_recent(paper: Dict, cutoff: date) -> bool:
+    pub_date = parse_publication_date(paper)
+    return pub_date is not None and pub_date >= cutoff
+
 SEPARATOR = "·· ·· ··"
 HEADER_LINE = "━" * 16
 
-def format_output(selected_with_reason: List[tuple], data: List[Dict]) -> str:
+def format_output(selected_with_reason: List[tuple], data: List[Dict], config: Dict[str, Any]) -> str:
     today = datetime.now().strftime("%Y-%m-%d")
+    rec_config = config.get("recommendation", {})
+    include_ai_reading = rec_config.get("include_ai_reading_placeholder", True)
+    recent_days = int(rec_config.get("recent_days", 30))
     lines = [
         HEADER_LINE,
         f"📬 Daily Papers · {today}",
@@ -111,7 +99,8 @@ def format_output(selected_with_reason: List[tuple], data: List[Dict]) -> str:
         if pub_date:
             lines.append(f"🗓️ Published: {pub_date}")
         lines.append(f"📝 **Abstract**: {abstract}")
-        lines.append(f"🤖 **AI Reading**: [AI_READING]")
+        if include_ai_reading:
+            lines.append(f"🤖 **AI Reading**: [AI_READING]")
         if url:
             lines.append(f"🔗 {url}")
         if pdf_url:
@@ -122,18 +111,17 @@ def format_output(selected_with_reason: List[tuple], data: List[Dict]) -> str:
             lines.append(SEPARATOR)
 
     pending = sum(1 for p in data if unrecommended(p))
-    high_quality = sum(1 for p in data if unrecommended(p) and (p.get("score", 0) or 0) >= 5)
-    thirty_days_ago = date.today() - timedelta(days=30)
-    recent_pending = sum(
-        1 for p in data
-        if unrecommended(p)
-        and parse_publication_date(p) is not None
-        and parse_publication_date(p) >= thirty_days_ago
-    )
+    high_threshold = float(rec_config.get("high_score_threshold", 5))
+    high_quality = sum(1 for p in data if unrecommended(p) and (p.get("score", 0) or 0) >= high_threshold)
+    recent_cutoff = date.today() - timedelta(days=recent_days)
+    recent_pending = 0
+    for p in data:
+        if unrecommended(p) and is_recent(p, recent_cutoff):
+            recent_pending += 1
 
     lines.append("")
     lines.append(HEADER_LINE)
-    lines.append(f"📊 Pending: {pending} | High-quality: {high_quality} | Recent 30d: {recent_pending}")
+    lines.append(f"📊 Pending: {pending} | High-quality: {high_quality} | Recent {recent_days}d: {recent_pending}")
 
     return "\n".join(lines)
 
@@ -143,7 +131,16 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true", help="Do not update file status")
     args = parser.parse_args()
 
-    data = load_database()
+    config = load_config()
+    data_file = config["_data_file"]
+    rec_config = config.get("recommendation", {})
+    daily_count = max(0, int(rec_config.get("daily_count", 3)))
+    quality_slots = max(0, int(rec_config.get("quality_slots", 1)))
+    quality_slots = min(quality_slots, daily_count)
+    high_threshold = float(rec_config.get("high_score_threshold", 5))
+    recent_days = int(rec_config.get("recent_days", 30))
+
+    data = load_database(data_file)
     if data is None:
         print("📂 No paper database found. Please run fetch_papers.py first.")
         return 0
@@ -154,12 +151,12 @@ def main() -> int:
         return 0
 
     # Prepare pools
-    thirty_days_ago = date.today() - timedelta(days=30)
+    recent_cutoff = date.today() - timedelta(days=recent_days)
     recent_pending = [
         p for p in pending
-        if parse_publication_date(p) is not None and parse_publication_date(p) >= thirty_days_ago
+        if is_recent(p, recent_cutoff)
     ]
-    high_score_pending = [p for p in pending if (p.get("score", 0) or 0) >= 5]
+    high_score_pending = [p for p in pending if (p.get("score", 0) or 0) >= high_threshold]
 
     exclude_ids = set()
     selected_with_reason = []
@@ -170,36 +167,38 @@ def main() -> int:
             return None
         return random.choice(valid)
 
-    # ==== Slot 1: Quality Priority ====
-    p1 = pop_random(high_score_pending)
-    if p1:
-        selected_with_reason.append((p1, "💎 High-Quality Selection (>= 5 score)"))
-        exclude_ids.add(paper_key(p1))
-    else:
-        p1 = pop_random(recent_pending)
-        if p1:
-            selected_with_reason.append((p1, "📅 Alternative Selection (Recent 30 days)"))
-            exclude_ids.add(paper_key(p1))
+    # ==== Quality Priority Slots ====
+    for _ in range(quality_slots):
+        px = pop_random(high_score_pending)
+        if px:
+            selected_with_reason.append((px, f"💎 High-Quality Selection (>= {high_threshold:g} score)"))
         else:
-            p1 = pop_random(pending)
-            if p1:
-                selected_with_reason.append((p1, "🎲 Alternative Selection (Historical)"))
-                exclude_ids.add(paper_key(p1))
+            px = pop_random(recent_pending)
+            if px:
+                selected_with_reason.append((px, f"📅 Alternative Selection (Recent {recent_days} days)"))
+            else:
+                px = pop_random(pending)
+                if px:
+                    selected_with_reason.append((px, "🎲 Alternative Selection (Historical)"))
+        if px:
+            exclude_ids.add(paper_key(px))
 
-    # ==== Slot 2 & 3: Recency Priority ====
-    for _ in range(2):
+    # ==== Recency Priority Slots ====
+    while len(selected_with_reason) < daily_count:
         px = pop_random(recent_pending)
         if px:
-            selected_with_reason.append((px, "📅 Recent Release (Last 30 days)"))
+            selected_with_reason.append((px, f"📅 Recent Release (Last {recent_days} days)"))
             exclude_ids.add(paper_key(px))
         else:
             px = pop_random(pending)
             if px:
                 selected_with_reason.append((px, "🎲 Random Exploration (Historical)"))
                 exclude_ids.add(paper_key(px))
+            else:
+                break
 
     # Output
-    print(format_output(selected_with_reason, data))
+    print(format_output(selected_with_reason, data, config))
 
     # Save status
     if not args.dry_run and selected_with_reason:
@@ -207,7 +206,7 @@ def main() -> int:
         for (p, _) in selected_with_reason:
             p["status"] = "recommended"
             p["recommended_at"] = now
-        save_database(data)
+        save_database(data, data_file)
 
     return 0
 

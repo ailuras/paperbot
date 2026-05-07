@@ -10,7 +10,7 @@ OpenAlex recommends sending an email address through the `mailto` parameter. Con
 export OPENALEX_MAILTO="you@example.com"
 ```
 
-or in `scripts/config.py`:
+or in `config.json`:
 
 ```python
 "openalex": {

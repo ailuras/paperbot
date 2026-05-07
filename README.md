@@ -7,7 +7,6 @@ OpenAlex-powered paper discovery toolkit — fetch, score, and recommend academi
 ```bash
 git clone git@github.com:Ailuras/PaperDaily.git
 cd PaperDaily
-pip install -r requirements.txt  # only requests
 
 # 1. Customize tracking domains
 vim data/config.json
@@ -34,7 +33,7 @@ PaperDaily/
 │   └── references/
 │       ├── scoring.md
 │       └── openalex.md
-├── data/                      # Your data (git-ignored except config)
+├── data/                      # Your data (papers database is git-ignored)
 │   ├── config.json            # Your personalized config
 │   └── papers.json            # Local paper database (auto-created)
 └── README.md
@@ -52,6 +51,24 @@ Edit `data/config.json` to customize:
 ## AI Skill
 
 Copy `skill/` to `~/.openclaw/workspace/skills/paperdaily/` to use with OpenClaw.
+
+The copied skill looks for its default config at `~/.openclaw/workspace/paperdaily/config.json`. The database path is not guessed separately; it comes from `data_file` inside that config. After copying the skill, prepare both files:
+
+```bash
+mkdir -p ~/.openclaw/workspace/paperdaily
+cp skill/examples/config.example.json ~/.openclaw/workspace/paperdaily/config.json
+cp skill/examples/papers.sample.json ~/.openclaw/workspace/paperdaily/papers.json
+```
+
+Then edit `~/.openclaw/workspace/paperdaily/config.json`. Make sure `data_file` points to the intended database, for example:
+
+```json
+"data_file": "~/.openclaw/workspace/paperdaily/papers.json"
+```
+
+Without this config/database setup, the copied skill may fail with a missing `config.json` or database path.
+
+Only the config file location is auto-detected. All other runtime settings come from `config.json`: fields present in the file take priority, and missing fields use the script's internal defaults.
 
 Cron example for daily paper push:
 
