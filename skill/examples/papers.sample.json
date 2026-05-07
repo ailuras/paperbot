@@ -1,0 +1,19 @@
+[
+  {
+    "id": "https://openalex.org/W1234567890",
+    "title": "Example Paper Title",
+    "authors": ["Author One", "Author Two"],
+    "publication_date": "2026-01-15",
+    "publication_year": 2026,
+    "venue": "Proceedings of the AAAI Conference on Artificial Intelligence",
+    "abstract": "This is a sample abstract.",
+    "landing_page_url": "https://doi.org/10.1609/example",
+    "pdf_url": "https://example.com/paper.pdf",
+    "cited_by_count": 5,
+    "track": "SMT",
+    "score": 20.0,
+    "tier": 1,
+    "status": "pending",
+    "recommended_at": null
+  }
+]

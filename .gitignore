@@ -1,0 +1,6 @@
+# Data (mutable, local only)
+data/papers.json
+
+# Python cache
+__pycache__/
+*.pyc

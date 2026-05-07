@@ -1,0 +1,245 @@
+{
+  "data_file": "papers.json",
+  "openalex": {
+    "base_url": "https://api.openalex.org/works",
+    "mailto": "",
+    "api_key_env": "OPENALEX_API_KEY",
+    "timeout_seconds": 20,
+    "per_page": 100,
+    "default_days": 45,
+    "default_max_results": 1000,
+    "topic_filter": "topics.field.id:17"
+  },
+  "tracks": {
+    "SMT": {
+      "query": "\"SMT solver\" OR \"satisfiability modulo theories\" OR \"SMT-based\" OR \"string constraint solving\" OR \"optimization modulo theories\"",
+      "keywords": [
+        "smt solver",
+        "smt solvers",
+        "smt solving",
+        "satisfiability modulo",
+        "smt-based",
+        "smt encoding",
+        "smt formula",
+        "smt formulas",
+        "optimization modulo",
+        "string constraint solving",
+        "bit-vector",
+        "uninterpreted functions",
+        "quantified smt",
+        "z3",
+        "cvc4",
+        "cvc5",
+        "mathsat",
+        "boolector",
+        "yices",
+        "bitwuzla"
+      ]
+    },
+    "SAT": {
+      "query": "\"SAT solving\" OR \"SAT solver\" OR \"Boolean satisfiability\" OR \"SAT-based\" OR \"CDCL\" OR \"conflict-driven clause learning\"",
+      "keywords": [
+        "sat solver",
+        "sat solvers",
+        "sat solving",
+        "boolean satisfiability",
+        "sat-based",
+        "sat encoding",
+        "sat formula",
+        "sat instances",
+        "cdcl",
+        "conflict-driven clause learning",
+        "maxsat",
+        "max-sat",
+        "qbf",
+        "quantified boolean formula",
+        "unsat core",
+        "model counting",
+        "minisat",
+        "glucose",
+        "cadical",
+        "cryptominisat",
+        "kissat",
+        "lingeling"
+      ]
+    },
+    "CP": {
+      "query": "\"constraint programming\" OR \"constraint solving\" OR \"constraint satisfaction\" OR \"constraint optimization\"",
+      "keywords": [
+        "constraint programming",
+        "constraint solving",
+        "constraint satisfaction",
+        "constraint optimization",
+        "csp",
+        "csps",
+        "cop",
+        "cops",
+        "constraint propagation",
+        "arc consistency",
+        "global constraint",
+        "global constraints",
+        "minizinc",
+        "choco solver",
+        "gecode",
+        "or-tools"
+      ]
+    }
+  },
+  "filters": {
+    "title_blacklist": [
+      "artifact for",
+      "supplementary material",
+      "supplemental material",
+      "correction to",
+      "erratum",
+      "retracted:",
+      "comment on"
+    ],
+    "source_blacklist": [
+      "zenodo",
+      "figshare"
+    ],
+    "venue_blacklist": [
+      "satellite",
+      "satellites",
+      "cpanel",
+      "combat",
+      "compatible"
+    ]
+  },
+  "scoring": {
+    "tiers": {
+      "1": {
+        "points": 20,
+        "acronyms": [
+          "CAV",
+          "ICSE",
+          "FSE",
+          "ESEC",
+          "ASE",
+          "ISSTA",
+          "PLDI",
+          "POPL",
+          "OOPSLA",
+          "NeurIPS",
+          "NIPS",
+          "ICML",
+          "ICLR",
+          "AAAI",
+          "IJCAI",
+          "TACAS",
+          "CADE",
+          "IJCAR",
+          "LICS",
+          "NDSS"
+        ],
+        "phrases": [
+          "Computer Aided Verification",
+          "International Conference on Software Engineering",
+          "Foundations of Software Engineering",
+          "Automated Software Engineering",
+          "Software Testing and Analysis",
+          "Programming Language Design",
+          "Principles of Programming Languages",
+          "Object-Oriented Programming",
+          "Neural Information Processing Systems",
+          "Machine Learning",
+          "Learning Representations",
+          "Advancement of Artificial Intelligence",
+          "Joint Conference on Artificial Intelligence",
+          "Tools and Algorithms for the Construction",
+          "Automated Deduction",
+          "Joint Conference on Automated Reasoning",
+          "Logic in Computer Science",
+          "Security and Privacy",
+          "USENIX Security",
+          "Computer and Communications Security",
+          "IEEE Transactions on Software Engineering",
+          "ACM Transactions on Software Engineering",
+          "Satisfiability Testing",
+          "Constraint Programming",
+          "Symposium on Formal Methods",
+          "Journal of Artificial Intelligence Research",
+          "Artificial Intelligence"
+        ]
+      },
+      "2": {
+        "points": 10,
+        "acronyms": [
+          "SAS",
+          "ICLP",
+          "FMCAD",
+          "VMCAI",
+          "CPAIOR",
+          "LPAR",
+          "JAR",
+          "FMSD",
+          "ICSME",
+          "ISSRE",
+          "SANER",
+          "COMPSAC",
+          "MSR",
+          "KR"
+        ],
+        "phrases": [
+          "Static Analysis",
+          "Logic Programming",
+          "Formal Methods in Computer-Aided Design",
+          "Verification, Model Checking",
+          "Constraint Programming, Artificial Intelligence",
+          "Logic for Programming",
+          "Journal of Automated Reasoning",
+          "Formal Methods in System Design",
+          "Software Maintenance",
+          "Software Reliability Engineering",
+          "Software Analysis, Evolution",
+          "Computer Software and Applications",
+          "Mining Software Repositories",
+          "Knowledge Representation and Reasoning"
+        ]
+      },
+      "3": {
+        "points": 5,
+        "acronyms": [
+          "SEFM",
+          "ICFEM",
+          "ICECCS",
+          "QRS",
+          "QSIC",
+          "AST",
+          "ICTAI"
+        ],
+        "phrases": [
+          "Software Engineering and Formal Methods",
+          "Formal Engineering Methods",
+          "Engineering of Complex Computer Systems",
+          "Software Quality, Reliability",
+          "Automated Software Testing",
+          "Tools with Artificial Intelligence"
+        ]
+      }
+    },
+    "citation_breakpoints": [
+      {
+        "up_to": 10,
+        "points_per_citation": 1.0
+      },
+      {
+        "up_to": 50,
+        "points_per_citation": 0.5
+      },
+      {
+        "up_to": null,
+        "points_per_citation": 0.2
+      }
+    ],
+    "max_citation_points": 40
+  },
+  "recommendation": {
+    "daily_count": 3,
+    "quality_slots": 1,
+    "high_score_threshold": 5,
+    "recent_days": 30,
+    "include_ai_reading_placeholder": true
+  }
+}
