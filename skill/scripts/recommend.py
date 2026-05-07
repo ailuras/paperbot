@@ -80,7 +80,7 @@ def format_output(selected_with_reason: List[tuple], data: List[Dict]) -> str:
     today = datetime.now().strftime("%Y-%m-%d")
     lines = [
         HEADER_LINE,
-        f"📬 今日论文推荐 · {today}",
+        f"📬 Daily Papers · {today}",
         HEADER_LINE,
     ]
 
@@ -104,14 +104,14 @@ def format_output(selected_with_reason: List[tuple], data: List[Dict]) -> str:
         lines.append(HEADER_LINE)
         lines.append(f"📄 **{title}**")
         lines.append(f"👤 {authors}")
-        venue_line = f"📍 {venue} {year}  ·  被引 {citations}  ·  评分 {score:.1f}"
+        venue_line = f"📍 {venue} {year}  ·  Cited {citations}  ·  Score {score:.1f}"
         if tier > 0:
             venue_line += f"  ·  Tier {tier}"
         lines.append(venue_line)
         if pub_date:
             lines.append(f"🗓️ Published: {pub_date}")
-        lines.append(f"📝 **摘要**：{abstract}")
-        lines.append(f"🤖 **AI 导读**：[AI_READING]")
+        lines.append(f"📝 **Abstract**: {abstract}")
+        lines.append(f"🤖 **AI Reading**: [AI_READING]")
         if url:
             lines.append(f"🔗 {url}")
         if pdf_url:
@@ -133,7 +133,7 @@ def format_output(selected_with_reason: List[tuple], data: List[Dict]) -> str:
 
     lines.append("")
     lines.append(HEADER_LINE)
-    lines.append(f"📊 待推荐: {pending} 篇 | 高质量: {high_quality} 篇 | 近30天: {recent_pending} 篇")
+    lines.append(f"📊 Pending: {pending} | High-quality: {high_quality} | Recent 30d: {recent_pending}")
 
     return "\n".join(lines)
 

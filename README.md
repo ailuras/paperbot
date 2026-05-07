@@ -57,7 +57,7 @@ Cron example for daily paper push:
 
 ```bash
 openclaw cron add --name "PaperBot Daily" --cron "0 8 * * *" --tz Asia/Shanghai \
-  --session main --system-event "使用 paperdaily skill 执行每日论文推荐并推送微信"
+  --session main --system-event "Use paperdaily skill to recommend daily papers and push to chat"
 ```
 
 ## License

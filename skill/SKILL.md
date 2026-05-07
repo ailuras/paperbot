@@ -1,6 +1,6 @@
 ---
 name: paperdaily
-description: Use this skill whenever the user wants to fetch, filter, score, recommend, or explain academic papers from OpenAlex, especially for daily paper reading workflows, SMT/SAT/CP or other configurable research domains, paper recommendation databases, venue/citation scoring, or AI-generated reading guides. This skill should be used even when the user asks casually for a "paper bot", "daily papers", "OpenAlex recommendations", "论文日报", "每日读论文", or wants to customize paper discovery criteria.
+description: Use this skill whenever the user wants to fetch, filter, score, recommend, or explain academic papers from OpenAlex, especially for daily paper reading workflows, SMT/SAT/CP or other configurable research domains, paper recommendation databases, venue/citation scoring, or AI-generated reading guides. This skill should be used even when the user asks casually for a "paper bot", "daily papers", "OpenAlex recommendations", or wants to customize paper discovery criteria.
 ---
 
 # PaperDaily

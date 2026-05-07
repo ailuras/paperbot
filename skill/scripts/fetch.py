@@ -329,20 +329,20 @@ def main() -> int:
     HL = "━" * 16
     print()
     print(HL)
-    print(f"📚 月度检索报告 · {today.isoformat()}")
+    print(f"📚 Monthly Fetch Report · {today.isoformat()}")
     print(HL)
-    print(f"🔍 检索范围: {from_day.isoformat()} ~ {today.isoformat()} ({days}天)")
+    print(f"🔍 Range: {from_day.isoformat()} ~ {today.isoformat()} ({days} days)")
     print()
-    print("📊 各 Track 命中")
+    print("📊 Results by Track")
     for track, total, filtered in track_stats:
-        print(f"  {track:<4}  OpenAlex {total:>4}  →  本地过滤 {filtered:>4} 篇")
+        print(f"  {track:<4}  OpenAlex {total:>4}  ->  local filter {filtered:>4}")
     print()
-    print("📈 数据库变化")
-    print(f"  新增 {added} 篇  |  更新 {updated} 篇  |  总计 {len(merged)} 篇")
-    print(f"  Tier 1: {tier1} 篇  |  高分 (≥15): {high_score} 篇")
+    print("📈 Database Changes")
+    print(f"  New {added}  |  Updated {updated}  |  Total {len(merged)}")
+    print(f"  Tier 1: {tier1}  |  High-score (≥15): {high_score}")
     if args.dry_run:
         print()
-        print("🧪 dry-run 模式，未保存")
+        print("🧪 dry-run mode, not saved")
     else:
         database.save(merged)
     print(HL)
