@@ -17,7 +17,7 @@ from paperbot.config import default_config_path, load_config
 from paperbot.dashboard import run_server as run_dashboard
 from paperbot.db import (
     get_paper_by_id_or_title,
-    get_recommendation_history,
+    get_recent_reads,
     get_stats,
     get_unread_papers,
     init_db,
@@ -235,8 +235,6 @@ def stats() -> None:
     table.add_column("Key", style="bold")
     table.add_column("Value")
     table.add_row("Total Papers", str(data.get("total_papers", 0)))
-    table.add_row("Total Recommendations", str(data.get("total_recommendations", 0)))
-    table.add_row("Recommendations (last 7d)", str(data.get("recommendations_last_7_days", 0)))
     console.print(table)
     console.print()
 
@@ -257,36 +255,55 @@ def stats() -> None:
 
 @app.command()
 def history(
-    days: int = typer.Option(7, help="How many days back to show"),
+    limit: int = typer.Option(10, help="Number of recent reads to show"),
 ) -> None:
-    """Show recommendation history."""
+    """Show recent read papers."""
     db_path = _db_path()
-    rows = get_recommendation_history(db_path, days=days)
+    rows = get_recent_reads(db_path, limit=limit)
 
     if not rows:
-        console.print("[yellow]No recommendations in the selected period.[/yellow]")
+        console.print("[yellow]No recent reads.[/yellow]")
         raise typer.Exit(0)
-
-    # Group by date
-    by_date: dict[str, list[dict]] = {}
-    for row in rows:
-        by_date.setdefault(row["date"], []).append(row)
 
     console.print()
     console.print(Text("━" * 20, style="bold cyan"))
-    console.print(Text("Recommendation History", style="bold cyan"))
+    console.print(Text("Recent Reads", style="bold cyan"))
     console.print(Text("━" * 20, style="bold cyan"))
 
-    for date_str in sorted(by_date.keys(), reverse=True):
-        entries = sorted(by_date[date_str], key=lambda r: r.get("slot_index", 0) or 0)
+    for i, p in enumerate(rows, 1):
+        authors = p.get("authors", [])
+        if isinstance(authors, str):
+            try:
+                authors = json.loads(authors)
+            except json.JSONDecodeError:
+                authors = [authors]
+        author_str = ", ".join(authors[:3])
+        if len(authors) > 3:
+            author_str += ", et al."
+
+        date_str = p.get("publication_date") or p.get("publication_year") or "?"
+        venue = p.get("venue") or "Unknown"
+        track = p.get("track") or "?"
+        score = p.get("score", 0) or 0
+        tier = p.get("tier", "") or ""
+
+        tier_tag = f" [T{tier}]" if tier else ""
+        meta = f"{date_str} · {venue} · Cited {p.get('cited_by_count', 0)} · Score {score:.1f}{tier_tag} · [{track}]"
+
         console.print()
-        console.print(f"[bold]{date_str}[/bold]")
-        for entry in entries:
-            slot = (entry.get("slot_index") or 0) + 1
-            title = entry.get("title", "No Title")
-            track = entry.get("track", "?")
-            score = entry.get("score", 0) or 0
-            console.print(f"  #{slot} [{track}] {title} (score {score:.1f})")
+        console.print(f"[bold]#{i}[/bold] {p.get('title', 'No Title')}")
+        console.print(f"[dim]{author_str}[/dim]")
+        console.print(f"[blue]{meta}[/blue]")
+
+        abstract = p.get("abstract", "")
+        if abstract:
+            if len(abstract) > 400:
+                abstract = abstract[:400] + "..."
+            console.print(f"\n{abstract}")
+
+        url = p.get("landing_page_url") or p.get("doi") or ""
+        if url:
+            console.print(f"\n[link={url}]🔗 {url}[/link]")
 
 
 @app.command()
@@ -330,54 +347,6 @@ def serve(
             os.dup2(f.fileno(), sys.stderr.fileno())
 
     run_dashboard(db_path=db_path, host=host, port=port)
-
-
-@app.command()
-def migrate(
-    source: str = typer.Argument(help="Path to the JSON file containing papers"),
-    config_path: str | None = typer.Option(
-        None,
-        "--config",
-        help="Path to config file (defaults to data/config.json)",
-    ),
-) -> None:
-    """Migrate papers from JSON into the SQLite database."""
-    cfg = load_config(config_path or default_config_path())
-    db_path = cfg.data_dir / "paperbot.db"
-
-    console.print(f"[blue]Database:[/blue] {db_path}")
-    console.print(f"[blue]Source:[/blue]   {source}")
-
-    init_db(db_path)
-
-    source_path = Path(source).expanduser()
-    with source_path.open(encoding="utf-8") as f:
-        papers: list[dict] = json.load(f)
-
-    if not papers:
-        console.print("[red]No papers found in source file.[/red]")
-        raise typer.Exit(1)
-
-    inserted, updated = upsert_papers(db_path, papers)
-
-    recommended_count = 0
-    for paper in papers:
-        if paper.get("recommended_at") or paper.get("status") in ("recommended", "read"):
-            set_paper_status(db_path, paper["id"], "read")
-            recommended_count += 1
-
-    console.print(f"\n[green]Migration complete.[/green]")
-    console.print(f"  Total papers: {len(papers)}")
-    console.print(f"  Inserted:     {inserted}")
-    console.print(f"  Updated:      {updated}")
-    console.print(f"  Recommended:  {recommended_count}")
-
-    from collections import Counter
-
-    track_counts = Counter(str(p.get("track", "unknown")) for p in papers)
-    console.print("\n[bold]By track:[/bold]")
-    for track, count in sorted(track_counts.items()):
-        console.print(f"  {track}: {count}")
 
 
 if __name__ == "__main__":
