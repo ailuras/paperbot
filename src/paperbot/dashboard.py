@@ -140,9 +140,28 @@ _HTML = """<!DOCTYPE html>
     nav { margin-bottom: 1rem; }
     .track-tag {
       font-size: 0.7rem;
-      background: var(--pico-secondary-background);
       padding: 0.1rem 0.35rem;
       border-radius: 3px;
+      font-weight: 600;
+    }
+    .track-tag.smt { background: #1e40af; color: #dbeafe; }
+    .track-tag.sat { background: #14532d; color: #dcfce7; }
+    .track-tag.cp  { background: #7c2d12; color: #ffedd5; }
+    .track-tag.mix { background: #581c87; color: #f3e8ff; }
+    .tier-tag {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .tier-tag.t1 { background: #b45309; color: #fef3c7; }
+    .tier-tag.t2 { background: #1e3a8a; color: #dbeafe; }
+    .tier-tag.t3 { background: #374151; color: #e5e7eb; }
+    .venue-abbr {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--pico-primary);
+      margin-right: 0.3rem;
     }
     .toast {
       position: fixed;
@@ -310,6 +329,30 @@ _HTML = """<!DOCTYPE html>
       return `<span class="badge ${st}">${map[st] || st}</span>`;
     }
 
+    function venueAbbr(venue) {
+      if (!venue) return '';
+      const matches = venue.match(/\b[A-Z]{2,}\b/g);
+      if (matches) return matches[0];
+      const words = venue.split(/\s+/).filter(w => w.length > 2 && !/^(the|of|on|in|for|and|with)$/i.test(w));
+      if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
+      return venue.slice(0, 3).toUpperCase();
+    }
+
+    function trackTag(track) {
+      const t = (track || '?').toLowerCase();
+      let cls = 'mix';
+      if (t === 'smt') cls = 'smt';
+      else if (t === 'sat') cls = 'sat';
+      else if (t === 'cp') cls = 'cp';
+      return `<span class="track-tag ${cls}">${track || '?'}</span>`;
+    }
+
+    function tierBadge(tier) {
+      if (!tier || tier === '0') return '';
+      const cls = `t${tier}`;
+      return `<span class="tier-tag ${cls}">T${tier}</span>`;
+    }
+
     async function markPaper(id, status) {
       try {
         await postApi('/api/mark', { id, status });
@@ -350,7 +393,9 @@ _HTML = """<!DOCTYPE html>
         if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
         const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
         const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
-        const meta = [`${p.venue||'Unknown'} ${p.publication_year||'?'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
+        const abbr = venueAbbr(p.venue);
+        const venueDisplay = abbr ? `<span class="venue-abbr">${abbr}</span>${p.venue||'Unknown'}` : (p.venue || 'Unknown');
+        const meta = [`${venueDisplay} ${p.publication_year||'?'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
         const url = p.landing_page_url || p.doi || p.id || '#';
 
         const st = p.status || 'pending';
@@ -370,7 +415,7 @@ _HTML = """<!DOCTYPE html>
           <div style="flex:1;min-width:0;">
             <div class="paper-title">${statusBadge(p.status||'pending')} <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
-            <div class="paper-meta">${meta} <span class="track-tag">${p.track||'?'}</span></div>
+            <div class="paper-meta">${meta} ${trackTag(p.track)} ${tierBadge(p.tier)}</div>
           </div>
           <div class="paper-actions">${actionBtns.join('')}</div>
         </div>`;
