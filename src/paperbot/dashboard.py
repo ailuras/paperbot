@@ -238,6 +238,7 @@ _HTML = """<!DOCTYPE html>
           <option value="asc">Asc</option>
         </select>
         <button onclick="loadPapers()">Apply</button>
+        <span id="paper-count" style="font-size:0.85rem;opacity:0.7;padding:0.25rem 0;white-space:nowrap;"></span>
       </div>
       <div id="papers-list">Loading...</div>
       <div id="pagination" style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem;"></div>
@@ -346,7 +347,7 @@ _HTML = """<!DOCTYPE html>
         const dateStr = p.publication_date || p.publication_year || '?';
         const url = p.landing_page_url || p.doi || p.id || '#';
         const abstract = p.abstract || '';
-        const absDisplay = abstract.length > 800 ? abstract.slice(0, 800) + '...' : abstract;
+        const absDisplay = abstract.length > 2000 ? abstract.slice(0, 2000) + '...' : abstract;
 
         return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
           <div>
@@ -486,6 +487,8 @@ _HTML = """<!DOCTYPE html>
 
       const data = await api(`/api/papers?${qs}`);
       currentTotal = data.total;
+      const countEl = document.getElementById('paper-count');
+      if (countEl) countEl.textContent = `${data.total} papers`;
       const el = document.getElementById('papers-list');
 
       if (!data.papers || !data.papers.length) {
@@ -550,8 +553,6 @@ _HTML = """<!DOCTYPE html>
       if (currentPage < totalPages) {
         pgHtml += `<button class="page-btn" onclick="goPage(${currentOffset + PAGE_SIZE})">Next »</button>`;
       }
-
-      pgHtml += `<span style="padding:0.5rem 0.75rem;font-size:0.85rem;opacity:0.7;">(${data.total} total)</span>`;
 
       if (totalPages > 1) {
         pgHtml += `
