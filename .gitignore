@@ -1,4 +1,8 @@
 # Data (mutable, local only)
+data/*.db
+data/*.sqlite
+.paperbot/
+*.db
 
 # Python cache
 __pycache__/

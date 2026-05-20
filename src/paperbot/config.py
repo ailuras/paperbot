@@ -87,6 +87,12 @@ def load_config(path: Path | str | None = None) -> Settings:
         raw: dict[str, Any] = json.load(f)
 
     data_dir = Path(raw.get("data_dir", "~/.paperbot")).expanduser()
+
+    # Allow overriding data_dir via environment variable
+    env_data_dir = os.getenv("PAPERBOT_DATA_DIR")
+    if env_data_dir:
+        data_dir = Path(env_data_dir).expanduser()
+
     data_dir.mkdir(parents=True, exist_ok=True)
 
     return Settings(data_dir=data_dir, **{k: v for k, v in raw.items() if k != "data_dir"})

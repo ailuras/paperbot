@@ -304,10 +304,7 @@ def serve(
 
 @app.command()
 def migrate(
-    source: str = typer.Option(
-        "/Users/macbookpro/Documents/06-文献/papers.json",
-        help="Path to the JSON file containing papers",
-    ),
+    source: str = typer.Argument(help="Path to the JSON file containing papers"),
     config_path: str | None = typer.Option(
         None,
         "--config",
