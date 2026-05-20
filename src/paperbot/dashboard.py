@@ -120,11 +120,16 @@ _HTML = """<!DOCTYPE html>
     .filter-bar {
       display: flex;
       gap: 0.5rem;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       margin-bottom: 1rem;
+      align-items: center;
     }
     .filter-bar input, .filter-bar select {
       margin-bottom: 0;
+    }
+    .filter-bar select {
+      width: auto;
+      min-width: 120px;
     }
     .hidden { display: none !important; }
     .empty-msg {
@@ -204,7 +209,7 @@ _HTML = """<!DOCTYPE html>
           <option value="desc">Desc</option>
           <option value="asc">Asc</option>
         </select>
-        <button onclick="loadPapers()">Filter</button>
+        <button onclick="loadPapers()">Apply</button>
       </div>
       <div id="papers-list">Loading...</div>
       <div id="pagination" style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem;"></div>
