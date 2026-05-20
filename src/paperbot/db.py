@@ -299,10 +299,12 @@ def list_papers(
     track: str | None = None,
     status: str | None = None,
     keyword: str | None = None,
+    sort_by: str = "score",
+    sort_order: str = "desc",
     limit: int = 50,
     offset: int = 0,
 ) -> dict[str, Any]:
-    """Return paginated paper list with optional filters."""
+    """Return paginated paper list with optional filters and sorting."""
     conn = _connect(db_path)
     params: list[Any] = []
 
@@ -335,12 +337,20 @@ def list_papers(
     """
     total = conn.execute(count_sql, params).fetchone()[0]
 
+    # Validate sort column
+    valid_sort_cols = {"score", "cited_by_count", "publication_date", "created_at", "title"}
+    sort_col = sort_by if sort_by in valid_sort_cols else "score"
+    order = "DESC" if sort_order.lower() == "desc" else "ASC"
+
+    # Secondary sort for stable ordering
+    secondary = "p.cited_by_count DESC" if sort_col == "score" else "p.score DESC"
+
     sql = f"""
     SELECT p.*, COALESCE(ps.status, 'pending') as status
     FROM papers p
     LEFT JOIN paper_states ps ON p.id = ps.paper_id
     {where_sql}
-    ORDER BY p.score DESC, p.cited_by_count DESC
+    ORDER BY p.{sort_col} {order}, {secondary}
     LIMIT ? OFFSET ?
     """
     cursor = conn.execute(sql, params + [limit, offset])

@@ -194,6 +194,16 @@ _HTML = """<!DOCTYPE html>
           <option value="SAT">SAT</option>
           <option value="CP">CP</option>
         </select>
+        <select id="sort-by">
+          <option value="score">Score</option>
+          <option value="publication_date">Date</option>
+          <option value="cited_by_count">Citations</option>
+          <option value="title">Title</option>
+        </select>
+        <select id="sort-order">
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
         <button onclick="loadPapers()">Filter</button>
       </div>
       <div id="papers-list">Loading...</div>
@@ -256,8 +266,12 @@ _HTML = """<!DOCTYPE html>
         const tracks = Object.entries(s.by_track)
           .filter(([t]) => !t.includes(','))  // skip combined tracks
           .sort((a, b) => b[1] - a[1]);
-        tracksHtml = '<div style="text-align:center;margin-top:0.75rem;font-size:0.85rem;opacity:0.7;">' +
-          tracks.map(([t, c]) => `<span class="track-tag">${t}</span> ${c}`).join(' &nbsp;|&nbsp; ') +
+        tracksHtml = '<div style="margin-top:0.75rem;">' +
+          tracks.map(([t, c]) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.25rem 0;font-size:0.85rem;opacity:0.8;border-bottom:1px solid var(--pico-muted-border-color);max-width:300px;margin:0 auto;">
+              <span><span class="track-tag">${t}</span></span>
+              <span style="font-weight:600;">${c}</span>
+            </div>`).join('') +
           '</div>';
       }
 
@@ -305,6 +319,8 @@ _HTML = """<!DOCTYPE html>
     async function loadPapers() {
       const keyword = document.getElementById('keyword').value;
       const track = document.getElementById('track-filter').value;
+      const sortBy = document.getElementById('sort-by').value;
+      const sortOrder = document.getElementById('sort-order').value;
       let status = currentTab;
       if (status === 'all') status = '';
 
@@ -312,6 +328,8 @@ _HTML = """<!DOCTYPE html>
       if (track) qs += `&track=${encodeURIComponent(track)}`;
       if (status) qs += `&status=${encodeURIComponent(status)}`;
       if (keyword) qs += `&keyword=${encodeURIComponent(keyword)}`;
+      qs += `&sort_by=${encodeURIComponent(sortBy)}`;
+      qs += `&sort_order=${encodeURIComponent(sortOrder)}`;
 
       const data = await api(`/api/papers?${qs}`);
       const el = document.getElementById('papers-list');
@@ -379,6 +397,10 @@ _HTML = """<!DOCTYPE html>
     document.getElementById('keyword').addEventListener('keydown', e => {
       if (e.key === 'Enter') { currentOffset = 0; loadPapers(); }
     });
+
+    // Auto-refresh when sort changes
+    document.getElementById('sort-by').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
+    document.getElementById('sort-order').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
 
     init();
   </script>
@@ -451,11 +473,15 @@ def make_handler(db_path: Path):
                     track = qs.get("track") or None
                     status = qs.get("status") or None
                     keyword = qs.get("keyword") or None
+                    sort_by = qs.get("sort_by") or "score"
+                    sort_order = qs.get("sort_order") or "desc"
                     data = list_papers(
                         db_path,
                         track=track,
                         status=status,
                         keyword=keyword,
+                        sort_by=sort_by,
+                        sort_order=sort_order,
                         limit=min(limit, 200),
                         offset=max(offset, 0),
                     )
