@@ -1,5 +1,5 @@
 {
-  "data_file": "papers.json",
+  "data_dir": "~/.paperbot",
   "openalex": {
     "base_url": "https://api.openalex.org/works",
     "mailto": "",
