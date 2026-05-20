@@ -239,7 +239,6 @@
     "daily_count": 3,
     "quality_slots": 1,
     "high_score_threshold": 5,
-    "recent_days": 30,
-    "include_ai_reading_placeholder": true
+    "recent_days": 30
   }
 }

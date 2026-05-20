@@ -54,7 +54,6 @@ class RecommendationConfig(BaseModel):
     quality_slots: int = 1
     high_score_threshold: int = 5
     recent_days: int = 30
-    include_ai_reading_placeholder: bool = True
 
 
 class Settings(BaseModel):

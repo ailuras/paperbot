@@ -34,7 +34,6 @@ CREATE TABLE IF NOT EXISTS recommendations (
     date TEXT NOT NULL,
     paper_id TEXT NOT NULL,
     slot_index INTEGER,
-    ai_reading TEXT,
     created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -203,20 +202,19 @@ def save_recommendation(
 ) -> None:
     """Persist a daily recommendation set.
 
-    picks: list of dicts with keys: paper_id, slot_index, ai_reading
+    picks: list of dicts with keys: paper_id, slot_index
     """
     conn = _connect(db_path)
     for pick in picks:
         conn.execute(
             """
-            INSERT INTO recommendations (date, paper_id, slot_index, ai_reading)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO recommendations (date, paper_id, slot_index)
+            VALUES (?, ?, ?)
             """,
             (
                 date,
                 pick["paper_id"],
                 pick.get("slot_index"),
-                pick.get("ai_reading"),
             ),
         )
     conn.commit()

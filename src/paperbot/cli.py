@@ -129,7 +129,6 @@ def recommend(
             {
                 "paper_id": r.paper_id,
                 "slot_index": r.slot_index,
-                "ai_reading": None,
             }
             for r in results
         ]
