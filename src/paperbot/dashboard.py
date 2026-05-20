@@ -244,21 +244,26 @@ _HTML = """<!DOCTYPE html>
       const s = await api('/api/stats');
       const grid = document.getElementById('stats-grid');
       const items = [
-        { n: s.total_papers || 0, l: 'Total Papers' },
+        { n: s.total_papers || 0, l: 'Total' },
         { n: s.pending || 0, l: 'Pending' },
         { n: s.read || 0, l: 'Read' },
         { n: s.starred || 0, l: 'Starred' },
         { n: s.skipped || 0, l: 'Skipped' },
-        { n: s.total_recommendations || 0, l: 'Recommendations' },
       ];
+
+      let tracksHtml = '';
       if (s.by_track) {
-        Object.entries(s.by_track).forEach(([track, count]) => {
-          items.push({ n: count, l: track });
-        });
+        const tracks = Object.entries(s.by_track)
+          .filter(([t]) => !t.includes(','))  // skip combined tracks
+          .sort((a, b) => b[1] - a[1]);
+        tracksHtml = '<div style="text-align:center;margin-top:0.75rem;font-size:0.85rem;opacity:0.7;">' +
+          tracks.map(([t, c]) => `<span class="track-tag">${t}</span> ${c}`).join(' &nbsp;|&nbsp; ') +
+          '</div>';
       }
+
       grid.innerHTML = items.map(i =>
         `<div class="stat-card"><div class="number">${i.n}</div><div class="label">${i.l}</div></div>`
-      ).join('');
+      ).join('') + tracksHtml;
     }
 
     async function loadRecommendations() {
@@ -325,11 +330,18 @@ _HTML = """<!DOCTYPE html>
         const meta = [`${p.venue||'Unknown'} ${p.publication_year||'?'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
         const url = p.landing_page_url || p.doi || p.id || '#';
 
-        const actionBtns = [];
-        if (p.status !== 'read') actionBtns.push(`<button onclick="markPaper('${p.id}','read')">✅ Read</button>`);
-        if (p.status !== 'starred') actionBtns.push(`<button onclick="markPaper('${p.id}','starred')">⭐ Star</button>`);
-        if (p.status !== 'skip') actionBtns.push(`<button onclick="markPaper('${p.id}','skip')" class="secondary">❌ Skip</button>`);
-        if (p.status !== 'pending' && p.status !== 'recommended') actionBtns.push(`<button onclick="markPaper('${p.id}','pending')" class="secondary">⏳ Pending</button>`);
+        const st = p.status || 'pending';
+        const actionBtns = [
+          st === 'read'
+            ? `<button onclick="markPaper('${p.id}','pending')" class="secondary">↩️ Unread</button>`
+            : `<button onclick="markPaper('${p.id}','read')">✅ Read</button>`,
+          st === 'starred'
+            ? `<button onclick="markPaper('${p.id}','pending')" class="secondary">↩️ Unstar</button>`
+            : `<button onclick="markPaper('${p.id}','starred')">⭐ Star</button>`,
+          st === 'skip'
+            ? `<button onclick="markPaper('${p.id}','pending')" class="secondary">↩️ Unskip</button>`
+            : `<button onclick="markPaper('${p.id}','skip')" class="secondary">❌ Skip</button>`,
+        ];
 
         return `<div class="paper-row">
           <div style="flex:1;min-width:0;">

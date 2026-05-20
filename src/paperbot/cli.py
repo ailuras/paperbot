@@ -294,11 +294,42 @@ def history(
 def serve(
     host: str = typer.Option("127.0.0.1", help="Bind address"),
     port: int = typer.Option(8765, help="Port"),
+    daemon: bool = typer.Option(False, help="Run in background (detach from terminal)"),
+    log_file: str = typer.Option("", help="Log file path (default: ~/.paperbot/dashboard.log)"),
 ) -> None:
     """Start the local web dashboard."""
     cfg = load_config(default_config_path())
     db_path = cfg.data_dir / "paperbot.db"
     init_db(db_path)
+
+    log_path = Path(log_file).expanduser() if log_file else cfg.data_dir / "dashboard.log"
+
+    if daemon:
+        import os
+        import sys
+
+        # First fork
+        pid = os.fork()
+        if pid > 0:
+            console.print(f"[green]Dashboard running in background (pid {pid}).[/green]")
+            console.print(f"[dim]Log: {log_path}[/dim]")
+            raise typer.Exit(0)
+
+        os.setsid()
+
+        # Second fork
+        pid = os.fork()
+        if pid > 0:
+            sys.exit(0)
+
+        # Redirect stdout/stderr to log file
+        sys.stdout.flush()
+        sys.stderr.flush()
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(log_path, "a+") as f:
+            os.dup2(f.fileno(), sys.stdout.fileno())
+            os.dup2(f.fileno(), sys.stderr.fileno())
+
     run_dashboard(db_path=db_path, host=host, port=port)
 
 
