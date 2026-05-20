@@ -248,6 +248,7 @@ _HTML = """<!DOCTYPE html>
     const API = '';
     let currentTab = 'pending';
     let currentOffset = 0;
+    let currentTotal = 0;
     const PAGE_SIZE = 50;
 
     async function api(path) {
@@ -345,7 +346,7 @@ _HTML = """<!DOCTYPE html>
         const dateStr = p.publication_date || p.publication_year || '?';
         const url = p.landing_page_url || p.doi || p.id || '#';
         const abstract = p.abstract || '';
-        const absDisplay = abstract.length > 300 ? abstract.slice(0, 300) + '...' : abstract;
+        const absDisplay = abstract.length > 800 ? abstract.slice(0, 800) + '...' : abstract;
 
         return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
           <div>
@@ -484,6 +485,7 @@ _HTML = """<!DOCTYPE html>
       qs += `&sort_order=${encodeURIComponent(sortOrder)}`;
 
       const data = await api(`/api/papers?${qs}`);
+      currentTotal = data.total;
       const el = document.getElementById('papers-list');
 
       if (!data.papers || !data.papers.length) {
@@ -550,11 +552,33 @@ _HTML = """<!DOCTYPE html>
       }
 
       pgHtml += `<span style="padding:0.5rem 0.75rem;font-size:0.85rem;opacity:0.7;">(${data.total} total)</span>`;
+
+      if (totalPages > 1) {
+        pgHtml += `
+          <input type="number" id="jump-page" min="1" max="${totalPages}" placeholder="#"
+            style="width:60px;padding:0.25rem 0.5rem;font-size:0.85rem;margin-bottom:0;text-align:center;"
+            onkeydown="if(event.key==='Enter')jumpToPage()">
+          <button class="page-btn" onclick="jumpToPage()">Go</button>`;
+      }
+
       document.getElementById('pagination').innerHTML = pgHtml;
     }
 
     function goPage(offset) {
       currentOffset = offset;
+      loadPapers();
+    }
+
+    function jumpToPage() {
+      const input = document.getElementById('jump-page');
+      if (!input) return;
+      const page = parseInt(input.value, 10);
+      const totalPages = Math.ceil(currentTotal / PAGE_SIZE);
+      if (!page || page < 1 || page > totalPages) {
+        toast(`Enter a page between 1 and ${totalPages}`, 'error');
+        return;
+      }
+      currentOffset = (page - 1) * PAGE_SIZE;
       loadPapers();
     }
 
