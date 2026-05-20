@@ -158,6 +158,16 @@ _HTML = """<!DOCTYPE html>
     .venue-tag.t2 { background: #1e3a8a; color: #dbeafe; }
     .venue-tag.t3 { background: #374151; color: #e5e7eb; }
     .venue-tag.t0 { background: var(--pico-secondary-background); color: var(--pico-color); }
+    .page-btn {
+      padding: 0.25rem 0.6rem;
+      font-size: 0.85rem;
+      min-width: 36px;
+    }
+    .page-btn.active {
+      background: var(--pico-primary);
+      color: var(--pico-primary-inverse);
+      border-color: var(--pico-primary);
+    }
     .toast {
       position: fixed;
       bottom: 1rem;
@@ -487,9 +497,28 @@ _HTML = """<!DOCTYPE html>
       const totalPages = Math.ceil(data.total / PAGE_SIZE);
       const currentPage = Math.floor(currentOffset / PAGE_SIZE) + 1;
       let pgHtml = '';
-      if (currentOffset > 0) pgHtml += `<button onclick="goPage(${currentOffset - PAGE_SIZE})">« Prev</button>`;
-      pgHtml += `<span style="padding:0.5rem;">Page ${currentPage} / ${totalPages||1} (${data.total} total)</span>`;
-      if (currentOffset + PAGE_SIZE < data.total) pgHtml += `<button onclick="goPage(${currentOffset + PAGE_SIZE})">Next »</button>`;
+
+      if (currentPage > 1) {
+        pgHtml += `<button class="page-btn" onclick="goPage(${currentOffset - PAGE_SIZE})">« Prev</button>`;
+      }
+
+      let start = 1, end = totalPages;
+      if (totalPages > 5) {
+        if (currentPage <= 3) { start = 1; end = 5; }
+        else if (currentPage >= totalPages - 2) { start = totalPages - 4; end = totalPages; }
+        else { start = currentPage - 2; end = currentPage + 2; }
+      }
+      for (let p = start; p <= end; p++) {
+        const off = (p - 1) * PAGE_SIZE;
+        const cls = p === currentPage ? 'page-btn active' : 'page-btn';
+        pgHtml += `<button class="${cls}" onclick="goPage(${off})">${p}</button>`;
+      }
+
+      if (currentPage < totalPages) {
+        pgHtml += `<button class="page-btn" onclick="goPage(${currentOffset + PAGE_SIZE})">Next »</button>`;
+      }
+
+      pgHtml += `<span style="padding:0.5rem 0.75rem;font-size:0.85rem;opacity:0.7;">(${data.total} total)</span>`;
       document.getElementById('pagination').innerHTML = pgHtml;
     }
 
