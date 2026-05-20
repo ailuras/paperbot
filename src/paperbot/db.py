@@ -294,6 +294,62 @@ def get_paper_by_id_or_title(
     return rows
 
 
+def list_papers(
+    db_path: Path,
+    track: str | None = None,
+    status: str | None = None,
+    keyword: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """Return paginated paper list with optional filters."""
+    conn = _connect(db_path)
+    params: list[Any] = []
+
+    where_clauses: list[str] = []
+
+    if track:
+        where_clauses.append("p.track LIKE ?")
+        params.append(f"%{track}%")
+
+    if status:
+        if status == "pending":
+            where_clauses.append("(ps.status IS NULL OR ps.status = 'pending')")
+        else:
+            where_clauses.append("ps.status = ?")
+            params.append(status)
+
+    if keyword:
+        where_clauses.append("(p.title LIKE ? OR p.abstract LIKE ?)")
+        params.append(f"%{keyword}%")
+        params.append(f"%{keyword}%")
+
+    where_sql = ""
+    if where_clauses:
+        where_sql = "WHERE " + " AND ".join(where_clauses)
+
+    count_sql = f"""
+    SELECT COUNT(*) FROM papers p
+    LEFT JOIN paper_states ps ON p.id = ps.paper_id
+    {where_sql}
+    """
+    total = conn.execute(count_sql, params).fetchone()[0]
+
+    sql = f"""
+    SELECT p.*, COALESCE(ps.status, 'pending') as status
+    FROM papers p
+    LEFT JOIN paper_states ps ON p.id = ps.paper_id
+    {where_sql}
+    ORDER BY p.score DESC, p.cited_by_count DESC
+    LIMIT ? OFFSET ?
+    """
+    cursor = conn.execute(sql, params + [limit, offset])
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+
+    return {"total": total, "papers": rows, "limit": limit, "offset": offset}
+
+
 def get_stats(db_path: Path) -> dict[str, Any]:
     """Return database statistics."""
     conn = _connect(db_path)

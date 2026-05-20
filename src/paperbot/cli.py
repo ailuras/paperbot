@@ -14,6 +14,7 @@ from rich.table import Table
 from rich.text import Text
 
 from paperbot.config import default_config_path, load_config
+from paperbot.dashboard import run_server as run_dashboard
 from paperbot.db import (
     get_paper_by_id_or_title,
     get_recommendation_history,
@@ -292,10 +293,13 @@ def history(
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", help="Bind address"),
-    port: int = typer.Option(8000, help="Port"),
+    port: int = typer.Option(8765, help="Port"),
 ) -> None:
     """Start the local web dashboard."""
-    console.print("[yellow]serve not implemented yet[/yellow]")
+    cfg = load_config(default_config_path())
+    db_path = cfg.data_dir / "paperbot.db"
+    init_db(db_path)
+    run_dashboard(db_path=db_path, host=host, port=port)
 
 
 @app.command()
