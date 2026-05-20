@@ -272,9 +272,11 @@ _HTML = """<!DOCTYPE html>
     async function loadStats() {
       const s = await api('/api/stats');
       const grid = document.getElementById('stats-grid');
+      const rec = s.by_status ? (s.by_status.recommended || 0) : 0;
       const items = [
         { n: s.total_papers || 0, l: 'Total' },
         { n: s.pending || 0, l: 'Pending' },
+        { n: rec, l: 'Recommended' },
         { n: s.read || 0, l: 'Read' },
         { n: s.starred || 0, l: 'Starred' },
         { n: s.skipped || 0, l: 'Skipped' },
