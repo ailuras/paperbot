@@ -166,7 +166,7 @@ def get_unread_papers(
 ) -> list[dict[str, Any]]:
     """Query candidate papers for recommendation.
 
-    Excludes papers that have been recommended, read, or skipped.
+    Excludes papers that have been read or skipped.
     """
     conn = _connect(db_path)
     params: list[Any] = []
@@ -248,7 +248,7 @@ def set_paper_status(
     paper_id: str,
     status: str,
 ) -> None:
-    """Mark a paper with a status (read, skip, later, recommended, pending)."""
+    """Mark a paper with a status (read, skip, starred, pending)."""
     conn = _connect(db_path)
     conn.execute(
         """
@@ -317,6 +317,8 @@ def list_papers(
     if status:
         if status == "pending":
             where_clauses.append("(ps.status IS NULL OR ps.status = 'pending')")
+        elif status == "read":
+            where_clauses.append("ps.status IN ('read', 'recommended')")
         else:
             where_clauses.append("ps.status = ?")
             params.append(status)
@@ -392,12 +394,12 @@ def get_stats(db_path: Path) -> dict[str, Any]:
     ).fetchone()
     stats["recommendations_last_7_days"] = row[0] if row else 0
 
-    # Pending / read / starred counts
+    # Pending / read / starred counts (recommended merged into read)
     cursor = conn.execute(
         """
         SELECT
             COUNT(CASE WHEN ps.status IS NULL OR ps.status = 'pending' THEN 1 END) as pending,
-            COUNT(CASE WHEN ps.status = 'read' THEN 1 END) as read,
+            COUNT(CASE WHEN ps.status IN ('read', 'recommended') THEN 1 END) as read,
             COUNT(CASE WHEN ps.status = 'starred' THEN 1 END) as starred,
             COUNT(CASE WHEN ps.status = 'skip' THEN 1 END) as skipped
         FROM papers p

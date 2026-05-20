@@ -136,7 +136,7 @@ def recommend(
         save_recommendation(db_path, today, picks)
         for r in results:
             if r.paper_id:
-                set_paper_status(db_path, r.paper_id, "recommended")
+                set_paper_status(db_path, r.paper_id, "read")
         console.print(f"[green]Saved {len(results)} recommendations.[/green]")
     else:
         console.print("[yellow]Dry run — not saved.[/yellow]")
@@ -363,8 +363,8 @@ def migrate(
 
     recommended_count = 0
     for paper in papers:
-        if paper.get("recommended_at") or paper.get("status") == "recommended":
-            set_paper_status(db_path, paper["id"], "recommended")
+        if paper.get("recommended_at") or paper.get("status") in ("recommended", "read"):
+            set_paper_status(db_path, paper["id"], "read")
             recommended_count += 1
 
     console.print(f"\n[green]Migration complete.[/green]")

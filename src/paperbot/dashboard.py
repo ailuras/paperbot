@@ -199,7 +199,6 @@ _HTML = """<!DOCTYPE html>
       <h2>Papers</h2>
       <div class="tabs">
         <button class="active" data-tab="pending" onclick="switchTab('pending')">Pending</button>
-        <button data-tab="recommended" onclick="switchTab('recommended')">To Read</button>
         <button data-tab="read" onclick="switchTab('read')">Read</button>
         <button data-tab="starred" onclick="switchTab('starred')">Starred</button>
         <button data-tab="skip" onclick="switchTab('skip')">Skipped</button>
@@ -272,11 +271,9 @@ _HTML = """<!DOCTYPE html>
     async function loadStats() {
       const s = await api('/api/stats');
       const grid = document.getElementById('stats-grid');
-      const rec = s.by_status ? (s.by_status.recommended || 0) : 0;
       const items = [
         { n: s.total_papers || 0, l: 'Total' },
         { n: s.pending || 0, l: 'Pending' },
-        { n: rec, l: 'Recommended' },
         { n: s.read || 0, l: 'Read' },
         { n: s.starred || 0, l: 'Starred' },
         { n: s.skipped || 0, l: 'Skipped' },
@@ -322,8 +319,9 @@ _HTML = """<!DOCTYPE html>
     }
 
     function statusBadge(st) {
-      const map = { pending: '⏳ Pending', read: '✅ Read', starred: '⭐ Starred', skip: '❌ Skip', recommended: '⭐ Recommended' };
-      return `<span class="badge ${st}">${map[st] || st}</span>`;
+      const display = st === 'recommended' ? 'read' : st;
+      const map = { pending: '⏳ Pending', read: '✅ Read', starred: '⭐ Starred', skip: '❌ Skip' };
+      return `<span class="badge ${display}">${map[display] || display}</span>`;
     }
 
     const VENUE_MAP = {
