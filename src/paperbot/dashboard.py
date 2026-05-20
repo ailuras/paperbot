@@ -351,9 +351,9 @@ _HTML = """<!DOCTYPE html>
 
         return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
           <div>
-            <div class="paper-title"><strong>#${i+1}</strong> ${venueTag(p.venue, p.tier)} ${trackTag(p.track)} <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
+            <div class="paper-title"><strong>#${i+1}</strong> <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
-            <div class="paper-meta">${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}</div>
+            <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}</div>
             ${absDisplay ? `<div style="margin-top:0.5rem;font-size:0.9rem;opacity:0.85;line-height:1.5;">${absDisplay}</div>` : ''}
           </div>
         </div>`;
