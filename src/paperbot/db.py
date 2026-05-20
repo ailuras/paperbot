@@ -249,7 +249,7 @@ def get_recent_reads(
     conn = _connect(db_path)
     cursor = conn.execute(
         """
-        SELECT p.*, COALESCE(ps.status, 'pending') as status
+        SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
         FROM papers p
         JOIN paper_states ps ON p.id = ps.paper_id
         WHERE ps.status = 'read'
@@ -360,19 +360,24 @@ def list_papers(
     total = conn.execute(count_sql, params).fetchone()[0]
 
     # Validate sort column
-    valid_sort_cols = {"score", "cited_by_count", "publication_date", "created_at", "title"}
+    valid_sort_cols = {"score", "cited_by_count", "publication_date", "created_at", "title", "changed_at"}
     sort_col = sort_by if sort_by in valid_sort_cols else "score"
     order = "DESC" if sort_order.lower() == "desc" else "ASC"
 
-    # Secondary sort for stable ordering
-    secondary = "p.cited_by_count DESC" if sort_col == "score" else "p.score DESC"
+    # Determine sort column prefix (p.* vs ps.*)
+    if sort_col == "changed_at":
+        sort_prefix = "ps"
+        secondary = "p.score DESC"
+    else:
+        sort_prefix = "p"
+        secondary = "p.cited_by_count DESC" if sort_col == "score" else "p.score DESC"
 
     sql = f"""
-    SELECT p.*, COALESCE(ps.status, 'pending') as status
+    SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
     FROM papers p
     LEFT JOIN paper_states ps ON p.id = ps.paper_id
     {where_sql}
-    ORDER BY p.{sort_col} {order}, {secondary}
+    ORDER BY {sort_prefix}.{sort_col} {order}, {secondary}
     LIMIT ? OFFSET ?
     """
     cursor = conn.execute(sql, params + [limit, offset])

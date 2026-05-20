@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -232,6 +233,7 @@ _HTML = """<!DOCTYPE html>
           <option value="publication_date">Date</option>
           <option value="cited_by_count">Citations</option>
           <option value="title">Title</option>
+          <option value="changed_at">Mark Time</option>
         </select>
         <select id="sort-order">
           <option value="desc">Desc</option>
@@ -347,12 +349,14 @@ _HTML = """<!DOCTYPE html>
         const url = p.landing_page_url || p.doi || p.id || '#';
         const abstract = p.abstract || '';
         const absDisplay = abstract.length > 2000 ? abstract.slice(0, 2000) + '...' : abstract;
+        const markTime = p.changed_at ? `Marked: ${p.changed_at}` : '';
 
         return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
           <div>
             <div class="paper-title"><strong>#${i+1}</strong> <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
             <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}</div>
+            ${markTime ? `<div class="paper-meta" style="opacity:0.6;">${markTime}</div>` : ''}
             ${absDisplay ? `<div style="margin-top:0.5rem;font-size:0.9rem;opacity:0.85;line-height:1.5;">${absDisplay}</div>` : ''}
           </div>
         </div>`;
@@ -739,13 +743,39 @@ def make_handler(db_path: Path):
     return DashboardHandler
 
 
+def _pid_file(data_dir: Path) -> Path:
+    return data_dir / "dashboard.pid"
+
+
 def run_server(db_path: Path, host: str = "127.0.0.1", port: int = 8000) -> None:
     """Start the dashboard HTTP server."""
     handler = make_handler(db_path)
     server = HTTPServer((host, port), handler)
+
+    # Write PID file
+    pid_path = _pid_file(db_path.parent)
+    pid_path.write_text(str(os.getpid()))
+
     print(f"Dashboard running at http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down.")
+    finally:
         server.shutdown()
+        pid_path.unlink(missing_ok=True)
+
+
+def stop_server(data_dir: Path) -> bool:
+    """Stop the running dashboard server."""
+    pid_path = _pid_file(data_dir)
+    if not pid_path.exists():
+        return False
+    try:
+        pid = int(pid_path.read_text().strip())
+        os.kill(pid, 15)  # SIGTERM
+        pid_path.unlink(missing_ok=True)
+        return True
+    except (ValueError, ProcessLookupError, PermissionError):
+        pid_path.unlink(missing_ok=True)
+        return False

@@ -12,7 +12,7 @@ from rich.table import Table
 from rich.text import Text
 
 from paperbot.config import default_config_path, load_config
-from paperbot.dashboard import run_server as run_dashboard
+from paperbot.dashboard import run_server as run_dashboard, stop_server
 from paperbot.db import (
     get_paper_by_id_or_title,
     get_recent_reads,
@@ -260,12 +260,16 @@ def history(
         if len(abstract) > 300:
             abstract = abstract[:300] + "..."
 
+        mark_time = p.get("changed_at", "")
+
         console.print("=====")
         console.print(f"[{abbr}] {p.get('title', 'No Title')}")
         if url:
             console.print(f"Link: {url}")
         console.print("-----")
         console.print(f"Authors: {author_str}")
+        if mark_time:
+            console.print(f"Marked: {mark_time}")
         console.print("-----")
         console.print(f"Abstract: {abstract}")
 
@@ -278,10 +282,20 @@ def serve(
     port: int = typer.Option(8765, help="Port"),
     daemon: bool = typer.Option(False, help="Run in background (detach from terminal)"),
     log_file: str = typer.Option("", help="Log file path (default: ~/.paperbot/dashboard.log)"),
+    stop: bool = typer.Option(False, help="Stop the running dashboard server"),
 ) -> None:
-    """Start the local web dashboard."""
+    """Start or stop the local web dashboard."""
     cfg = load_config(default_config_path())
     db_path = cfg.data_dir / "paperbot.db"
+
+    if stop:
+        stopped = stop_server(cfg.data_dir)
+        if stopped:
+            console.print("[green]Dashboard stopped.[/green]")
+        else:
+            console.print("[yellow]Dashboard is not running.[/yellow]")
+        raise typer.Exit(0)
+
     init_db(db_path)
 
     log_path = Path(log_file).expanduser() if log_file else cfg.data_dir / "dashboard.log"
