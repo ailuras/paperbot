@@ -9,7 +9,9 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
-from paperbot.db import get_recommendation_history, get_stats, list_papers, set_paper_status
+from paperbot.config import default_config_path, load_config
+from paperbot.db import get_recommendation_history, get_stats, init_db, list_papers, set_paper_status, upsert_papers
+from paperbot.fetch import fetch_papers
 
 _HTML = """<!DOCTYPE html>
 <html lang="en" data-theme="dark">
@@ -192,7 +194,10 @@ _HTML = """<!DOCTYPE html>
 
     <!-- Overview -->
     <section>
-      <h2>Overview</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+        <h2 style="margin:0;">Overview</h2>
+        <button id="update-btn" onclick="updatePapers()">Update (40d)</button>
+      </div>
       <div class="stats-grid" id="stats-grid">
         <div class="stat-card"><div class="number">-</div><div class="label">Total</div></div>
       </div>
@@ -276,6 +281,25 @@ _HTML = """<!DOCTYPE html>
         b.classList.toggle('active', b.dataset.tab === tab);
       });
       loadPapers();
+    }
+
+    async function updatePapers() {
+      const btn = document.getElementById('update-btn');
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      try {
+        const r = await fetch(API + '/api/update', { method: 'POST' });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        toast(`Updated: ${data.inserted} inserted, ${data.updated} updated (${data.range})`);
+        await loadStats();
+        await loadPapers();
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Update (40d)';
+      }
     }
 
     async function loadStats() {
@@ -654,6 +678,21 @@ def make_handler(db_path: Path):
                         return
                     set_paper_status(db_path, paper_id, status)
                     _json_response(self, {"success": True, "id": paper_id, "status": status})
+
+                elif path == "/api/update":
+                    cfg = load_config(default_config_path())
+                    papers, stats = fetch_papers(cfg, days=40)
+                    if papers:
+                        inserted, updated = upsert_papers(db_path, papers)
+                    else:
+                        inserted, updated = 0, 0
+                    _json_response(self, {
+                        "success": True,
+                        "inserted": inserted,
+                        "updated": updated,
+                        "total": len(papers),
+                        "range": stats.get("range", ""),
+                    })
 
                 else:
                     self.send_error(404, "Not Found")
