@@ -237,7 +237,6 @@ _HTML = """<!DOCTYPE html>
           <option value="desc">Desc</option>
           <option value="asc">Asc</option>
         </select>
-        <button onclick="loadPapers()">Apply</button>
         <span id="paper-count" style="font-size:0.85rem;opacity:0.7;padding:0.25rem 0;white-space:nowrap;"></span>
       </div>
       <div id="papers-list">Loading...</div>
@@ -590,12 +589,13 @@ _HTML = """<!DOCTYPE html>
       await loadPapers();
     }
 
-    // Enter key in search
-    document.getElementById('keyword').addEventListener('keydown', e => {
-      if (e.key === 'Enter') { currentOffset = 0; loadPapers(); }
+    // Auto-refresh when filter/sort changes
+    let keywordTimer;
+    document.getElementById('keyword').addEventListener('input', () => {
+      clearTimeout(keywordTimer);
+      keywordTimer = setTimeout(() => { currentOffset = 0; loadPapers(); }, 300);
     });
-
-    // Auto-refresh when sort changes
+    document.getElementById('track-filter').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
     document.getElementById('sort-by').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
     document.getElementById('sort-order').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
 
