@@ -162,11 +162,11 @@ def get_unread_papers(
     db_path: Path,
     track: str | None = None,
     limit: int | None = None,
-    recent_days: int = 30,
+    recent_days: int | None = None,
 ) -> list[dict[str, Any]]:
     """Query candidate papers for recommendation.
 
-    Excludes papers that have been recommended or marked as read/skip.
+    Excludes papers that have been recommended, read, or skipped.
     """
     conn = _connect(db_path)
     params: list[Any] = []
@@ -175,8 +175,10 @@ def get_unread_papers(
     SELECT p.* FROM papers p
     LEFT JOIN paper_states ps ON p.id = ps.paper_id
     WHERE (ps.status IS NULL OR ps.status = 'pending')
-      AND p.created_at >= datetime('now', '-{} days')
-    """.format(recent_days)
+    """
+
+    if recent_days is not None:
+        sql += " AND p.publication_date >= date('now', '-{} days')".format(recent_days)
 
     if track:
         sql += " AND p.track LIKE ?"
@@ -262,6 +264,36 @@ def set_paper_status(
     conn.close()
 
 
+def get_paper_by_id_or_title(
+    db_path: Path,
+    query: str,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """Search papers by exact ID or fuzzy title match."""
+    conn = _connect(db_path)
+
+    # Try exact match first
+    cursor = conn.execute("SELECT * FROM papers WHERE id = ? LIMIT 1", (query,))
+    row = cursor.fetchone()
+    if row:
+        conn.close()
+        return [dict(row)]
+
+    # Fuzzy title search
+    cursor = conn.execute(
+        """
+        SELECT * FROM papers
+        WHERE title LIKE ?
+        ORDER BY score DESC
+        LIMIT ?
+        """,
+        (f"%{query}%", limit),
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
 def get_stats(db_path: Path) -> dict[str, Any]:
     """Return database statistics."""
     conn = _connect(db_path)
@@ -293,6 +325,25 @@ def get_stats(db_path: Path) -> dict[str, Any]:
         """
     ).fetchone()
     stats["recommendations_last_7_days"] = row[0] if row else 0
+
+    # Pending / read / starred counts
+    cursor = conn.execute(
+        """
+        SELECT
+            COUNT(CASE WHEN ps.status IS NULL OR ps.status = 'pending' THEN 1 END) as pending,
+            COUNT(CASE WHEN ps.status = 'read' THEN 1 END) as read,
+            COUNT(CASE WHEN ps.status = 'starred' THEN 1 END) as starred,
+            COUNT(CASE WHEN ps.status = 'skip' THEN 1 END) as skipped
+        FROM papers p
+        LEFT JOIN paper_states ps ON p.id = ps.paper_id
+        """
+    )
+    row = cursor.fetchone()
+    if row:
+        stats["pending"] = row[0]
+        stats["read"] = row[1]
+        stats["starred"] = row[2]
+        stats["skipped"] = row[3]
 
     conn.close()
     return stats
