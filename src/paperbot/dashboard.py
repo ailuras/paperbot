@@ -467,7 +467,8 @@ _HTML = """<!DOCTYPE html>
         if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
         const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
         const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
-        const meta = [`${p.venue||'Unknown'} ${p.publication_year||'?'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
+        const dateStr = p.publication_date || p.publication_year || '?';
+        const meta = [`${dateStr}`, `${p.venue||'Unknown'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
         const url = p.landing_page_url || p.doi || p.id || '#';
 
         const st = p.status || 'pending';
