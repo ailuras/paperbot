@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from paperbot.config import default_config_path, load_config
-from paperbot.db import get_recommendation_history, get_stats, init_db, list_papers, set_paper_status, upsert_papers
+from paperbot.db import get_recent_reads, get_stats, init_db, list_papers, set_paper_status, upsert_papers
 from paperbot.fetch import fetch_papers
 
 _HTML = """<!DOCTYPE html>
@@ -203,10 +203,10 @@ _HTML = """<!DOCTYPE html>
       </div>
     </section>
 
-    <!-- Recommendations -->
+    <!-- Recent Reads -->
     <section>
-      <h2>Recommendation History</h2>
-      <div id="recommendations">Loading...</div>
+      <h2>Recent Reads</h2>
+      <div id="recent-reads">Loading...</div>
     </section>
 
     <!-- Papers with Filters -->
@@ -332,23 +332,29 @@ _HTML = """<!DOCTYPE html>
       ).join('') + tracksHtml;
     }
 
-    async function loadRecommendations() {
-      const rows = await api('/api/recommendations?days=14');
-      const el = document.getElementById('recommendations');
-      if (!rows || !rows.length) { el.innerHTML = '<p class="empty-msg">No recommendations yet.</p>'; return; }
+    async function loadRecentReads() {
+      const rows = await api('/api/recent-reads?limit=3');
+      const el = document.getElementById('recent-reads');
+      if (!rows || !rows.length) { el.innerHTML = '<p class="empty-msg">No recent reads.</p>'; return; }
 
-      const byDate = {};
-      rows.forEach(r => { (byDate[r.date] ||= []).push(r); });
+      el.innerHTML = rows.map((p, i) => {
+        let authors = p.authors;
+        if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+        const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
+        const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
+        const dateStr = p.publication_date || p.publication_year || '?';
+        const url = p.landing_page_url || p.doi || p.id || '#';
+        const abstract = p.abstract || '';
+        const absDisplay = abstract.length > 300 ? abstract.slice(0, 300) + '...' : abstract;
 
-      el.innerHTML = Object.entries(byDate).sort((a,b) => b[0].localeCompare(a[0])).map(([date, items]) => {
-        const list = items.sort((a,b) => (a.slot_index||0) - (b.slot_index||0)).map(r =>
-          `<div class="recommendation-item">
-            <strong>#${(r.slot_index||0)+1}</strong> <span class="track-tag">${r.track||'?'}</span>
-            <div>${r.title || 'Untitled'}</div>
-            <div class="paper-meta">score ${(r.score||0).toFixed(1)}</div>
-          </div>`
-        ).join('');
-        return `<div class="recommendation-group"><div class="recommendation-date">📅 ${date}</div>${list}</div>`;
+        return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
+          <div>
+            <div class="paper-title"><strong>#${i+1}</strong> ${venueTag(p.venue, p.tier)} ${trackTag(p.track)} <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
+            <div class="paper-meta">${authorStr}${extraAuthors}</div>
+            <div class="paper-meta">${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}</div>
+            ${absDisplay ? `<div style="margin-top:0.5rem;font-size:0.9rem;opacity:0.85;line-height:1.5;">${absDisplay}</div>` : ''}
+          </div>
+        </div>`;
       }).join('');
     }
 
@@ -555,7 +561,7 @@ _HTML = """<!DOCTYPE html>
     async function init() {
       document.getElementById('last-updated').textContent = new Date().toLocaleString();
       await loadStats();
-      await loadRecommendations();
+      await loadRecentReads();
       await loadPapers();
     }
 
@@ -656,6 +662,11 @@ def make_handler(db_path: Path):
                 elif path == "/api/recommendations":
                     days = int(qs.get("days", "7"))
                     rows = get_recommendation_history(db_path, days=min(days, 365))
+                    _json_response(self, rows)
+
+                elif path == "/api/recent-reads":
+                    limit = int(qs.get("limit", "3"))
+                    rows = get_recent_reads(db_path, limit=min(limit, 10))
                     _json_response(self, rows)
 
                 else:
