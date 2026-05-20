@@ -148,21 +148,16 @@ _HTML = """<!DOCTYPE html>
     .track-tag.sat { background: #14532d; color: #dcfce7; }
     .track-tag.cp  { background: #7c2d12; color: #ffedd5; }
     .track-tag.mix { background: #581c87; color: #f3e8ff; }
-    .tier-tag {
+    .venue-tag {
       font-size: 0.7rem;
       padding: 0.1rem 0.35rem;
       border-radius: 3px;
       font-weight: 600;
     }
-    .tier-tag.t1 { background: #b45309; color: #fef3c7; }
-    .tier-tag.t2 { background: #1e3a8a; color: #dbeafe; }
-    .tier-tag.t3 { background: #374151; color: #e5e7eb; }
-    .venue-abbr {
-      font-size: 0.75rem;
-      font-weight: 700;
-      color: var(--pico-primary);
-      margin-right: 0.3rem;
-    }
+    .venue-tag.t1 { background: #b45309; color: #fef3c7; }
+    .venue-tag.t2 { background: #1e3a8a; color: #dbeafe; }
+    .venue-tag.t3 { background: #374151; color: #e5e7eb; }
+    .venue-tag.t0 { background: var(--pico-secondary-background); color: var(--pico-color); }
     .toast {
       position: fixed;
       bottom: 1rem;
@@ -329,13 +324,81 @@ _HTML = """<!DOCTYPE html>
       return `<span class="badge ${st}">${map[st] || st}</span>`;
     }
 
+    const VENUE_MAP = {
+      'CAV': ['computer aided verification'],
+      'ICSE': ['international conference on software engineering'],
+      'FSE': ['foundations of software engineering', 'esec/fse'],
+      'ASE': ['automated software engineering'],
+      'ISSTA': ['software testing and analysis'],
+      'PLDI': ['programming language design'],
+      'POPL': ['principles of programming languages'],
+      'OOPSLA': ['object-oriented programming'],
+      'NeurIPS': ['neural information processing', 'neurips'],
+      'ICML': ['international conference on machine learning'],
+      'ICLR': ['learning representations'],
+      'AAAI': ['advancement of artificial intelligence'],
+      'IJCAI': ['joint conference on artificial intelligence'],
+      'TACAS': ['tools and algorithms'],
+      'CADE': ['automated deduction'],
+      'IJCAR': ['joint conference on automated reasoning'],
+      'LICS': ['logic in computer science'],
+      'SAT': ['satisfiability testing', 'theory and applications of satisfiability'],
+      'CP': ['constraint programming', 'principles and practice of constraint programming'],
+      'FM': ['symposium on formal methods'],
+      'JAIR': ['journal of artificial intelligence research'],
+      'AIJ': ['artificial intelligence'],
+      'TOSEM': ['acm transactions on software engineering'],
+      'TSE': ['ieee transactions on software engineering'],
+      'TOPLAS': ['programming languages and systems'],
+      'USENIX': ['usenix security'],
+      'CCS': ['computer and communications security'],
+      'NDSS': ['network and distributed system security'],
+      'S&P': ['security and privacy', 'ieee symposium on security'],
+      'OSDI': ['operating systems design'],
+      'SOSP': ['operating systems principles'],
+      'EuroSys': ['eurosys'],
+      'SIGCOMM': ['sigcomm'],
+      'SIGMOD': ['management of data'],
+      'VLDB': ['very large data bases', 'vldb'],
+      'WWW': ['the web conference', 'world wide web'],
+      'ACL': ['association for computational linguistics'],
+      'EMNLP': ['empirical methods in natural language'],
+      'CVPR': ['computer vision and pattern recognition'],
+      'ICCV': ['international conference on computer vision'],
+      'ECCV': ['european conference on computer vision'],
+      'SAS': ['static analysis symposium'],
+      'ICLP': ['logic programming'],
+      'FMCAD': ['formal methods in computer-aided design'],
+      'VMCAI': ['verification, model checking'],
+      'CPAIOR': ['constraint programming, artificial intelligence'],
+      'LPAR': ['logic for programming'],
+      'JAR': ['journal of automated reasoning'],
+      'FMSD': ['formal methods in system design'],
+      'ICSME': ['software maintenance'],
+      'ISSRE': ['software reliability engineering'],
+      'SANER': ['software analysis, evolution'],
+      'COMPSAC': ['computer software and applications'],
+      'MSR': ['mining software repositories'],
+      'KR': ['knowledge representation and reasoning'],
+      'SEFM': ['software engineering and formal methods'],
+      'ICFEM': ['formal engineering methods'],
+      'ICECCS': ['engineering of complex computer systems'],
+      'QRS': ['software quality, reliability'],
+      'AST': ['automated software testing'],
+      'ICTAI': ['tools with artificial intelligence'],
+    };
+
     function venueAbbr(venue) {
       if (!venue) return '';
+      const v = venue.toLowerCase();
+      for (const [abbr, keywords] of Object.entries(VENUE_MAP)) {
+        for (const kw of keywords) {
+          if (v.includes(kw)) return abbr;
+        }
+      }
       const matches = venue.match(/\b[A-Z]{2,}\b/g);
       if (matches) return matches[0];
-      const words = venue.split(/\s+/).filter(w => w.length > 2 && !/^(the|of|on|in|for|and|with)$/i.test(w));
-      if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
-      return venue.slice(0, 3).toUpperCase();
+      return '';
     }
 
     function trackTag(track) {
@@ -347,10 +410,11 @@ _HTML = """<!DOCTYPE html>
       return `<span class="track-tag ${cls}">${track || '?'}</span>`;
     }
 
-    function tierBadge(tier) {
-      if (!tier || tier === '0') return '';
-      const cls = `t${tier}`;
-      return `<span class="tier-tag ${cls}">T${tier}</span>`;
+    function venueTag(venue, tier) {
+      const abbr = venueAbbr(venue);
+      if (!abbr) return '';
+      const t = tier || '0';
+      return `<span class="venue-tag t${t}">${abbr}</span>`;
     }
 
     async function markPaper(id, status) {
@@ -393,9 +457,7 @@ _HTML = """<!DOCTYPE html>
         if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
         const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
         const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
-        const abbr = venueAbbr(p.venue);
-        const venueDisplay = abbr ? `<span class="venue-abbr">${abbr}</span>${p.venue||'Unknown'}` : (p.venue || 'Unknown');
-        const meta = [`${venueDisplay} ${p.publication_year||'?'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
+        const meta = [`${p.venue||'Unknown'} ${p.publication_year||'?'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
         const url = p.landing_page_url || p.doi || p.id || '#';
 
         const st = p.status || 'pending';
@@ -415,7 +477,7 @@ _HTML = """<!DOCTYPE html>
           <div style="flex:1;min-width:0;">
             <div class="paper-title">${statusBadge(p.status||'pending')} <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
-            <div class="paper-meta">${meta} ${trackTag(p.track)} ${tierBadge(p.tier)}</div>
+            <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${meta}</div>
           </div>
           <div class="paper-actions">${actionBtns.join('')}</div>
         </div>`;
