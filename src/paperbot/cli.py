@@ -61,6 +61,12 @@ def recommend(
 
     today = datetime.now().strftime("%Y-%m-%d")
 
+    def _abbr(venue: str) -> str:
+        if not venue:
+            return "?"
+        m = __import__("re").search(r"\b[A-Z]{2,}\b", venue)
+        return m.group(0) if m else venue[:10]
+
     if json_output:
         for r in results:
             console.print(json.dumps({
@@ -70,8 +76,7 @@ def recommend(
                 "paper": r.paper,
             }, ensure_ascii=False))
     else:
-        sep = "-" * 10
-        console.print(f"{sep} Daily Papers · {today} {sep}")
+        console.print(f"Daily Papers · {today}")
 
         for r in results:
             p = r.paper
@@ -81,26 +86,28 @@ def recommend(
                     authors = json.loads(authors)
                 except json.JSONDecodeError:
                     authors = [authors]
-            author_str = ", ".join(authors[:2])
-            if len(authors) > 2:
-                author_str += " et al."
+            author_str = ", ".join(authors[:3])
+            if len(authors) > 3:
+                author_str += ", et al."
 
             venue = p.get("venue") or "OpenAlex"
-            year = p.get("publication_year") or "?"
-            score = p.get("score", 0) or 0
-            tier = p.get("tier", 0) or 0
-            track = p.get("track") or "?"
+            abbr = _abbr(venue)
             url = p.get("landing_page_url") or p.get("doi") or ""
+            abstract = p.get("abstract", "")
+            if len(abstract) > 300:
+                abstract = abstract[:300] + "..."
 
-            tier_tag = f"T{tier}" if tier else "T0"
-            line = f"#{r.slot_index + 1} [{track}] {p.get('title', 'No Title')} | {author_str} | {venue} {year} | Score {score:.1f} | {tier_tag}"
+            console.print("=====")
+            console.print(f"[{abbr}] {p.get('title', 'No Title')}")
             if url:
-                line += f" | {url}"
-            console.print(line)
+                console.print(f"Link: {url}")
+            console.print("-----")
+            console.print(f"Authors: {author_str}")
+            console.print("-----")
+            console.print(f"Abstract: {abstract}")
 
-        pending = sum(1 for p in papers if True)
-        console.print(f"{sep}")
-        console.print(f"Pending: {pending} | Selected: {len(results)}")
+        console.print("=====")
+        console.print(f"Pending: {len(papers)} | Selected: {len(results)}")
 
     if not dry_run:
         picks = [
@@ -227,8 +234,13 @@ def history(
         console.print("[yellow]No recent reads.[/yellow]")
         raise typer.Exit(0)
 
-    sep = "-" * 10
-    console.print(f"{sep} Recent Reads {sep}")
+    def _abbr(venue: str) -> str:
+        if not venue:
+            return "?"
+        m = __import__("re").search(r"\b[A-Z]{2,}\b", venue)
+        return m.group(0) if m else venue[:10]
+
+    console.print("Recent Reads")
 
     for i, p in enumerate(rows, 1):
         authors = p.get("authors", [])
@@ -237,22 +249,27 @@ def history(
                 authors = json.loads(authors)
             except json.JSONDecodeError:
                 authors = [authors]
-        author_str = ", ".join(authors[:2])
-        if len(authors) > 2:
-            author_str += " et al."
+        author_str = ", ".join(authors[:3])
+        if len(authors) > 3:
+            author_str += ", et al."
 
-        date_str = p.get("publication_date") or p.get("publication_year") or "?"
-        venue = p.get("venue") or "Unknown"
-        track = p.get("track") or "?"
-        score = p.get("score", 0) or 0
-        tier = p.get("tier", 0) or 0
+        venue = p.get("venue") or "OpenAlex"
+        abbr = _abbr(venue)
         url = p.get("landing_page_url") or p.get("doi") or ""
+        abstract = p.get("abstract", "")
+        if len(abstract) > 300:
+            abstract = abstract[:300] + "..."
 
-        tier_tag = f"T{tier}" if tier else "T0"
-        line = f"#{i} [{track}] {p.get('title', 'No Title')} | {author_str} | {venue} {date_str} | Score {score:.1f} | {tier_tag}"
+        console.print("=====")
+        console.print(f"[{abbr}] {p.get('title', 'No Title')}")
         if url:
-            line += f" | {url}"
-        console.print(line)
+            console.print(f"Link: {url}")
+        console.print("-----")
+        console.print(f"Authors: {author_str}")
+        console.print("-----")
+        console.print(f"Abstract: {abstract}")
+
+    console.print("=====")
 
 
 @app.command()
