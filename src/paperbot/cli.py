@@ -94,8 +94,6 @@ def recommend(
             abbr = _abbr(venue)
             url = p.get("landing_page_url") or p.get("doi") or ""
             abstract = p.get("abstract", "")
-            if len(abstract) > 300:
-                abstract = abstract[:300] + "..."
 
             console.print("=====")
             console.print(f"[{abbr}] {p.get('title', 'No Title')}")
@@ -257,8 +255,6 @@ def history(
         abbr = _abbr(venue)
         url = p.get("landing_page_url") or p.get("doi") or ""
         abstract = p.get("abstract", "")
-        if len(abstract) > 300:
-            abstract = abstract[:300] + "..."
 
         mark_time = p.get("changed_at", "")
 
