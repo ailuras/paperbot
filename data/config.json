@@ -4,7 +4,7 @@
     "base_url": "https://api.openalex.org/works",
     "mailto": "",
     "api_key_env": "OPENALEX_API_KEY",
-    "timeout_seconds": 20,
+    "timeout_seconds": 60,
     "per_page": 100,
     "default_days": 45,
     "default_max_results": 1000,
