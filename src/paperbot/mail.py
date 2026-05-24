@@ -29,6 +29,7 @@ def _smtp_config(settings: Settings) -> dict[str, Any]:
         "from_name": getattr(mail_cfg, "from_name", "PaperBot"),
         "to_addrs": getattr(mail_cfg, "to_addrs", []),
         "use_tls": getattr(mail_cfg, "use_tls", True),
+        "dashboard_url": getattr(mail_cfg, "dashboard_url", "http://localhost:8765"),
     }
 
 
@@ -153,6 +154,7 @@ def _build_email_body(
     title: str,
     date_str: str,
     stats: dict[str, Any] | None = None,
+    dashboard_url: str = "http://localhost:8765",
 ) -> str:
     """Build full HTML email body."""
     papers_html = "\n".join(_paper_to_html(p, i + 1) for i, p in enumerate(papers))
@@ -184,7 +186,7 @@ def _build_email_body(
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
   <p style="color:#94a3b8;font-size:12px;text-align:center;">
     PaperBot — daily paper recommendation for SMT/SAT/CP researchers<br>
-    <a href="http://localhost:8765" style="color:#64748b;">Open Dashboard</a>
+    <a href="{dashboard_url}" style="color:#64748b;">Open Dashboard</a>
   </p>
 </body>
 </html>"""
@@ -234,7 +236,10 @@ def send_recommendation_email(
 
         date_str = datetime.now().strftime("%Y-%m-%d")
 
-    html_body = _build_email_body(papers, "Daily Recommendations", date_str, stats)
+    html_body = _build_email_body(
+        papers, "Daily Recommendations", date_str, stats,
+        dashboard_url=cfg.get("dashboard_url", "http://localhost:8765"),
+    )
     return _send_email(
         cfg.get("to_addrs", []),
         f"PaperBot Daily · {date_str}",
@@ -294,7 +299,7 @@ def send_fetch_report_email(
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
   <p style="color:#94a3b8;font-size:12px;text-align:center;">
     PaperBot — daily paper recommendation for SMT/SAT/CP researchers<br>
-    <a href="http://localhost:8765" style="color:#64748b;">Open Dashboard</a>
+    <a href="{cfg.get('dashboard_url', 'http://localhost:8765')}" style="color:#64748b;">Open Dashboard</a>
   </p>
 </body>
 </html>"""

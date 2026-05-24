@@ -65,6 +65,7 @@ class MailConfig(BaseModel):
     from_name: str = "PaperBot"
     to_addrs: list[str] = Field(default_factory=list)
     use_tls: bool = True
+    dashboard_url: str = "http://localhost:8765"
 
 
 class Settings(BaseModel):
