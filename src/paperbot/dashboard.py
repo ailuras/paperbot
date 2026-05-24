@@ -11,8 +11,18 @@ from pathlib import Path
 from typing import Any
 
 from paperbot.config import default_config_path, load_config
-from paperbot.db import get_recent_reads, get_stats, init_db, list_papers, set_paper_status, upsert_papers
+from paperbot.db import (
+    get_paper_by_id_or_title,
+    get_recent_reads,
+    get_stats,
+    init_db,
+    list_papers,
+    save_recommendation,
+    set_paper_status,
+    upsert_papers,
+)
 from paperbot.fetch import fetch_papers
+from paperbot.recommend import recommend_papers
 
 _HTML = """<!DOCTYPE html>
 <html lang="en" data-theme="dark">
@@ -59,6 +69,9 @@ _HTML = """<!DOCTYPE html>
       font-weight: 600;
       margin-bottom: 0.25rem;
     }
+    .paper-title a {
+      cursor: pointer;
+    }
     .paper-meta {
       font-size: 0.8rem;
       opacity: 0.7;
@@ -86,22 +99,6 @@ _HTML = """<!DOCTYPE html>
     .badge.starred { background: #ffc107; color: #000; }
     .badge.skip { background: #dc3545; }
     .badge.recommended { background: #0d6efd; }
-    .recommendation-group {
-      margin-bottom: 1rem;
-    }
-    .recommendation-date {
-      font-weight: bold;
-      margin-bottom: 0.5rem;
-      padding: 0.5rem;
-      background: var(--pico-primary-background);
-      color: var(--pico-primary-inverse);
-      border-radius: var(--pico-border-radius);
-    }
-    .recommendation-item {
-      padding: 0.5rem 1rem;
-      border-left: 3px solid var(--pico-primary);
-      margin-bottom: 0.5rem;
-    }
     .tabs {
       display: flex;
       gap: 0.5rem;
@@ -178,12 +175,90 @@ _HTML = """<!DOCTYPE html>
       padding: 0.75rem 1.25rem;
       border-radius: var(--pico-border-radius);
       color: #fff;
-      z-index: 1000;
+      z-index: 2000;
       animation: fadein 0.3s ease;
     }
     .toast.success { background: #198754; }
     .toast.error { background: #dc3545; }
     @keyframes fadein { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal-content {
+      background: var(--pico-card-background-color);
+      border-radius: var(--pico-border-radius);
+      max-width: 800px;
+      width: 92vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 0.75rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--pico-muted-color);
+      line-height: 1;
+      padding: 0;
+    }
+    .modal-close:hover { color: var(--pico-color); }
+    .modal-header {
+      margin-bottom: 1rem;
+      padding-right: 2rem;
+    }
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem 0;
+      line-height: 1.4;
+    }
+    .modal-meta {
+      font-size: 0.85rem;
+      opacity: 0.8;
+      margin-bottom: 0.5rem;
+    }
+    .modal-section {
+      margin-bottom: 1rem;
+    }
+    .modal-section h4 {
+      font-size: 0.9rem;
+      margin: 0 0 0.25rem 0;
+      opacity: 0.7;
+    }
+    .modal-section p {
+      margin: 0;
+      line-height: 1.6;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--pico-muted-border-color);
+    }
+    .btn-group {
+      display: flex;
+      gap: 0.5rem;
+    }
   </style>
 </head>
 <body>
@@ -195,9 +270,12 @@ _HTML = """<!DOCTYPE html>
 
     <!-- Overview -->
     <section>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
         <h2 style="margin:0;">Overview</h2>
-        <button id="update-btn" onclick="updatePapers()">Update (40d)</button>
+        <div class="btn-group">
+          <button id="recommend-btn" onclick="recommendPapers()">Recommend</button>
+          <button id="update-btn" onclick="updatePapers()">Update (40d)</button>
+        </div>
       </div>
       <div class="stats-grid" id="stats-grid">
         <div class="stat-card"><div class="number">-</div><div class="label">Total</div></div>
@@ -246,6 +324,30 @@ _HTML = """<!DOCTYPE html>
     </section>
   </main>
 
+  <!-- Paper Detail Modal -->
+  <div class="modal-overlay" id="paper-modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="hidePaperDetail()">&times;</button>
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-meta" id="modal-meta"></div>
+      </div>
+      <div class="modal-section">
+        <h4>Authors</h4>
+        <p id="modal-authors"></p>
+      </div>
+      <div class="modal-section">
+        <h4>Abstract</h4>
+        <p id="modal-abstract"></p>
+      </div>
+      <div class="modal-section">
+        <h4>Links</h4>
+        <p id="modal-links"></p>
+      </div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+
   <script>
     const API = '';
     let currentTab = 'pending';
@@ -286,6 +388,26 @@ _HTML = """<!DOCTYPE html>
       loadPapers();
     }
 
+    async function recommendPapers() {
+      const btn = document.getElementById('recommend-btn');
+      btn.disabled = true;
+      btn.textContent = 'Recommending...';
+      try {
+        const r = await fetch(API + '/api/recommend', { method: 'POST' });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        toast(`Recommended: ${data.count} papers`);
+        await loadStats();
+        await loadRecentReads();
+        await loadPapers();
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Recommend';
+      }
+    }
+
     async function updatePapers() {
       const btn = document.getElementById('update-btn');
       btn.disabled = true;
@@ -319,7 +441,7 @@ _HTML = """<!DOCTYPE html>
       let tracksHtml = '';
       if (s.by_track) {
         const tracks = Object.entries(s.by_track)
-          .filter(([t]) => !t.includes(','))  // skip combined tracks
+          .filter(([t]) => !t.includes(','))
           .sort((a, b) => b[1] - a[1]);
         tracksHtml = '<div style="margin-top:0.75rem;">' +
           tracks.map(([t, c]) => `
@@ -353,7 +475,7 @@ _HTML = """<!DOCTYPE html>
 
         return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
           <div>
-            <div class="paper-title"><strong>#${i+1}</strong> <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
+            <div class="paper-title"><strong>#${i+1}</strong> <a onclick="showPaperDetail('${p.id}')" style="cursor:pointer;">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
             <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}</div>
             ${markTime ? `<div class="paper-meta" style="opacity:0.6;">${markTime}</div>` : ''}
@@ -473,6 +595,69 @@ _HTML = """<!DOCTYPE html>
       }
     }
 
+    async function showPaperDetail(id) {
+      try {
+        const p = await api(`/api/paper/${encodeURIComponent(id)}`);
+        if (!p) { toast('Paper not found', 'error'); return; }
+
+        document.getElementById('modal-title').textContent = p.title || 'Untitled';
+
+        let authors = p.authors;
+        if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+        const authorStr = (Array.isArray(authors) ? authors.join(', ') : (authors||'Unknown'));
+        const dateStr = p.publication_date || p.publication_year || '?';
+        const metaHtml = `${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}`;
+        document.getElementById('modal-meta').innerHTML = metaHtml;
+        document.getElementById('modal-authors').textContent = authorStr;
+        document.getElementById('modal-abstract').textContent = p.abstract || 'No abstract available.';
+
+        const url = p.landing_page_url || p.doi || p.id || '';
+        document.getElementById('modal-links').innerHTML = url
+          ? `<a href="${url}" target="_blank" class="secondary">${url}</a>`
+          : '<em>No link available</em>';
+
+        const st = p.status || 'pending';
+        const actionBtns = [
+          st === 'read'
+            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Mark Unread</button>`
+            : `<button onclick="markPaperFromModal('${p.id}','read')">✅ Mark Read</button>`,
+          st === 'starred'
+            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Unstar</button>`
+            : `<button onclick="markPaperFromModal('${p.id}','starred')">⭐ Star</button>`,
+          st === 'skip'
+            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Unskip</button>`
+            : `<button onclick="markPaperFromModal('${p.id}','skip')" class="secondary">❌ Skip</button>`,
+        ];
+        document.getElementById('modal-actions').innerHTML = actionBtns.join('');
+
+        document.getElementById('paper-modal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    function hidePaperDetail() {
+      document.getElementById('paper-modal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function closeModal(event) {
+      if (event.target === document.getElementById('paper-modal')) {
+        hidePaperDetail();
+      }
+    }
+
+    async function markPaperFromModal(id, status) {
+      await markPaper(id, status);
+      hidePaperDetail();
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hidePaperDetail();
+    });
+
     async function loadPapers() {
       const keyword = document.getElementById('keyword').value;
       const track = document.getElementById('track-filter').value;
@@ -524,7 +709,7 @@ _HTML = """<!DOCTYPE html>
 
         return `<div class="paper-row">
           <div style="flex:1;min-width:0;">
-            <div class="paper-title">${statusBadge(p.status||'pending')} <a href="${url}" target="_blank">${p.title||'Untitled'}</a></div>
+            <div class="paper-title">${statusBadge(p.status||'pending')} <a onclick="showPaperDetail('${p.id}')" style="cursor:pointer;">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
             <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${meta}</div>
           </div>
@@ -688,7 +873,17 @@ def make_handler(db_path: Path):
                     )
                     _json_response(self, data)
 
+                elif path.startswith("/api/paper/"):
+                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):])
+                    matches = get_paper_by_id_or_title(db_path, paper_id, limit=1)
+                    if matches:
+                        _json_response(self, matches[0])
+                    else:
+                        _json_response(self, {"error": "Paper not found"}, 404)
+
                 elif path == "/api/recommendations":
+                    from paperbot.db import get_recommendation_history
+
                     days = int(qs.get("days", "7"))
                     rows = get_recommendation_history(db_path, days=min(days, 365))
                     _json_response(self, rows)
@@ -732,6 +927,33 @@ def make_handler(db_path: Path):
                         "updated": updated,
                         "total": len(papers),
                         "range": stats.get("range", ""),
+                    })
+
+                elif path == "/api/recommend":
+                    from datetime import datetime
+
+                    cfg = load_config(default_config_path())
+                    papers = get_unread_papers(db_path)
+                    if not papers:
+                        _json_response(self, {"success": True, "count": 0, "message": "No unread papers"})
+                        return
+
+                    results = recommend_papers(papers, cfg)
+                    if not results:
+                        _json_response(self, {"success": True, "count": 0, "message": "No papers selected"})
+                        return
+
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    picks = [{"paper_id": r.paper_id, "slot_index": r.slot_index} for r in results]
+                    save_recommendation(db_path, today, picks)
+                    for r in results:
+                        if r.paper_id:
+                            set_paper_status(db_path, r.paper_id, "read")
+
+                    _json_response(self, {
+                        "success": True,
+                        "count": len(results),
+                        "date": today,
                     })
 
                 else:
