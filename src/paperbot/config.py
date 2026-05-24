@@ -62,6 +62,7 @@ class MailConfig(BaseModel):
     smtp_user: str = ""
     smtp_password: str = ""
     from_addr: str = ""
+    from_name: str = "PaperBot"
     to_addrs: list[str] = Field(default_factory=list)
     use_tls: bool = True
 
@@ -91,7 +92,14 @@ def load_config(path: Path | str | None = None) -> Settings:
 
     path = path.expanduser()
     if not path.exists():
-        raise FileNotFoundError(f"Config file not found: {path}")
+        # Try to copy from example template
+        example = path.with_suffix(path.suffix + ".example")
+        if example.exists():
+            import shutil
+
+            shutil.copy(example, path)
+        else:
+            raise FileNotFoundError(f"Config file not found: {path}")
 
     with path.open() as f:
         raw: dict[str, Any] = json.load(f)

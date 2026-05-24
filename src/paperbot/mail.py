@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import os
+import shutil
 import smtplib
+import subprocess
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
@@ -24,9 +26,86 @@ def _smtp_config(settings: Settings) -> dict[str, Any]:
         "user": getattr(mail_cfg, "smtp_user", os.getenv("SMTP_USER", "")),
         "password": getattr(mail_cfg, "smtp_password", os.getenv("SMTP_PASSWORD", "")),
         "from_addr": getattr(mail_cfg, "from_addr", os.getenv("SMTP_FROM", "")),
+        "from_name": getattr(mail_cfg, "from_name", "PaperBot"),
         "to_addrs": getattr(mail_cfg, "to_addrs", []),
         "use_tls": getattr(mail_cfg, "use_tls", True),
     }
+
+
+def _has_local_sendmail() -> str | None:
+    """Check if a local sendmail-compatible binary is available."""
+    for candidate in ("/usr/sbin/sendmail", "/usr/lib/sendmail"):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    # Also check for ssmtp/msmtp wrappers
+    for cmd in ("sendmail", "ssmtp", "msmtp"):
+        path = shutil.which(cmd)
+        if path:
+            return path
+    return None
+
+
+def _send_via_local(
+    to_addrs: list[str],
+    subject: str,
+    from_addr: str,
+    from_name: str,
+    body: str,
+) -> bool:
+    """Send email using local sendmail binary."""
+    sendmail_path = _has_local_sendmail()
+    if not sendmail_path:
+        return False
+
+    # Build raw email with headers
+    display_from = f"{from_name} <{from_addr}>" if from_name else from_addr
+    headers = (
+        f"From: {display_from}\r\n"
+        f"To: {', '.join(to_addrs)}\r\n"
+        f"Subject: {subject}\r\n"
+        f"Content-Type: text/html; charset=utf-8\r\n"
+        f"MIME-Version: 1.0\r\n"
+        f"\r\n"
+    )
+    raw = headers + body
+
+    try:
+        proc = subprocess.run(
+            [sendmail_path, "-t"] + to_addrs,
+            input=raw.encode("utf-8"),
+            capture_output=True,
+            timeout=30,
+        )
+        return proc.returncode == 0
+    except Exception:
+        return False
+
+
+def _send_via_smtp(
+    to_addrs: list[str],
+    subject: str,
+    from_addr: str,
+    from_name: str,
+    body: str,
+    cfg: dict[str, Any],
+) -> bool:
+    """Send email using SMTP."""
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = f"{from_name} <{from_addr}>" if from_name else from_addr
+    msg["To"] = ", ".join(to_addrs)
+    msg.attach(MIMEText(body, "html", "utf-8"))
+
+    try:
+        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
+            if cfg.get("use_tls", True):
+                server.starttls()
+            if cfg.get("user") and cfg.get("password"):
+                server.login(cfg["user"], cfg["password"])
+            server.sendmail(from_addr, to_addrs, msg.as_string())
+        return True
+    except Exception:
+        return False
 
 
 def _paper_to_html(paper: dict[str, Any], index: int) -> str:
@@ -111,6 +190,32 @@ def _build_email_body(
 </html>"""
 
 
+def _send_email(
+    to_addrs: list[str],
+    subject: str,
+    body: str,
+    cfg: dict[str, Any],
+) -> bool:
+    """Send email using local sendmail if available, fallback to SMTP."""
+    from_addr = cfg.get("from_addr", "")
+    from_name = cfg.get("from_name", "PaperBot")
+
+    if not from_addr:
+        return False
+    if not to_addrs:
+        return False
+
+    # Try local sendmail first
+    if _has_local_sendmail():
+        return _send_via_local(to_addrs, subject, from_addr, from_name, body)
+
+    # Fallback to SMTP if configured
+    if cfg.get("host"):
+        return _send_via_smtp(to_addrs, subject, from_addr, from_name, body, cfg)
+
+    return False
+
+
 def send_recommendation_email(
     papers: list[dict[str, Any]],
     settings: Settings,
@@ -120,39 +225,22 @@ def send_recommendation_email(
     """Send daily recommendation email.
 
     Returns True if email was sent successfully, False otherwise.
-    Only sends if mail configuration is properly set up.
+    Uses local sendmail if available, otherwise falls back to SMTP.
     """
     cfg = _smtp_config(settings)
-    if not cfg.get("host") or not cfg.get("from_addr"):
-        return False
-
-    to_addrs = cfg.get("to_addrs", [])
-    if not to_addrs:
-        return False
 
     if date_str is None:
         from datetime import datetime
 
         date_str = datetime.now().strftime("%Y-%m-%d")
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"PaperBot Daily · {date_str}"
-    msg["From"] = cfg["from_addr"]
-    msg["To"] = ", ".join(to_addrs)
-
     html_body = _build_email_body(papers, "Daily Recommendations", date_str, stats)
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
-            if cfg.get("use_tls", True):
-                server.starttls()
-            if cfg.get("user") and cfg.get("password"):
-                server.login(cfg["user"], cfg["password"])
-            server.sendmail(cfg["from_addr"], to_addrs, msg.as_string())
-        return True
-    except Exception:
-        return False
+    return _send_email(
+        cfg.get("to_addrs", []),
+        f"PaperBot Daily · {date_str}",
+        html_body,
+        cfg,
+    )
 
 
 def send_fetch_report_email(
@@ -166,12 +254,6 @@ def send_fetch_report_email(
     Returns True if email was sent successfully, False otherwise.
     """
     cfg = _smtp_config(settings)
-    if not cfg.get("host") or not cfg.get("from_addr"):
-        return False
-
-    to_addrs = cfg.get("to_addrs", [])
-    if not to_addrs:
-        return False
 
     if date_str is None:
         from datetime import datetime
@@ -217,19 +299,9 @@ def send_fetch_report_email(
 </body>
 </html>"""
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"PaperBot Fetch · {date_str}"
-    msg["From"] = cfg["from_addr"]
-    msg["To"] = ", ".join(to_addrs)
-    msg.attach(MIMEText(html_body, "html", "utf-8"))
-
-    try:
-        with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
-            if cfg.get("use_tls", True):
-                server.starttls()
-            if cfg.get("user") and cfg.get("password"):
-                server.login(cfg["user"], cfg["password"])
-            server.sendmail(cfg["from_addr"], to_addrs, msg.as_string())
-        return True
-    except Exception:
-        return False
+    return _send_email(
+        cfg.get("to_addrs", []),
+        f"PaperBot Fetch · {date_str}",
+        html_body,
+        cfg,
+    )

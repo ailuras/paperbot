@@ -247,7 +247,8 @@
     "smtp_user": "",
     "smtp_password": "",
     "from_addr": "",
-    "to_addrs": ["hrcarryu@gmail.com"],
+    "from_name": "PaperBot",
+    "to_addrs": [],
     "use_tls": true
   }
 }

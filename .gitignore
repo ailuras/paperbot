@@ -1,6 +1,7 @@
 # Data (mutable, local only)
 data/*.db
 data/*.sqlite
+data/config.json
 .paperbot/
 *.db
 
