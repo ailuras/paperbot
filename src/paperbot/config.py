@@ -66,12 +66,6 @@ class MailConfig(BaseModel):
     use_tls: bool = True
 
 
-class SchedulerConfig(BaseModel):
-    recommend_cron: str = "0 8 * * *"  # Daily at 8:00
-    fetch_cron: str = "0 8 1 * *"  # 1st of month at 8:00
-    enabled: bool = False
-
-
 class Settings(BaseModel):
     data_dir: Path = Field(default_factory=lambda: Path.home() / ".paperbot")
     openalex: OpenAlexConfig = Field(default_factory=OpenAlexConfig)
@@ -80,7 +74,6 @@ class Settings(BaseModel):
     scoring: ScoringConfig
     recommendation: RecommendationConfig = Field(default_factory=RecommendationConfig)
     mail: MailConfig = Field(default_factory=MailConfig)
-    scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
 
     model_config = {"populate_by_name": True}
 

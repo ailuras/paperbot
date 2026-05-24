@@ -25,8 +25,8 @@ from paperbot.db import (
     upsert_papers,
 )
 from paperbot.fetch import fetch_papers
+from paperbot.mail import send_fetch_report_email, send_recommendation_email
 from paperbot.recommend import recommend_papers
-from paperbot.scheduler import run_scheduler_daemon
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
 console = Console()
@@ -44,6 +44,7 @@ def recommend(
     count: int = typer.Option(3, help="Number of papers to recommend"),
     json_output: bool = typer.Option(False, "--json", help="Output NDJSON"),
     dry_run: bool = typer.Option(False, help="Preview without saving"),
+    email: bool = typer.Option(False, "--email", help="Send result via email (used by crontab)"),
 ) -> None:
     """Generate today's paper recommendations."""
     cfg = load_config(default_config_path())
@@ -122,6 +123,17 @@ def recommend(
             if r.paper_id:
                 set_paper_status(db_path, r.paper_id, "read")
         console.print(f"[green]Saved {len(results)} recommendations.[/green]")
+
+        if email:
+            sent = send_recommendation_email(
+                papers=[r.paper for r in results],
+                settings=cfg,
+                date_str=today,
+            )
+            if sent:
+                console.print("[green]Email sent.[/green]")
+            else:
+                console.print("[yellow]Email not sent (check mail config).[/yellow]")
     else:
         console.print("[yellow]Dry run — not saved.[/yellow]")
 
@@ -130,6 +142,7 @@ def recommend(
 def fetch(
     days: int = typer.Option(45, help="How many days back to fetch"),
     dry_run: bool = typer.Option(False, help="Preview without saving"),
+    email: bool = typer.Option(False, "--email", help="Send report via email (used by crontab)"),
 ) -> None:
     """Fetch papers from OpenAlex."""
     cfg = load_config(default_config_path())
@@ -163,6 +176,18 @@ def fetch(
     inserted, updated = upsert_papers(db_path, papers)
     console.print()
     console.print(f"[green]Inserted: {inserted} | Updated: {updated}[/green]")
+
+    if email:
+        sent = send_fetch_report_email(
+            stats=stats,
+            papers_count=inserted + updated,
+            settings=cfg,
+            date_str=datetime.now().strftime("%Y-%m-%d"),
+        )
+        if sent:
+            console.print("[green]Email report sent.[/green]")
+        else:
+            console.print("[yellow]Email not sent (check mail config).[/yellow]")
 
 
 @app.command()
@@ -326,81 +351,6 @@ def serve(
 
     run_dashboard(db_path=db_path, host=host, port=port)
 
-
-@app.command()
-def scheduler(
-    action: str = typer.Argument(..., help="Action: start|stop|status"),
-) -> None:
-    """Manage the background scheduler daemon."""
-    cfg = load_config(default_config_path())
-    db_path = cfg.data_dir / "paperbot.db"
-    init_db(db_path)
-    pid_path = cfg.data_dir / "scheduler.pid"
-
-    if action == "start":
-        if pid_path.exists():
-            try:
-                pid = int(pid_path.read_text().strip())
-                os.kill(pid, 0)
-                console.print(f"[yellow]Scheduler already running (pid {pid}).[/yellow]")
-                raise typer.Exit(0)
-            except (ValueError, ProcessLookupError, PermissionError):
-                pid_path.unlink(missing_ok=True)
-
-        import subprocess
-        import sys
-
-        # Start scheduler as background subprocess
-        log_path = cfg.data_dir / "scheduler.log"
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        proc = subprocess.Popen(
-            [sys.executable, "-c",
-             f"from paperbot.scheduler import run_scheduler_daemon; "
-             f"from pathlib import Path; "
-             f"run_scheduler_daemon(Path('{default_config_path()}'), Path('{db_path}'), Path('{pid_path}'))"],
-            stdout=open(log_path, "a+"),
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        # Small delay to let process start and write pid file
-        import time
-        time.sleep(0.5)
-        if pid_path.exists():
-            daemon_pid = int(pid_path.read_text().strip())
-            console.print(f"[green]Scheduler started (pid {daemon_pid}).[/green]")
-        else:
-            console.print(f"[green]Scheduler started.[/green]")
-        console.print(f"[dim]Config: recommend={cfg.scheduler.recommend_cron}, fetch={cfg.scheduler.fetch_cron}[/dim]")
-        console.print(f"[dim]Log: {log_path}[/dim]")
-
-    elif action == "stop":
-        if not pid_path.exists():
-            console.print("[yellow]Scheduler is not running.[/yellow]")
-            raise typer.Exit(0)
-        try:
-            pid = int(pid_path.read_text().strip())
-            os.kill(pid, 15)
-            pid_path.unlink(missing_ok=True)
-            console.print("[green]Scheduler stopped.[/green]")
-        except (ValueError, ProcessLookupError, PermissionError):
-            pid_path.unlink(missing_ok=True)
-            console.print("[yellow]Scheduler was not running.[/yellow]")
-
-    elif action == "status":
-        if pid_path.exists():
-            try:
-                pid = int(pid_path.read_text().strip())
-                os.kill(pid, 0)
-                console.print(f"[green]Scheduler: RUNNING (pid {pid})[/green]")
-            except (ValueError, ProcessLookupError, PermissionError):
-                console.print("[yellow]Scheduler: STOPPED (stale pid file)[/yellow]")
-                pid_path.unlink(missing_ok=True)
-        else:
-            console.print("[yellow]Scheduler: STOPPED[/yellow]")
-        console.print(f"[dim]Config: recommend={cfg.scheduler.recommend_cron}, fetch={cfg.scheduler.fetch_cron}, enabled={cfg.scheduler.enabled}[/dim]")
-    else:
-        console.print(f"[red]Unknown action: {action}. Use start|stop|status.[/red]")
-        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

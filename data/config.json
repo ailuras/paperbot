@@ -249,10 +249,5 @@
     "from_addr": "",
     "to_addrs": ["hrcarryu@gmail.com"],
     "use_tls": true
-  },
-  "scheduler": {
-    "recommend_cron": "0 8 * * *",
-    "fetch_cron": "0 8 1 * *",
-    "enabled": false
   }
 }
