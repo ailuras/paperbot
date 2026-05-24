@@ -240,5 +240,19 @@
     "quality_slots": 1,
     "high_score_threshold": 5,
     "recent_days": 30
+  },
+  "mail": {
+    "smtp_host": "",
+    "smtp_port": 587,
+    "smtp_user": "",
+    "smtp_password": "",
+    "from_addr": "",
+    "to_addrs": ["hrcarryu@gmail.com"],
+    "use_tls": true
+  },
+  "scheduler": {
+    "recommend_cron": "0 8 * * *",
+    "fetch_cron": "0 8 1 * *",
+    "enabled": false
   }
 }
