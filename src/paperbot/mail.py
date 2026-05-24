@@ -71,7 +71,7 @@ def _send_via_local(
 
     try:
         proc = subprocess.run(
-            [sendmail_path, "-t"] + to_addrs,
+            [sendmail_path, "-t"],
             input=raw.encode("utf-8"),
             capture_output=True,
             timeout=30,

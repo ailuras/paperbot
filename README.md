@@ -7,15 +7,17 @@ Daily paper recommendation for SMT / SAT / CP researchers.
 ```
 paperbot/
 ├── data/
-│   └── config.json          # user-configurable tracks, scoring tiers, filters
+│   ├── config.json.example    # configuration template (copy to config.json)
+│   └── config.json            # your local config (gitignored)
 ├── src/paperbot/
 │   ├── __init__.py
-│   ├── cli.py               # typer CLI entry point
-│   ├── config.py            # pydantic settings loader
-│   ├── dashboard.py         # web dashboard (HTTP server + SPA)
-│   ├── db.py                # SQLite layer (papers, recommendations, marks)
-│   ├── fetch.py             # OpenAlex API fetcher
-│   └── recommend.py         # recommendation engine
+│   ├── cli.py                 # typer CLI entry point
+│   ├── config.py              # pydantic settings loader
+│   ├── dashboard.py           # web dashboard (HTTP server + SPA)
+│   ├── db.py                  # SQLite layer (papers, recommendations, marks)
+│   ├── fetch.py               # OpenAlex API fetcher
+│   ├── mail.py                # email notifications (sendmail / SMTP)
+│   └── recommend.py           # recommendation engine
 ├── pyproject.toml
 └── README.md
 ```
@@ -48,14 +50,14 @@ uv run paperbot fetch --help
 
 ### Command Cheatsheet
 
-| Command     | Description                    | Common Options                |
-|-------------|--------------------------------|-------------------------------|
-| `fetch`     | Fetch papers from OpenAlex     | `--days 40` last 40 days      |
-| `recommend` | Generate daily recommendations | `--count 3` number of picks   |
-| `mark`      | Mark a paper status            | `--status read`               |
-| `stats`     | Show database statistics       | —                             |
-| `history`   | Show recent reads              | `--limit 10`                  |
-| `serve`     | Start the web dashboard        | `--port 8765 --daemon`        |
+| Command | Description | Common Options |
+|---------|-------------|----------------|
+| `fetch` | Fetch papers from OpenAlex | `--days 40`, `--email` |
+| `recommend` | Generate daily recommendations | `--count 3`, `--email` |
+| `mark` | Mark a paper status | `--status read` |
+| `stats` | Show database statistics | — |
+| `history` | Show recent reads | `--limit 10` |
+| `serve` | Start the web dashboard | `--port 8765 --daemon` |
 
 ### Examples
 
@@ -79,6 +81,49 @@ uv run paperbot mark "paper title" --status read
 uv run paperbot stats
 ```
 
+### Email Notifications
+
+PaperBot supports email notifications via **local sendmail** (default) or **SMTP**.
+
+**Local sendmail** (no configuration needed):
+```bash
+paperbot recommend --email
+paperbot fetch --email
+```
+
+**SMTP** (configure in `data/config.json`):
+```json
+"mail": {
+  "smtp_host": "smtp.gmail.com",
+  "smtp_port": 587,
+  "smtp_user": "your-email@gmail.com",
+  "smtp_password": "your-app-password",
+  "from_addr": "your-email@gmail.com",
+  "from_name": "PaperBot",
+  "to_addrs": ["recipient@example.com"],
+  "use_tls": true
+}
+```
+
+Environment variable overrides: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
+
+### Scheduled Tasks (crontab)
+
+PaperBot uses system crontab for periodic tasks (same approach as mihomo).
+
+```bash
+# Daily recommendation at 8:00
+0 8 * * * /path/to/paperbot recommend --email
+
+# Monthly fetch on 1st at 8:00
+0 8 1 * * /path/to/paperbot fetch --email
+```
+
+Current crontab:
+```bash
+crontab -l
+```
+
 ### Alternative: activate venv first
 
 ```bash
@@ -93,12 +138,19 @@ paperbot serve --port 8765 --daemon
 
 ## Configuration
 
+Copy the template and edit:
+
+```bash
+cp data/config.json.example data/config.json
+```
+
 Edit `data/config.json` to customize:
 
 - **tracks** — SMT, SAT, CP queries and keywords
 - **scoring.tiers** — venue tiers with point weights
-- **scoring.citation_breakpoints** — citation → score mapping
+- **scoring.citation_breakpoints** — citation -> score mapping
 - **filters** — title / source / venue blacklist
 - **recommendation** — daily count, quality slots, thresholds
+- **mail** — email sender config (sendmail or SMTP)
 
 Default data directory: `~/.paperbot/`

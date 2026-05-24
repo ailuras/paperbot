@@ -274,7 +274,7 @@ _HTML = """<!DOCTYPE html>
         <h2 style="margin:0;">Overview</h2>
         <div class="btn-group">
           <button id="recommend-btn" onclick="recommendPapers()">Recommend</button>
-          <button id="update-btn" onclick="updatePapers()">Update (40d)</button>
+          <button id="update-btn" onclick="updatePapers()">Fetch</button>
         </div>
       </div>
       <div class="stats-grid" id="stats-grid">
@@ -423,7 +423,7 @@ _HTML = """<!DOCTYPE html>
         toast(e.message, 'error');
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Update (40d)';
+        btn.textContent = 'Fetch';
       }
     }
 
