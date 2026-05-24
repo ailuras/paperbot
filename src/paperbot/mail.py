@@ -196,7 +196,7 @@ def _send_email(
     body: str,
     cfg: dict[str, Any],
 ) -> bool:
-    """Send email using local sendmail if available, fallback to SMTP."""
+    """Send email using SMTP if configured, fallback to local sendmail."""
     from_addr = cfg.get("from_addr", "")
     from_name = cfg.get("from_name", "PaperBot")
 
@@ -205,13 +205,13 @@ def _send_email(
     if not to_addrs:
         return False
 
-    # Try local sendmail first
-    if _has_local_sendmail():
-        return _send_via_local(to_addrs, subject, from_addr, from_name, body)
-
-    # Fallback to SMTP if configured
+    # Prefer SMTP if configured (can send to external addresses)
     if cfg.get("host"):
         return _send_via_smtp(to_addrs, subject, from_addr, from_name, body, cfg)
+
+    # Fallback to local sendmail (usually local-only delivery)
+    if _has_local_sendmail():
+        return _send_via_local(to_addrs, subject, from_addr, from_name, body)
 
     return False
 
