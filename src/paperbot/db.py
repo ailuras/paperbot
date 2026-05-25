@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS paper_notes (
     note TEXT NOT NULL DEFAULT '',
     updated_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS paper_translations (
+    paper_id TEXT PRIMARY KEY,
+    title_zh TEXT,
+    abstract_zh TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS paper_pdfs (
+    paper_id TEXT PRIMARY KEY,
+    pdf_url TEXT NOT NULL,
+    pdf_source TEXT,
+    resolved_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 # ── Connection helper ───────────────────────────────────────────────
@@ -484,3 +498,83 @@ def get_stats(db_path: Path) -> dict[str, Any]:
 
     conn.close()
     return stats
+
+
+# ── Translation cache ─────────────────────────────────────────────────
+
+
+def get_paper_translation(db_path: Path, paper_id: str) -> dict[str, str]:
+    """Get cached translation for a paper."""
+    conn = _connect(db_path)
+    cursor = conn.execute(
+        "SELECT title_zh, abstract_zh FROM paper_translations WHERE paper_id = ?",
+        (paper_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"title_zh": row[0] or "", "abstract_zh": row[1] or ""}
+    return {"title_zh": "", "abstract_zh": ""}
+
+
+def set_paper_translation(
+    db_path: Path,
+    paper_id: str,
+    title_zh: str,
+    abstract_zh: str,
+) -> None:
+    """Save or update translation for a paper."""
+    conn = _connect(db_path)
+    conn.execute(
+        """
+        INSERT INTO paper_translations (paper_id, title_zh, abstract_zh, updated_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(paper_id) DO UPDATE SET
+            title_zh = excluded.title_zh,
+            abstract_zh = excluded.abstract_zh,
+            updated_at = datetime('now')
+        """,
+        (paper_id, title_zh, abstract_zh),
+    )
+    conn.commit()
+    conn.close()
+
+
+# ── PDF URL cache ─────────────────────────────────────────────────────
+
+
+def get_paper_pdf(db_path: Path, paper_id: str) -> dict[str, str] | None:
+    """Get cached PDF URL for a paper."""
+    conn = _connect(db_path)
+    cursor = conn.execute(
+        "SELECT pdf_url, pdf_source FROM paper_pdfs WHERE paper_id = ?",
+        (paper_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {"pdf_url": row[0], "pdf_source": row[1] or ""}
+    return None
+
+
+def set_paper_pdf(
+    db_path: Path,
+    paper_id: str,
+    pdf_url: str,
+    pdf_source: str = "",
+) -> None:
+    """Save or update PDF URL for a paper."""
+    conn = _connect(db_path)
+    conn.execute(
+        """
+        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
+        VALUES (?, ?, ?, datetime('now'))
+        ON CONFLICT(paper_id) DO UPDATE SET
+            pdf_url = excluded.pdf_url,
+            pdf_source = excluded.pdf_source,
+            resolved_at = datetime('now')
+        """,
+        (paper_id, pdf_url, pdf_source),
+    )
+    conn.commit()
+    conn.close()
