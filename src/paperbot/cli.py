@@ -191,6 +191,49 @@ def fetch(
 
 
 @app.command()
+def init(
+    days: int = typer.Option(365, help="How many days back to fetch"),
+    dry_run: bool = typer.Option(False, help="Preview without saving"),
+) -> None:
+    """Initialize the database by fetching papers from the last year."""
+    cfg = load_config(default_config_path())
+    db_path = _db_path()
+
+    console.print(f"[blue]Initializing database — fetching from OpenAlex...[/blue]")
+    papers, stats = fetch_papers(cfg, days=days)
+
+    hl = "━" * 16
+    console.print()
+    console.print(hl)
+    console.print(f"[bold]Fetch Report · {datetime.now().strftime('%Y-%m-%d')}[/bold]")
+    console.print(hl)
+    console.print(f"Range: {stats['range']} ({stats['days']} days)")
+    console.print()
+    console.print("[bold]By Track:[/bold]")
+    for ts in stats["track_stats"]:
+        console.print(f"  {ts['track']:<4}  raw {ts['raw']:>4}  →  kept {ts['filtered']:>4}")
+    console.print()
+    console.print(f"Total raw: {stats['total_raw']} | Filtered: {stats['total_filtered']}")
+
+    if dry_run:
+        console.print()
+        console.print("[yellow]Dry run — not saved.[/yellow]")
+        raise typer.Exit(0)
+
+    if not papers:
+        console.print("[yellow]No papers to save.[/yellow]")
+        raise typer.Exit(0)
+
+    inserted, updated = upsert_papers(db_path, papers)
+    console.print()
+    console.print(f"[green]Inserted: {inserted} | Updated: {updated}[/green]")
+
+    total = get_stats(db_path).get("total_papers", 0)
+    console.print()
+    console.print(f"[bold green]Init complete: {total} papers in database.[/bold green]")
+
+
+@app.command()
 def mark(
     paper_query: str = typer.Argument(help="Paper OpenAlex ID or title substring"),
     status: str = typer.Option(..., "--status", help="Status: read|starred|skip"),

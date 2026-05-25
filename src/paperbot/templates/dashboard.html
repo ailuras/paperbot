@@ -903,7 +903,7 @@
                              track.toLowerCase() === 'cp' ? 'cp' : 'mix';
             return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;font-size:0.85rem;border-bottom:1px solid var(--pico-muted-border-color);">
               <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0;">
-                <span style="font-weight:600;min-width:1.5rem;">#${item.slot_index + 1}</span>
+                <span style="font-weight:600;min-width:1.5rem;">#${i + 1}</span>
                 <a onclick="showPaperDetail('${item.paper_id}')" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.title || 'Untitled'}</a>
               </div>
               <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;margin-left:0.5rem;">
