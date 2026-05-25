@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PaperBot Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%9A%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --pico-font-size: 90%;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .stat-card {
+      background: var(--pico-card-background-color);
+      border-radius: var(--pico-border-radius);
+      padding: 1rem;
+      text-align: center;
+    }
+    .stat-card .number {
+      font-size: 2rem;
+      font-weight: bold;
+      color: var(--pico-primary);
+    }
+    .stat-card .label {
+      font-size: 0.85rem;
+      opacity: 0.8;
+    }
+    .paper-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--pico-muted-border-color);
+    }
+    .paper-row:last-child { border-bottom: none; }
+    .paper-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .paper-title a {
+      cursor: pointer;
+    }
+    .paper-meta {
+      font-size: 0.8rem;
+      opacity: 0.7;
+    }
+    .paper-actions {
+      display: flex;
+      gap: 0.25rem;
+      flex-shrink: 0;
+    }
+    .paper-actions button {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.1rem 0.4rem;
+      border-radius: var(--pico-border-radius);
+      font-size: 0.75rem;
+      background: var(--pico-primary-background);
+      color: var(--pico-primary-inverse);
+      margin-right: 0.3rem;
+    }
+    .badge.pending { background: #6c757d; }
+    .badge.read { background: #198754; }
+    .badge.starred { background: #ffc107; color: #000; }
+    .badge.skip { background: #dc3545; }
+    .badge.recommended { background: #0d6efd; }
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      border-bottom: 1px solid var(--pico-muted-border-color);
+      padding-bottom: 0.5rem;
+    }
+    .tabs button {
+      background: transparent;
+      border: none;
+      color: var(--pico-muted-color);
+      cursor: pointer;
+      padding: 0.5rem 1rem;
+    }
+    .tabs button.active {
+      color: var(--pico-primary);
+      border-bottom: 2px solid var(--pico-primary);
+    }
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: nowrap;
+      margin-bottom: 1rem;
+      align-items: center;
+    }
+    .filter-bar input, .filter-bar select {
+      margin-bottom: 0;
+    }
+    .filter-bar select {
+      width: auto;
+      min-width: 120px;
+    }
+    .hidden { display: none !important; }
+    .empty-msg {
+      text-align: center;
+      padding: 2rem;
+      opacity: 0.6;
+    }
+    nav { margin-bottom: 1rem; }
+    .track-tag {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .track-tag.smt { background: #1e40af; color: #dbeafe; }
+    .track-tag.sat { background: #14532d; color: #dcfce7; }
+    .track-tag.cp  { background: #7c2d12; color: #ffedd5; }
+    .track-tag.mix { background: #581c87; color: #f3e8ff; }
+    .venue-tag {
+      font-size: 0.7rem;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .venue-tag.t1 { background: #b45309; color: #fef3c7; }
+    .venue-tag.t2 { background: #1e3a8a; color: #dbeafe; }
+    .venue-tag.t3 { background: #374151; color: #e5e7eb; }
+    .venue-tag.t0 { background: var(--pico-secondary-background); color: var(--pico-color); }
+    .page-btn {
+      padding: 0.25rem 0.6rem;
+      font-size: 0.85rem;
+      min-width: 36px;
+    }
+    .page-btn.active {
+      background: var(--pico-primary);
+      color: var(--pico-primary-inverse);
+      border-color: var(--pico-primary);
+    }
+    .toast {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      padding: 0.75rem 1.25rem;
+      border-radius: var(--pico-border-radius);
+      color: #fff;
+      z-index: 2000;
+      animation: fadein 0.3s ease;
+    }
+    .toast.success { background: #198754; }
+    .toast.error { background: #dc3545; }
+    @keyframes fadein { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1500;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s, visibility 0.2s;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+    .modal-content {
+      background: var(--pico-card-background-color);
+      border-radius: var(--pico-border-radius);
+      max-width: 800px;
+      width: 92vw;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 1.5rem;
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 0.75rem;
+      right: 1rem;
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--pico-muted-color);
+      line-height: 1;
+      padding: 0;
+    }
+    .modal-close:hover { color: var(--pico-color); }
+    .modal-header {
+      margin-bottom: 1rem;
+      padding-right: 2rem;
+    }
+    .modal-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0 0 0.5rem 0;
+      line-height: 1.4;
+    }
+    .modal-meta {
+      font-size: 0.85rem;
+      opacity: 0.8;
+      margin-bottom: 0.5rem;
+    }
+    .modal-section {
+      margin-bottom: 1rem;
+    }
+    .modal-section h4 {
+      font-size: 0.9rem;
+      margin: 0 0 0.25rem 0;
+      opacity: 0.7;
+    }
+    .modal-section p {
+      margin: 0;
+      line-height: 1.6;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--pico-muted-border-color);
+    }
+    .btn-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <nav>
+      <ul><li><strong>PaperBot Dashboard</strong></li></ul>
+      <ul><li><small id="last-updated">Loading...</small></li></ul>
+    </nav>
+
+    <!-- Overview -->
+    <section>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.5rem;">
+        <h2 style="margin:0;">Overview</h2>
+        <div class="btn-group">
+          <button id="recommend-btn" onclick="recommendPapers()">Recommend</button>
+          <button id="update-btn" onclick="updatePapers()">Fetch</button>
+        </div>
+      </div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card"><div class="number">-</div><div class="label">Total</div></div>
+      </div>
+    </section>
+
+    <!-- Recommendation History -->
+    <section>
+      <h2>Recommendation History</h2>
+      <div id="recommendation-history">Loading...</div>
+    </section>
+
+    <!-- Recent Reads -->
+    <section>
+      <h2>Recent Reads</h2>
+      <div id="recent-reads">Loading...</div>
+    </section>
+
+    <!-- Papers with Filters -->
+    <section>
+      <h2>Papers</h2>
+      <div class="tabs">
+        <button class="active" data-tab="pending" onclick="switchTab('pending')">Pending</button>
+        <button data-tab="read" onclick="switchTab('read')">Read</button>
+        <button data-tab="starred" onclick="switchTab('starred')">Starred</button>
+        <button data-tab="skip" onclick="switchTab('skip')">Skipped</button>
+        <button data-tab="all" onclick="switchTab('all')">All</button>
+      </div>
+      <div class="filter-bar">
+        <input type="search" id="keyword" placeholder="Search title/abstract..." style="flex:1;min-width:200px;">
+        <select id="track-filter">
+          <option value="">All Tracks</option>
+          <option value="SMT">SMT</option>
+          <option value="SAT">SAT</option>
+          <option value="CP">CP</option>
+        </select>
+        <select id="sort-by">
+          <option value="score">Score</option>
+          <option value="publication_date">Date</option>
+          <option value="cited_by_count">Citations</option>
+          <option value="title">Title</option>
+          <option value="changed_at">Mark Time</option>
+        </select>
+        <select id="sort-order">
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
+        <span id="paper-count" style="font-size:0.85rem;opacity:0.7;padding:0.25rem 0;white-space:nowrap;"></span>
+      </div>
+      <div id="papers-list">Loading...</div>
+      <div id="pagination" style="display:flex;gap:0.5rem;justify-content:center;margin-top:1rem;"></div>
+    </section>
+  </main>
+
+  <!-- Paper Detail Modal -->
+  <div class="modal-overlay" id="paper-modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <button class="modal-close" onclick="hidePaperDetail()">&times;</button>
+      <div class="modal-header">
+        <div class="modal-title" id="modal-title"></div>
+        <div class="modal-meta" id="modal-meta"></div>
+      </div>
+      <div class="modal-section">
+        <h4>Authors</h4>
+        <p id="modal-authors"></p>
+      </div>
+      <div class="modal-section">
+        <h4>Abstract</h4>
+        <p id="modal-abstract"></p>
+      </div>
+      <div class="modal-section">
+        <h4>Links</h4>
+        <p id="modal-links"></p>
+      </div>
+      <div class="modal-section">
+        <h4>Personal Notes</h4>
+        <textarea id="modal-note-input" rows="4" style="width:100%;font-size:0.9rem;margin-bottom:0.5rem;" placeholder="Write your notes about this paper..."></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
+          <button onclick="savePaperNote()" id="modal-note-save">Save Note</button>
+        </div>
+      </div>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+
+  <script>
+    const API = '';
+    let currentTab = 'pending';
+    let currentOffset = 0;
+    let currentTotal = 0;
+    let currentPaperId = '';
+    const PAGE_SIZE = 50;
+
+    async function api(path) {
+      const r = await fetch(API + path);
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+
+    async function postApi(path, body) {
+      const r = await fetch(API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(await r.text());
+      return r.json();
+    }
+
+    function toast(msg, type='success') {
+      const el = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 2500);
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      currentOffset = 0;
+      document.querySelectorAll('.tabs button').forEach(b => {
+        b.classList.toggle('active', b.dataset.tab === tab);
+      });
+      loadPapers();
+    }
+
+    async function recommendPapers() {
+      const btn = document.getElementById('recommend-btn');
+      btn.disabled = true;
+      btn.textContent = 'Recommending...';
+      try {
+        const r = await fetch(API + '/api/recommend', { method: 'POST' });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        toast(`Recommended: ${data.count} papers`);
+        await loadStats();
+        await loadRecentReads();
+        await loadPapers();
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Recommend';
+      }
+    }
+
+    async function updatePapers() {
+      const btn = document.getElementById('update-btn');
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+      try {
+        const r = await fetch(API + '/api/update', { method: 'POST' });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        toast(`Updated: ${data.inserted} inserted, ${data.updated} updated (${data.range})`);
+        await loadStats();
+        await loadPapers();
+      } catch (e) {
+        toast(e.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Fetch';
+      }
+    }
+
+    async function loadStats() {
+      const s = await api('/api/stats');
+      const grid = document.getElementById('stats-grid');
+      const items = [
+        { n: s.total_papers || 0, l: 'Total' },
+        { n: s.pending || 0, l: 'Pending' },
+        { n: s.read || 0, l: 'Read' },
+        { n: s.starred || 0, l: 'Starred' },
+        { n: s.skipped || 0, l: 'Skipped' },
+      ];
+
+      let tracksHtml = '';
+      if (s.by_track) {
+        const tracks = Object.entries(s.by_track)
+          .filter(([t]) => !t.includes(','))
+          .sort((a, b) => b[1] - a[1]);
+        tracksHtml = '<div style="margin-top:0.75rem;">' +
+          tracks.map(([t, c]) => `
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:0.25rem 0;font-size:0.85rem;opacity:0.8;border-bottom:1px solid var(--pico-muted-border-color);max-width:300px;margin:0 auto;">
+              <span><span class="track-tag">${t}</span></span>
+              <span style="font-weight:600;">${c}</span>
+            </div>`).join('') +
+          '</div>';
+      }
+
+      grid.innerHTML = items.map(i =>
+        `<div class="stat-card"><div class="number">${i.n}</div><div class="label">${i.l}</div></div>`
+      ).join('') + tracksHtml;
+    }
+
+    async function loadRecentReads() {
+      const rows = await api('/api/recent-reads?limit=3');
+      const el = document.getElementById('recent-reads');
+      if (!rows || !rows.length) { el.innerHTML = '<p class="empty-msg">No recent reads.</p>'; return; }
+
+      el.innerHTML = rows.map((p, i) => {
+        let authors = p.authors;
+        if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+        const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
+        const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
+        const dateStr = p.publication_date || p.publication_year || '?';
+        const url = p.landing_page_url || p.doi || p.id || '#';
+        const abstract = p.abstract || '';
+        const absDisplay = abstract.length > 2000 ? abstract.slice(0, 2000) + '...' : abstract;
+        const markTime = p.changed_at ? `Marked: ${p.changed_at}` : '';
+
+        return `<div class="paper-row" style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:1rem;">
+          <div>
+            <div class="paper-title"><strong>#${i+1}</strong> <a onclick="showPaperDetail('${p.id}')" style="cursor:pointer;">${p.title||'Untitled'}</a></div>
+            <div class="paper-meta">${authorStr}${extraAuthors}</div>
+            <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}</div>
+            ${markTime ? `<div class="paper-meta" style="opacity:0.6;">${markTime}</div>` : ''}
+            ${absDisplay ? `<div style="margin-top:0.5rem;font-size:0.9rem;opacity:0.85;line-height:1.5;">${absDisplay}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function statusBadge(st) {
+      const display = st === 'recommended' ? 'read' : st;
+      const map = { pending: '⏳ Pending', read: '✅ Read', starred: '⭐ Starred', skip: '❌ Skip' };
+      return `<span class="badge ${display}">${map[display] || display}</span>`;
+    }
+
+    const VENUE_MAP = {
+      'CAV': ['computer aided verification'],
+      'ICSE': ['international conference on software engineering'],
+      'FSE': ['foundations of software engineering', 'esec/fse'],
+      'ASE': ['automated software engineering'],
+      'ISSTA': ['software testing and analysis'],
+      'PLDI': ['programming language design'],
+      'POPL': ['principles of programming languages'],
+      'OOPSLA': ['object-oriented programming'],
+      'NeurIPS': ['neural information processing', 'neurips'],
+      'ICML': ['international conference on machine learning'],
+      'ICLR': ['learning representations'],
+      'AAAI': ['advancement of artificial intelligence'],
+      'IJCAI': ['joint conference on artificial intelligence'],
+      'TACAS': ['tools and algorithms'],
+      'CADE': ['automated deduction'],
+      'IJCAR': ['joint conference on automated reasoning'],
+      'LICS': ['logic in computer science'],
+      'SAT': ['satisfiability testing', 'theory and applications of satisfiability'],
+      'CP': ['constraint programming', 'principles and practice of constraint programming'],
+      'FM': ['symposium on formal methods'],
+      'JAIR': ['journal of artificial intelligence research'],
+      'AIJ': ['artificial intelligence'],
+      'TOSEM': ['acm transactions on software engineering'],
+      'TSE': ['ieee transactions on software engineering'],
+      'TOPLAS': ['programming languages and systems'],
+      'USENIX': ['usenix security'],
+      'CCS': ['computer and communications security'],
+      'NDSS': ['network and distributed system security'],
+      'S&P': ['security and privacy', 'ieee symposium on security'],
+      'OSDI': ['operating systems design'],
+      'SOSP': ['operating systems principles'],
+      'EuroSys': ['eurosys'],
+      'SIGCOMM': ['sigcomm'],
+      'SIGMOD': ['management of data'],
+      'VLDB': ['very large data bases', 'vldb'],
+      'WWW': ['the web conference', 'world wide web'],
+      'ACL': ['association for computational linguistics'],
+      'EMNLP': ['empirical methods in natural language'],
+      'CVPR': ['computer vision and pattern recognition'],
+      'ICCV': ['international conference on computer vision'],
+      'ECCV': ['european conference on computer vision'],
+      'SAS': ['static analysis symposium'],
+      'ICLP': ['logic programming'],
+      'FMCAD': ['formal methods in computer-aided design'],
+      'VMCAI': ['verification, model checking'],
+      'CPAIOR': ['constraint programming, artificial intelligence'],
+      'LPAR': ['logic for programming'],
+      'JAR': ['journal of automated reasoning'],
+      'FMSD': ['formal methods in system design'],
+      'ICSME': ['software maintenance'],
+      'ISSRE': ['software reliability engineering'],
+      'SANER': ['software analysis, evolution'],
+      'COMPSAC': ['computer software and applications'],
+      'MSR': ['mining software repositories'],
+      'KR': ['knowledge representation and reasoning'],
+      'SEFM': ['software engineering and formal methods'],
+      'ICFEM': ['formal engineering methods'],
+      'ICECCS': ['engineering of complex computer systems'],
+      'QRS': ['software quality, reliability'],
+      'AST': ['automated software testing'],
+      'ICTAI': ['tools with artificial intelligence'],
+    };
+
+    function venueAbbr(venue) {
+      if (!venue) return '';
+      const v = venue.toLowerCase();
+      for (const [abbr, keywords] of Object.entries(VENUE_MAP)) {
+        for (const kw of keywords) {
+          if (v.includes(kw)) return abbr;
+        }
+      }
+      const matches = venue.match(/\b[A-Z]{2,}\b/g);
+      if (matches) return matches[0];
+      return '';
+    }
+
+    function trackTag(track) {
+      const t = (track || '?').toLowerCase();
+      let cls = 'mix';
+      if (t === 'smt') cls = 'smt';
+      else if (t === 'sat') cls = 'sat';
+      else if (t === 'cp') cls = 'cp';
+      return `<span class="track-tag ${cls}">${track || '?'}</span>`;
+    }
+
+    function venueTag(venue, tier) {
+      const abbr = venueAbbr(venue);
+      if (!abbr) return '';
+      const t = tier || '0';
+      return `<span class="venue-tag t${t}">${abbr}</span>`;
+    }
+
+    async function markPaper(id, status) {
+      try {
+        await postApi('/api/mark', { id, status });
+        toast(`Marked as ${status}`);
+        loadPapers();
+        loadStats();
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    async function showPaperDetail(id) {
+      try {
+        const p = await api(`/api/paper/${encodeURIComponent(id)}`);
+        if (!p) { toast('Paper not found', 'error'); return; }
+
+        currentPaperId = id;
+        document.getElementById('modal-title').textContent = p.title || 'Untitled';
+
+        let authors = p.authors;
+        if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+        const authorStr = (Array.isArray(authors) ? authors.join(', ') : (authors||'Unknown'));
+        const dateStr = p.publication_date || p.publication_year || '?';
+        const metaHtml = `${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}`;
+        document.getElementById('modal-meta').innerHTML = metaHtml;
+        document.getElementById('modal-authors').textContent = authorStr;
+        document.getElementById('modal-abstract').textContent = p.abstract || 'No abstract available.';
+
+        const url = p.landing_page_url || p.doi || p.id || '';
+        document.getElementById('modal-links').innerHTML = url
+          ? `<a href="${url}" target="_blank" class="secondary">${url}</a>`
+          : '<em>No link available</em>';
+
+        const st = p.status || 'pending';
+        const actionBtns = [
+          st === 'read'
+            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Mark Unread</button>`
+            : `<button onclick="markPaperFromModal('${p.id}','read')">✅ Mark Read</button>`,
+          st === 'starred'
+            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Unstar</button>`
+            : `<button onclick="markPaperFromModal('${p.id}','starred')">⭐ Star</button>`,
+          st === 'skip'
+            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Unskip</button>`
+            : `<button onclick="markPaperFromModal('${p.id}','skip')" class="secondary">❌ Skip</button>`,
+          `<button onclick="copyBibTeX('${p.id}')" class="secondary">📋 BibTeX</button>`,
+        ];
+        document.getElementById('modal-actions').innerHTML = actionBtns.join('');
+
+        // Load note
+        try {
+          const noteData = await api(`/api/paper/${encodeURIComponent(id)}/note`);
+          document.getElementById('modal-note-input').value = noteData.note || '';
+        } catch (e) {
+          document.getElementById('modal-note-input').value = '';
+        }
+        const saveBtn = document.getElementById('modal-note-save');
+        if (saveBtn) saveBtn.textContent = 'Save Note';
+
+        document.getElementById('paper-modal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    function generateBibTeX(p) {
+      // Generate a citation key from first author last name + year
+      let authors = p.authors;
+      if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+      let citeKey = 'unknown';
+      if (Array.isArray(authors) && authors.length > 0) {
+        const firstAuthor = authors[0];
+        const lastName = firstAuthor.split(' ').pop() || 'unknown';
+        citeKey = lastName.toLowerCase().replace(/[^a-z]/g, '') + String(p.publication_year || '0000');
+      } else if (p.publication_year) {
+        citeKey = 'paper' + p.publication_year;
+      }
+
+      let bib = `@article{${citeKey},\n`;
+      bib += `  title = {${p.title || ''}},\n`;
+
+      if (Array.isArray(authors) && authors.length > 0) {
+        bib += `  author = {${authors.join(' and ')}},\n`;
+      }
+
+      if (p.publication_year) {
+        bib += `  year = {${p.publication_year}},\n`;
+      }
+
+      if (p.venue) {
+        bib += `  journal = {${p.venue}},\n`;
+      }
+
+      if (p.doi) {
+        bib += `  doi = {${p.doi}},\n`;
+      }
+
+      if (p.id && p.id.startsWith('https://')) {
+        bib += `  url = {${p.id}},\n`;
+      } else if (p.landing_page_url) {
+        bib += `  url = {${p.landing_page_url}},\n`;
+      }
+
+      bib += `}`;
+      return bib;
+    }
+
+    async function copyBibTeX(paperId) {
+      try {
+        const p = await api(`/api/paper/${encodeURIComponent(paperId)}`);
+        if (!p) { toast('Paper not found', 'error'); return; }
+        const bib = generateBibTeX(p);
+        try {
+          await navigator.clipboard.writeText(bib);
+          toast('BibTeX copied to clipboard');
+          return;
+        } catch (clipErr) {
+          // Fallback for non-HTTPS contexts (e.g. localhost)
+        }
+        const ta = document.createElement('textarea');
+        ta.value = bib;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        let ok = false;
+        try {
+          ok = document.execCommand('copy');
+        } catch (execErr) {
+          ok = false;
+        }
+        document.body.removeChild(ta);
+        if (ok) {
+          toast('BibTeX copied to clipboard');
+        } else {
+          toast('Failed to copy BibTeX', 'error');
+        }
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    async function savePaperNote() {
+      if (!currentPaperId) return;
+      const note = document.getElementById('modal-note-input').value;
+      const saveBtn = document.getElementById('modal-note-save');
+      const originalText = saveBtn ? saveBtn.textContent : 'Save Note';
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+      }
+      try {
+        await postApi(`/api/paper/${encodeURIComponent(currentPaperId)}/note`, { note });
+        toast('Note saved');
+        if (saveBtn) saveBtn.textContent = 'Saved!';
+        setTimeout(() => { if (saveBtn) saveBtn.textContent = 'Save Note'; }, 1500);
+      } catch (e) {
+        toast(e.message, 'error');
+        if (saveBtn) saveBtn.textContent = originalText;
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
+      }
+    }
+
+    function hidePaperDetail() {
+      document.getElementById('paper-modal').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function closeModal(event) {
+      if (event.target === document.getElementById('paper-modal')) {
+        hidePaperDetail();
+      }
+    }
+
+    async function markPaperFromModal(id, status) {
+      await markPaper(id, status);
+      hidePaperDetail();
+    }
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') hidePaperDetail();
+    });
+
+    async function loadPapers() {
+      const keyword = document.getElementById('keyword').value;
+      const track = document.getElementById('track-filter').value;
+      const sortBy = document.getElementById('sort-by').value;
+      const sortOrder = document.getElementById('sort-order').value;
+      let status = currentTab;
+      if (status === 'all') status = '';
+
+      let qs = `limit=${PAGE_SIZE}&offset=${currentOffset}`;
+      if (track) qs += `&track=${encodeURIComponent(track)}`;
+      if (status) qs += `&status=${encodeURIComponent(status)}`;
+      if (keyword) qs += `&keyword=${encodeURIComponent(keyword)}`;
+      qs += `&sort_by=${encodeURIComponent(sortBy)}`;
+      qs += `&sort_order=${encodeURIComponent(sortOrder)}`;
+
+      const data = await api(`/api/papers?${qs}`);
+      currentTotal = data.total;
+      const countEl = document.getElementById('paper-count');
+      if (countEl) countEl.textContent = `${data.total} papers`;
+      const el = document.getElementById('papers-list');
+
+      if (!data.papers || !data.papers.length) {
+        el.innerHTML = '<p class="empty-msg">No papers found.</p>';
+        document.getElementById('pagination').innerHTML = '';
+        return;
+      }
+
+      el.innerHTML = data.papers.map(p => {
+        let authors = p.authors;
+        if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+        const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
+        const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
+        const dateStr = p.publication_date || p.publication_year || '?';
+        const meta = [`${dateStr}`, `${p.venue||'Unknown'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' · ');
+        const url = p.landing_page_url || p.doi || p.id || '#';
+
+        const st = p.status || 'pending';
+        const actionBtns = [
+          st === 'read'
+            ? `<button onclick="markPaper('${p.id}','pending')" class="secondary">↩️ Unread</button>`
+            : `<button onclick="markPaper('${p.id}','read')">✅ Read</button>`,
+          st === 'starred'
+            ? `<button onclick="markPaper('${p.id}','pending')" class="secondary">↩️ Unstar</button>`
+            : `<button onclick="markPaper('${p.id}','starred')">⭐ Star</button>`,
+          st === 'skip'
+            ? `<button onclick="markPaper('${p.id}','pending')" class="secondary">↩️ Unskip</button>`
+            : `<button onclick="markPaper('${p.id}','skip')" class="secondary">❌ Skip</button>`,
+        ];
+
+        return `<div class="paper-row">
+          <div style="flex:1;min-width:0;">
+            <div class="paper-title">${statusBadge(p.status||'pending')} <a onclick="showPaperDetail('${p.id}')" style="cursor:pointer;">${p.title||'Untitled'}</a></div>
+            <div class="paper-meta">${authorStr}${extraAuthors}</div>
+            <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${meta}</div>
+          </div>
+          <div class="paper-actions">${actionBtns.join('')}</div>
+        </div>`;
+      }).join('');
+
+      // pagination
+      const totalPages = Math.ceil(data.total / PAGE_SIZE);
+      const currentPage = Math.floor(currentOffset / PAGE_SIZE) + 1;
+      let pgHtml = '';
+
+      if (currentPage > 1) {
+        pgHtml += `<button class="page-btn" onclick="goPage(${currentOffset - PAGE_SIZE})">« Prev</button>`;
+      }
+
+      let start = 1, end = totalPages;
+      if (totalPages > 5) {
+        if (currentPage <= 3) { start = 1; end = 5; }
+        else if (currentPage >= totalPages - 2) { start = totalPages - 4; end = totalPages; }
+        else { start = currentPage - 2; end = currentPage + 2; }
+      }
+      for (let p = start; p <= end; p++) {
+        const off = (p - 1) * PAGE_SIZE;
+        const cls = p === currentPage ? 'page-btn active' : 'page-btn';
+        pgHtml += `<button class="${cls}" onclick="goPage(${off})">${p}</button>`;
+      }
+
+      if (currentPage < totalPages) {
+        pgHtml += `<button class="page-btn" onclick="goPage(${currentOffset + PAGE_SIZE})">Next »</button>`;
+      }
+
+      if (totalPages > 1) {
+        pgHtml += `
+          <input type="number" id="jump-page" min="1" max="${totalPages}" placeholder="#"
+            style="width:60px;padding:0.25rem 0.5rem;font-size:0.85rem;margin-bottom:0;text-align:center;"
+            onkeydown="if(event.key==='Enter')jumpToPage()">
+          <button class="page-btn" onclick="jumpToPage()">Go</button>`;
+      }
+
+      document.getElementById('pagination').innerHTML = pgHtml;
+    }
+
+    function goPage(offset) {
+      currentOffset = offset;
+      loadPapers();
+    }
+
+    function jumpToPage() {
+      const input = document.getElementById('jump-page');
+      if (!input) return;
+      const page = parseInt(input.value, 10);
+      const totalPages = Math.ceil(currentTotal / PAGE_SIZE);
+      if (!page || page < 1 || page > totalPages) {
+        toast(`Enter a page between 1 and ${totalPages}`, 'error');
+        return;
+      }
+      currentOffset = (page - 1) * PAGE_SIZE;
+      loadPapers();
+    }
+
+    async function loadRecommendationHistory() {
+      try {
+        const rows = await api('/api/recommendations?days=7');
+        const el = document.getElementById('recommendation-history');
+        if (!rows || !rows.length) {
+          el.innerHTML = '<p class="empty-msg">No recommendations yet.</p>';
+          return;
+        }
+
+        // Group by date
+        const byDate = {};
+        for (const r of rows) {
+          if (!byDate[r.date]) byDate[r.date] = [];
+          byDate[r.date].push(r);
+        }
+
+        // Sort dates descending
+        const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+        el.innerHTML = dates.map(date => {
+          const items = byDate[date].sort((a, b) => (a.slot_index||0) - (b.slot_index||0));
+          const isToday = date === new Date().toISOString().slice(0, 10);
+          const dateLabel = isToday ? `${date} (Today)` : date;
+
+          const itemsHtml = items.map((item, i) => {
+            const track = item.track || '';
+            const trackCls = track.toLowerCase() === 'smt' ? 'smt' :
+                             track.toLowerCase() === 'sat' ? 'sat' :
+                             track.toLowerCase() === 'cp' ? 'cp' : 'mix';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;font-size:0.85rem;border-bottom:1px solid var(--pico-muted-border-color);">
+              <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0;">
+                <span style="font-weight:600;min-width:1.5rem;">#${item.slot_index + 1}</span>
+                <a onclick="showPaperDetail('${item.paper_id}')" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.title || 'Untitled'}</a>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;margin-left:0.5rem;">
+                <span class="track-tag ${trackCls}">${track || '?'}</span>
+                <span style="opacity:0.7;font-size:0.8rem;">Score ${(item.score||0).toFixed(1)}</span>
+              </div>
+            </div>`;
+          }).join('');
+
+          return `<details style="margin-bottom:0.5rem;" ${isToday ? 'open' : ''}>
+            <summary style="font-weight:600;font-size:0.95rem;cursor:pointer;padding:0.35rem 0;">${dateLabel}</summary>
+            <div style="padding-left:0.75rem;margin-top:0.25rem;">${itemsHtml}</div>
+          </details>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('recommendation-history').innerHTML = '<p class="empty-msg">Failed to load history.</p>';
+      }
+    }
+
+    async function init() {
+      document.getElementById('last-updated').textContent = new Date().toLocaleString();
+      await loadStats();
+      await loadRecommendationHistory();
+      await loadRecentReads();
+      await loadPapers();
+    }
+
+    // Auto-refresh when filter/sort changes
+    let keywordTimer;
+    document.getElementById('keyword').addEventListener('input', () => {
+      clearTimeout(keywordTimer);
+      keywordTimer = setTimeout(() => { currentOffset = 0; loadPapers(); }, 300);
+    });
+    document.getElementById('track-filter').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
+    document.getElementById('sort-by').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
+    document.getElementById('sort-order').addEventListener('change', () => { currentOffset = 0; loadPapers(); });
+
+    init();
+  </script>
+</body>
+</html>
