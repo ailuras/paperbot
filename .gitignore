@@ -8,5 +8,20 @@ data/config.json
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environment
+.venv/
+
+# Build artifacts
+build/
+dist/
+
+# AI agent configs
 .antigravitycli/
 .claude/
+.agents/
+.codex/
