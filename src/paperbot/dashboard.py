@@ -675,7 +675,7 @@ _HTML = """<!DOCTYPE html>
       if (Array.isArray(authors) && authors.length > 0) {
         const firstAuthor = authors[0];
         const lastName = firstAuthor.split(' ').pop() || 'unknown';
-        citeKey = lastName.toLowerCase().replace(/[^a-z]/g, '') + (p.publication_year || '0000');
+        citeKey = lastName.toLowerCase().replace(/[^a-z]/g, '') + String(p.publication_year || '0000');
       } else if (p.publication_year) {
         citeKey = 'paper' + p.publication_year;
       }
@@ -714,8 +714,32 @@ _HTML = """<!DOCTYPE html>
         const p = await api(`/api/paper/${encodeURIComponent(paperId)}`);
         if (!p) { toast('Paper not found', 'error'); return; }
         const bib = generateBibTeX(p);
-        await navigator.clipboard.writeText(bib);
-        toast('BibTeX copied to clipboard');
+        try {
+          await navigator.clipboard.writeText(bib);
+          toast('BibTeX copied to clipboard');
+          return;
+        } catch (clipErr) {
+          // Fallback for non-HTTPS contexts (e.g. localhost)
+        }
+        const ta = document.createElement('textarea');
+        ta.value = bib;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        let ok = false;
+        try {
+          ok = document.execCommand('copy');
+        } catch (execErr) {
+          ok = false;
+        }
+        document.body.removeChild(ta);
+        if (ok) {
+          toast('BibTeX copied to clipboard');
+        } else {
+          toast('Failed to copy BibTeX', 'error');
+        }
       } catch (e) {
         toast(e.message, 'error');
       }
