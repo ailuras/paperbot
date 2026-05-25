@@ -1,0 +1,180 @@
+"""Tests for the dashboard HTTP handler."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from paperbot.dashboard import make_handler
+from paperbot.db import upsert_papers
+
+
+def _make_handler(db_path: Path):
+    """Helper to create handler class for testing."""
+    handler_cls = make_handler(db_path)
+    return handler_cls
+
+
+def _request(handler_cls, method: str, path: str, body: bytes | None = None) -> tuple[int, dict | str]:
+    """Simulate an HTTP request and return (status, body)."""
+    from io import BytesIO
+
+    # Build request bytes
+    request_line = f"{method} {path} HTTP/1.1\r\n"
+    headers = "Host: localhost\r\n"
+    if body:
+        headers += f"Content-Length: {len(body)}\r\n"
+    headers += "\r\n"
+    raw = (request_line + headers).encode("utf-8")
+    if body:
+        raw += body
+
+    class MockSocket:
+        pass
+
+    # Create handler without running the full __init__ handle() loop
+    handler = handler_cls.__new__(handler_cls)
+    handler.request = MockSocket()
+    handler.client_address = ("127.0.0.1", 8765)
+    handler.server = None
+    handler.rfile = BytesIO(raw)
+    handler.wfile = BytesIO()
+    handler.raw_requestline = b""
+    handler.error_code = None
+    handler.error_message = None
+
+    # Parse request line
+    handler.raw_requestline = handler.rfile.readline(65537)
+    if not handler.raw_requestline:
+        return 400, ""
+
+    if not handler.parse_request():
+        return handler.error_code or 400, ""
+
+    # Route to handler method
+    do_method = getattr(handler, f"do_{handler.command}", None)
+    if do_method is None:
+        handler.send_error(405)
+    else:
+        try:
+            do_method()
+        except Exception:
+            handler.send_error(500)
+
+    handler.wfile.flush()
+
+    # Parse response
+    wfile = handler.wfile
+    wfile.seek(0)
+    response = wfile.read().decode("utf-8")
+    lines = response.split("\r\n")
+    status_code = int(lines[0].split()[1])
+
+    blank_idx = next(i for i, line in enumerate(lines) if line == "")
+    body_str = "\r\n".join(lines[blank_idx + 1 :])
+
+    try:
+        data = json.loads(body_str) if body_str else {}
+    except json.JSONDecodeError:
+        data = body_str
+
+    return status_code, data
+
+
+def test_dashboard_index(tmp_db_path: Path):
+    """GET / returns the HTML dashboard."""
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/")
+    assert status == 200
+    assert "PaperBot Dashboard" in str(data)
+
+
+def test_api_stats(tmp_db_path: Path):
+    """GET /api/stats returns statistics."""
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/stats")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("total_papers") == 0
+
+
+def test_api_papers_empty(tmp_db_path: Path):
+    """GET /api/papers returns empty list."""
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/papers")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("total") == 0
+    assert data.get("papers") == []
+
+
+def test_api_papers_with_data(tmp_db_path: Path, sample_papers: list):
+    """GET /api/papers returns inserted papers."""
+    upsert_papers(tmp_db_path, sample_papers)
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/papers")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("total") == 3
+    assert len(data.get("papers", [])) == 3
+
+
+def test_api_mark_paper(tmp_db_path: Path, sample_paper: dict):
+    """POST /api/mark updates paper status."""
+    upsert_papers(tmp_db_path, [sample_paper])
+    handler_cls = _make_handler(tmp_db_path)
+    body = json.dumps({"id": sample_paper["id"], "status": "read"}).encode("utf-8")
+    status, data = _request(handler_cls, "POST", "/api/mark", body)
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("success") is True
+
+    # Verify via stats
+    _, stats = _request(handler_cls, "GET", "/api/stats")
+    assert isinstance(stats, dict)
+    assert stats.get("read") == 1
+    assert stats.get("pending") == 0
+
+
+def test_api_paper_detail(tmp_db_path: Path, sample_paper: dict):
+    """GET /api/paper/:id returns paper details."""
+    upsert_papers(tmp_db_path, [sample_paper])
+    handler_cls = _make_handler(tmp_db_path)
+    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("title") == sample_paper["title"]
+
+
+def test_api_paper_note(tmp_db_path: Path, sample_paper: dict):
+    """GET/POST /api/paper/:id/note works."""
+    upsert_papers(tmp_db_path, [sample_paper])
+    handler_cls = _make_handler(tmp_db_path)
+    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+
+    # GET empty note
+    status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}/note")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("note") == ""
+
+    # POST note
+    body = json.dumps({"note": "Test note"}).encode("utf-8")
+    status, data = _request(handler_cls, "POST", f"/api/paper/{encoded_id}/note", body)
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("success") is True
+
+    # GET updated note
+    status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}/note")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data.get("note") == "Test note"
+
+
+def test_api_404(tmp_db_path: Path):
+    """Unknown routes return 404."""
+    handler_cls = _make_handler(tmp_db_path)
+    status, _ = _request(handler_cls, "GET", "/api/unknown")
+    assert status == 404
