@@ -156,6 +156,15 @@ def upsert_papers(
                 """,
                 row,
             )
+            # Auto-mark new papers as pending
+            cursor.execute(
+                """
+                INSERT INTO paper_states (paper_id, status, changed_at)
+                VALUES (?, 'pending', datetime('now'))
+                ON CONFLICT(paper_id) DO NOTHING
+                """,
+                (paper_id,),
+            )
             inserted += 1
 
     conn.commit()
@@ -179,7 +188,7 @@ def get_unread_papers(
     sql = """
     SELECT p.* FROM papers p
     LEFT JOIN paper_states ps ON p.id = ps.paper_id
-    WHERE (ps.status IS NULL OR ps.status = 'pending')
+    WHERE ps.status = 'pending'
     """
 
     if recent_days is not None:
@@ -342,7 +351,7 @@ def list_papers(
 
     if status:
         if status == "pending":
-            where_clauses.append("(ps.status IS NULL OR ps.status = 'pending')")
+            where_clauses.append("ps.status = 'pending'")
         elif status == "read":
             where_clauses.append("ps.status IN ('read', 'recommended')")
         else:
@@ -458,7 +467,7 @@ def get_stats(db_path: Path) -> dict[str, Any]:
     cursor = conn.execute(
         """
         SELECT
-            COUNT(CASE WHEN ps.status IS NULL OR ps.status = 'pending' THEN 1 END) as pending,
+            COUNT(CASE WHEN ps.status = 'pending' THEN 1 END) as pending,
             COUNT(CASE WHEN ps.status IN ('read', 'recommended') THEN 1 END) as read,
             COUNT(CASE WHEN ps.status = 'starred' THEN 1 END) as starred,
             COUNT(CASE WHEN ps.status = 'skip' THEN 1 END) as skipped
