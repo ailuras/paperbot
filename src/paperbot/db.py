@@ -42,6 +42,12 @@ CREATE TABLE IF NOT EXISTS paper_states (
     status TEXT NOT NULL DEFAULT 'pending',
     changed_at TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS paper_notes (
+    paper_id TEXT PRIMARY KEY,
+    note TEXT NOT NULL DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+);
 """
 
 # ── Connection helper ───────────────────────────────────────────────
@@ -385,6 +391,35 @@ def list_papers(
     conn.close()
 
     return {"total": total, "papers": rows, "limit": limit, "offset": offset}
+
+
+def get_paper_note(db_path: Path, paper_id: str) -> str:
+    """Get note for a paper."""
+    conn = _connect(db_path)
+    cursor = conn.execute(
+        "SELECT note FROM paper_notes WHERE paper_id = ?",
+        (paper_id,),
+    )
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else ""
+
+
+def set_paper_note(db_path: Path, paper_id: str, note: str) -> None:
+    """Save or update note for a paper."""
+    conn = _connect(db_path)
+    conn.execute(
+        """
+        INSERT INTO paper_notes (paper_id, note, updated_at)
+        VALUES (?, ?, datetime('now'))
+        ON CONFLICT(paper_id) DO UPDATE SET
+            note = excluded.note,
+            updated_at = datetime('now')
+        """,
+        (paper_id, note),
+    )
+    conn.commit()
+    conn.close()
 
 
 def get_stats(db_path: Path) -> dict[str, Any]:

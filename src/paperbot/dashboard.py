@@ -13,11 +13,14 @@ from typing import Any
 from paperbot.config import default_config_path, load_config
 from paperbot.db import (
     get_paper_by_id_or_title,
+    get_paper_note,
     get_recent_reads,
     get_stats,
+    get_unread_papers,
     init_db,
     list_papers,
     save_recommendation,
+    set_paper_note,
     set_paper_status,
     upsert_papers,
 )
@@ -283,6 +286,12 @@ _HTML = """<!DOCTYPE html>
       </div>
     </section>
 
+    <!-- Recommendation History -->
+    <section>
+      <h2>Recommendation History</h2>
+      <div id="recommendation-history">Loading...</div>
+    </section>
+
     <!-- Recent Reads -->
     <section>
       <h2>Recent Reads</h2>
@@ -345,6 +354,13 @@ _HTML = """<!DOCTYPE html>
         <h4>Links</h4>
         <p id="modal-links"></p>
       </div>
+      <div class="modal-section">
+        <h4>Personal Notes</h4>
+        <textarea id="modal-note-input" rows="4" style="width:100%;font-size:0.9rem;margin-bottom:0.5rem;" placeholder="Write your notes about this paper..."></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:0.5rem;">
+          <button onclick="savePaperNote()" id="modal-note-save">Save Note</button>
+        </div>
+      </div>
       <div class="modal-actions" id="modal-actions"></div>
     </div>
   </div>
@@ -354,6 +370,7 @@ _HTML = """<!DOCTYPE html>
     let currentTab = 'pending';
     let currentOffset = 0;
     let currentTotal = 0;
+    let currentPaperId = '';
     const PAGE_SIZE = 50;
 
     async function api(path) {
@@ -601,6 +618,7 @@ _HTML = """<!DOCTYPE html>
         const p = await api(`/api/paper/${encodeURIComponent(id)}`);
         if (!p) { toast('Paper not found', 'error'); return; }
 
+        currentPaperId = id;
         document.getElementById('modal-title').textContent = p.title || 'Untitled';
 
         let authors = p.authors;
@@ -628,13 +646,100 @@ _HTML = """<!DOCTYPE html>
           st === 'skip'
             ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="secondary">↩️ Unskip</button>`
             : `<button onclick="markPaperFromModal('${p.id}','skip')" class="secondary">❌ Skip</button>`,
+          `<button onclick="copyBibTeX('${p.id}')" class="secondary">📋 BibTeX</button>`,
         ];
         document.getElementById('modal-actions').innerHTML = actionBtns.join('');
+
+        // Load note
+        try {
+          const noteData = await api(`/api/paper/${encodeURIComponent(id)}/note`);
+          document.getElementById('modal-note-input').value = noteData.note || '';
+        } catch (e) {
+          document.getElementById('modal-note-input').value = '';
+        }
+        const saveBtn = document.getElementById('modal-note-save');
+        if (saveBtn) saveBtn.textContent = 'Save Note';
 
         document.getElementById('paper-modal').classList.add('active');
         document.body.style.overflow = 'hidden';
       } catch (e) {
         toast(e.message, 'error');
+      }
+    }
+
+    function generateBibTeX(p) {
+      // Generate a citation key from first author last name + year
+      let authors = p.authors;
+      if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
+      let citeKey = 'unknown';
+      if (Array.isArray(authors) && authors.length > 0) {
+        const firstAuthor = authors[0];
+        const lastName = firstAuthor.split(' ').pop() || 'unknown';
+        citeKey = lastName.toLowerCase().replace(/[^a-z]/g, '') + (p.publication_year || '0000');
+      } else if (p.publication_year) {
+        citeKey = 'paper' + p.publication_year;
+      }
+
+      let bib = `@article{${citeKey},\n`;
+      bib += `  title = {${p.title || ''}},\n`;
+
+      if (Array.isArray(authors) && authors.length > 0) {
+        bib += `  author = {${authors.join(' and ')}},\n`;
+      }
+
+      if (p.publication_year) {
+        bib += `  year = {${p.publication_year}},\n`;
+      }
+
+      if (p.venue) {
+        bib += `  journal = {${p.venue}},\n`;
+      }
+
+      if (p.doi) {
+        bib += `  doi = {${p.doi}},\n`;
+      }
+
+      if (p.id && p.id.startsWith('https://')) {
+        bib += `  url = {${p.id}},\n`;
+      } else if (p.landing_page_url) {
+        bib += `  url = {${p.landing_page_url}},\n`;
+      }
+
+      bib += `}`;
+      return bib;
+    }
+
+    async function copyBibTeX(paperId) {
+      try {
+        const p = await api(`/api/paper/${encodeURIComponent(paperId)}`);
+        if (!p) { toast('Paper not found', 'error'); return; }
+        const bib = generateBibTeX(p);
+        await navigator.clipboard.writeText(bib);
+        toast('BibTeX copied to clipboard');
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
+    async function savePaperNote() {
+      if (!currentPaperId) return;
+      const note = document.getElementById('modal-note-input').value;
+      const saveBtn = document.getElementById('modal-note-save');
+      const originalText = saveBtn ? saveBtn.textContent : 'Save Note';
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+      }
+      try {
+        await postApi(`/api/paper/${encodeURIComponent(currentPaperId)}/note`, { note });
+        toast('Note saved');
+        if (saveBtn) saveBtn.textContent = 'Saved!';
+        setTimeout(() => { if (saveBtn) saveBtn.textContent = 'Save Note'; }, 1500);
+      } catch (e) {
+        toast(e.message, 'error');
+        if (saveBtn) saveBtn.textContent = originalText;
+      } finally {
+        if (saveBtn) saveBtn.disabled = false;
       }
     }
 
@@ -772,9 +877,61 @@ _HTML = """<!DOCTYPE html>
       loadPapers();
     }
 
+    async function loadRecommendationHistory() {
+      try {
+        const rows = await api('/api/recommendations?days=7');
+        const el = document.getElementById('recommendation-history');
+        if (!rows || !rows.length) {
+          el.innerHTML = '<p class="empty-msg">No recommendations yet.</p>';
+          return;
+        }
+
+        // Group by date
+        const byDate = {};
+        for (const r of rows) {
+          if (!byDate[r.date]) byDate[r.date] = [];
+          byDate[r.date].push(r);
+        }
+
+        // Sort dates descending
+        const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+        el.innerHTML = dates.map(date => {
+          const items = byDate[date].sort((a, b) => (a.slot_index||0) - (b.slot_index||0));
+          const isToday = date === new Date().toISOString().slice(0, 10);
+          const dateLabel = isToday ? `${date} (Today)` : date;
+
+          const itemsHtml = items.map((item, i) => {
+            const track = item.track || '';
+            const trackCls = track.toLowerCase() === 'smt' ? 'smt' :
+                             track.toLowerCase() === 'sat' ? 'sat' :
+                             track.toLowerCase() === 'cp' ? 'cp' : 'mix';
+            return `<div style="display:flex;justify-content:space-between;align-items:center;padding:0.35rem 0;font-size:0.85rem;border-bottom:1px solid var(--pico-muted-border-color);">
+              <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0;">
+                <span style="font-weight:600;min-width:1.5rem;">#${item.slot_index + 1}</span>
+                <a onclick="showPaperDetail('${item.paper_id}')" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.title || 'Untitled'}</a>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.35rem;flex-shrink:0;margin-left:0.5rem;">
+                <span class="track-tag ${trackCls}">${track || '?'}</span>
+                <span style="opacity:0.7;font-size:0.8rem;">Score ${(item.score||0).toFixed(1)}</span>
+              </div>
+            </div>`;
+          }).join('');
+
+          return `<details style="margin-bottom:0.5rem;" ${isToday ? 'open' : ''}>
+            <summary style="font-weight:600;font-size:0.95rem;cursor:pointer;padding:0.35rem 0;">${dateLabel}</summary>
+            <div style="padding-left:0.75rem;margin-top:0.25rem;">${itemsHtml}</div>
+          </details>`;
+        }).join('');
+      } catch (e) {
+        document.getElementById('recommendation-history').innerHTML = '<p class="empty-msg">Failed to load history.</p>';
+      }
+    }
+
     async function init() {
       document.getElementById('last-updated').textContent = new Date().toLocaleString();
       await loadStats();
+      await loadRecommendationHistory();
       await loadRecentReads();
       await loadPapers();
     }
@@ -874,6 +1031,11 @@ def make_handler(db_path: Path):
                     )
                     _json_response(self, data)
 
+                elif path.startswith("/api/paper/") and path.endswith("/note"):
+                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/note")])
+                    note = get_paper_note(db_path, paper_id)
+                    _json_response(self, {"paper_id": paper_id, "note": note})
+
                 elif path.startswith("/api/paper/"):
                     paper_id = urllib.parse.unquote(path[len("/api/paper/"):])
                     matches = get_paper_by_id_or_title(db_path, paper_id, limit=1)
@@ -905,7 +1067,19 @@ def make_handler(db_path: Path):
             path = parsed.path
 
             try:
-                if path == "/api/mark":
+                if path.startswith("/api/paper/") and path.endswith("/note"):
+                    paper_id = urllib.parse.unquote(
+                        path[len("/api/paper/"):path.rfind("/note")]
+                    )
+                    body = _read_body(self)
+                    note = body.get("note", "")
+                    set_paper_note(db_path, paper_id, note)
+                    _json_response(self, {
+                        "success": True,
+                        "paper_id": paper_id,
+                    })
+
+                elif path == "/api/mark":
                     body = _read_body(self)
                     paper_id = body.get("id")
                     status = body.get("status")
