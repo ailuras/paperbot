@@ -342,7 +342,7 @@
     let currentOffset = 0;
     let currentTotal = 0;
     let currentPaperId = '';
-    const PAGE_SIZE = 50;
+    const PAGE_SIZE = 20;
 
     async function api(path) {
       const r = await fetch(API + path);
@@ -874,7 +874,7 @@
 
     async function loadRecommendationHistory() {
       try {
-        const rows = await api('/api/recommendations?days=7');
+        const rows = await api('/api/recommendations?days=3');
         const el = document.getElementById('recommendation-history');
         if (!rows || !rows.length) {
           el.innerHTML = '<p class="empty-msg">No recommendations yet.</p>';
