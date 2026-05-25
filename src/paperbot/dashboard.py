@@ -14,6 +14,8 @@ from paperbot.config import default_config_path, load_config
 from paperbot.db import (
     get_paper_by_id_or_title,
     get_paper_note,
+    get_paper_pdf,
+    get_paper_translation,
     get_recent_reads,
     get_stats,
     get_unread_papers,
@@ -21,11 +23,15 @@ from paperbot.db import (
     list_papers,
     save_recommendation,
     set_paper_note,
+    set_paper_pdf,
     set_paper_status,
+    set_paper_translation,
     upsert_papers,
 )
 from paperbot.fetch import fetch_papers
+from paperbot.pdf_resolver import PdfResolver
 from paperbot.recommend import recommend_papers
+from paperbot.translate import translate_paper
 
 def _load_template() -> str:
     """Load the dashboard HTML template from package resources."""
@@ -137,6 +143,19 @@ def make_handler(db_path: Path):
                     rows = get_recent_reads(db_path, limit=min(limit, 10))
                     _json_response(self, rows)
 
+                elif path.startswith("/api/paper/") and path.endswith("/translation"):
+                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/translation")])
+                    trans = get_paper_translation(db_path, paper_id)
+                    _json_response(self, {"paper_id": paper_id, **trans})
+
+                elif path.startswith("/api/paper/") and path.endswith("/pdf"):
+                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/pdf")])
+                    pdf = get_paper_pdf(db_path, paper_id)
+                    if pdf:
+                        _json_response(self, {"paper_id": paper_id, **pdf})
+                    else:
+                        _json_response(self, {"paper_id": paper_id, "pdf_url": "", "pdf_source": ""})
+
                 else:
                     self.send_error(404, "Not Found")
 
@@ -211,6 +230,84 @@ def make_handler(db_path: Path):
                         "count": len(results),
                         "date": today,
                     })
+
+                elif path.startswith("/api/paper/") and path.endswith("/translate"):
+                    paper_id = urllib.parse.unquote(
+                        path[len("/api/paper/"):path.rfind("/translate")]
+                    )
+                    # Check cache first
+                    cached = get_paper_translation(db_path, paper_id)
+                    if cached.get("title_zh"):
+                        _json_response(self, {
+                            "success": True,
+                            "paper_id": paper_id,
+                            **cached,
+                            "source": "cache",
+                        })
+                        return
+                    # Fetch paper and translate
+                    matches = get_paper_by_id_or_title(db_path, paper_id, limit=1)
+                    if not matches:
+                        _json_response(self, {"error": "Paper not found"}, 404)
+                        return
+                    paper = matches[0]
+                    from paperbot.translate import translate_paper
+                    result = translate_paper(
+                        title=paper.get("title", ""),
+                        abstract=paper.get("abstract"),
+                    )
+                    set_paper_translation(
+                        db_path, paper_id, result.title_zh, result.abstract_zh
+                    )
+                    _json_response(self, {
+                        "success": True,
+                        "paper_id": paper_id,
+                        "title_zh": result.title_zh,
+                        "abstract_zh": result.abstract_zh,
+                        "source": "api",
+                    })
+
+                elif path.startswith("/api/paper/") and path.endswith("/resolve-pdf"):
+                    paper_id = urllib.parse.unquote(
+                        path[len("/api/paper/"):path.rfind("/resolve-pdf")]
+                    )
+                    # Check cache first
+                    cached = get_paper_pdf(db_path, paper_id)
+                    if cached:
+                        _json_response(self, {
+                            "success": True,
+                            "paper_id": paper_id,
+                            **cached,
+                            "source": "cache",
+                        })
+                        return
+                    # Fetch paper and resolve PDF
+                    matches = get_paper_by_id_or_title(db_path, paper_id, limit=1)
+                    if not matches:
+                        _json_response(self, {"error": "Paper not found"}, 404)
+                        return
+                    paper = matches[0]
+                    doi = paper.get("doi", "")
+                    if not doi:
+                        _json_response(self, {"error": "No DOI available"}, 400)
+                        return
+                    resolver = PdfResolver()
+                    result = resolver.resolve(doi, title=paper.get("title", ""))
+                    if result:
+                        set_paper_pdf(db_path, paper_id, result.url, result.source)
+                        _json_response(self, {
+                            "success": True,
+                            "paper_id": paper_id,
+                            "pdf_url": result.url,
+                            "pdf_source": result.source,
+                        })
+                    else:
+                        _json_response(self, {
+                            "success": True,
+                            "paper_id": paper_id,
+                            "pdf_url": "",
+                            "pdf_source": "",
+                        })
 
                 else:
                     self.send_error(404, "Not Found")
