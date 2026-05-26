@@ -2,17 +2,34 @@
 
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
 from paperbot.cli import app
+from paperbot.db import init_db, upsert_papers
 
 runner = CliRunner()
 
 
 def _strip_ansi(s: str) -> str:
     return re.sub(r"\x1b\[[0-9;]*m", "", s)
+
+
+@pytest.fixture
+def cli_env(tmp_path: Path, sample_config_dict: dict):
+    """Prepare environment variables for CLI tests."""
+    data_dir = tmp_path / "paperbot_data"
+    data_dir.mkdir()
+    config_path = tmp_path / "config.json"
+    config_path.write_text(json.dumps(sample_config_dict), encoding="utf-8")
+    return {
+        "PAPERBOT_CONFIG": str(config_path),
+        "PAPERBOT_DATA_DIR": str(data_dir),
+    }
 
 
 def test_cli_help():
@@ -86,3 +103,34 @@ def test_serve_help():
     assert "--host" in out
     assert "--port" in out
     assert "--daemon" in out
+
+
+def test_stats_command(cli_env: dict):
+    """stats command prints paper statistics."""
+    result = runner.invoke(app, ["stats"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Total Papers" in out
+    assert "States:" in out
+
+
+def test_mark_command(cli_env: dict, sample_paper: dict):
+    """mark command sets paper status."""
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, [sample_paper])
+
+    result = runner.invoke(
+        app, ["mark", sample_paper["id"], "--status", "read"], env=cli_env
+    )
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "read" in out
+
+
+def test_audit_command(cli_env: dict):
+    """audit command shows recent operations."""
+    result = runner.invoke(app, ["audit"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "No audit entries found" in out

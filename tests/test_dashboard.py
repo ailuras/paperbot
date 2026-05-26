@@ -276,3 +276,57 @@ def test_api_paper_pdf_no_doi(tmp_db_path: Path, sample_paper: dict):
 
     assert status == 400
     assert "error" in data
+
+
+def test_api_config(tmp_db_path: Path):
+    """GET /api/config returns track configuration."""
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/config")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert "tracks" in data
+    assert "dashboard_url" in data
+
+
+def test_api_audit_logs(tmp_db_path: Path):
+    """GET /api/audit returns audit log entries."""
+    from paperbot.audit import init_audit, log_audit, AuditEntry
+
+    init_audit(tmp_db_path)
+    log_audit(tmp_db_path, AuditEntry(action="fetch", status="success"))
+
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/audit")
+    assert status == 200
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["action"] == "fetch"
+
+
+def test_api_audit_stats(tmp_db_path: Path):
+    """GET /api/audit/stats returns aggregated stats."""
+    from paperbot.audit import init_audit, log_audit, AuditEntry
+
+    init_audit(tmp_db_path)
+    log_audit(tmp_db_path, AuditEntry(action="fetch", status="success"))
+
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/audit/stats")
+    assert status == 200
+    assert isinstance(data, dict)
+    assert data["total"] == 1
+
+
+def test_api_recent_reads(tmp_db_path: Path, sample_papers: list):
+    """GET /api/recent-reads returns recently read papers."""
+    from paperbot.db import upsert_papers, set_paper_status
+
+    upsert_papers(tmp_db_path, sample_papers)
+    set_paper_status(tmp_db_path, sample_papers[0]["id"], "read")
+
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "GET", "/api/recent-reads")
+    assert status == 200
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["title"] == sample_papers[0]["title"]
