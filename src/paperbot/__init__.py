@@ -1,3 +1,3 @@
-"""PaperBot — daily paper recommendation for SMT/SAT/CP researchers."""
+"""PaperBot — daily paper recommendation for researchers."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"

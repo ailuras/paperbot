@@ -1,6 +1,15 @@
 # PaperBot
 
-Daily paper recommendation for SMT / SAT / CP researchers.
+Daily paper recommendation for researchers. Configurable tracks, dual-theme dashboard, translation, and PDF resolution.
+
+## What's New in v0.3.0
+
+- **Dynamic tracks** — tracks are no longer hardcoded; configure any research area in `config.json`
+- **Dark / light theme** — modern academic editorial design with theme toggle
+- **Paper translation** — DeepSeek API integration for Chinese translations (cached)
+- **PDF resolution** — multi-source open-access PDF finder (OpenAlex → Unpaywall → arXiv → Semantic Scholar)
+- **Audit logging** — all operations logged to SQLite and text file for cron debugging
+- **Email diagnostics** — SMTP errors are now printed with detailed messages
 
 ## Project Structure
 
@@ -11,13 +20,16 @@ paperbot/
 │   └── config.json            # your local config (gitignored)
 ├── src/paperbot/
 │   ├── __init__.py
+│   ├── audit.py               # operation audit logging
 │   ├── cli.py                 # typer CLI entry point
 │   ├── config.py              # pydantic settings loader
 │   ├── dashboard.py           # web dashboard (HTTP server + SPA)
 │   ├── db.py                  # SQLite layer (papers, recommendations, marks)
 │   ├── fetch.py               # OpenAlex API fetcher
 │   ├── mail.py                # email notifications (sendmail / SMTP)
-│   └── recommend.py           # recommendation engine
+│   ├── pdf_resolver.py        # open-access PDF URL resolver
+│   ├── recommend.py           # recommendation engine
+│   └── translate.py           # DeepSeek API translation
 ├── pyproject.toml
 └── README.md
 ```
@@ -57,6 +69,7 @@ uv run paperbot fetch --help
 | `mark` | Mark a paper status | `--status read` |
 | `stats` | Show database statistics | — |
 | `history` | Show recent reads | `--limit 10` |
+| `audit` | View operation audit log | `--stats`, `--limit 20` |
 | `serve` | Start the web dashboard | `--port 8765 --daemon` |
 
 ### Examples
@@ -79,7 +92,44 @@ uv run paperbot mark "paper title" --status read
 
 # View statistics
 uv run paperbot stats
+
+# View audit log (useful for cron debugging)
+uv run paperbot audit --stats
+uv run paperbot audit --limit 10
 ```
+
+### Dashboard Features
+
+Open http://localhost:8765 in your browser:
+
+- **Dual theme** — toggle dark / light mode (persisted in localStorage)
+- **Dynamic track pills** — track distribution shown in header
+- **Paper detail modal** — click any paper title to view details
+- **Translate** — translate title and abstract to Chinese via DeepSeek API
+- **PDF** — resolve and open open-access PDF
+- **BibTeX** — one-click copy
+- **Personal notes** — save notes per paper
+
+### Translation
+
+Requires `DEEPSEEK_API_KEY` environment variable:
+
+```bash
+export DEEPSEEK_API_KEY=your_key_here
+```
+
+Translations are cached in the database; the same paper is never translated twice.
+
+### PDF Resolution
+
+Click the **PDF** button on any paper. PaperBot tries these sources in order:
+
+1. OpenAlex metadata (free)
+2. Unpaywall API (free)
+3. arXiv search (free)
+4. Semantic Scholar (free)
+
+Resolved PDF URLs are cached in the database.
 
 ### Email Notifications
 
@@ -109,7 +159,7 @@ Environment variable overrides: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP
 
 ### Scheduled Tasks (crontab)
 
-PaperBot uses system crontab for periodic tasks (same approach as mihomo).
+PaperBot uses system crontab for periodic tasks.
 
 ```bash
 # Daily recommendation at 8:00
@@ -122,6 +172,21 @@ PaperBot uses system crontab for periodic tasks (same approach as mihomo).
 Current crontab:
 ```bash
 crontab -l
+```
+
+### Audit Logging
+
+All `recommend` and `fetch` operations are logged to both SQLite (`audit_logs` table) and `~/.paperbot/audit.log` text file. Use this to debug cron issues:
+
+```bash
+# View recent operations
+paperbot audit --limit 10
+
+# View summary statistics
+paperbot audit --stats
+
+# Tail the text log
+tail -f ~/.paperbot/audit.log
 ```
 
 ### Alternative: activate venv first
@@ -146,11 +211,24 @@ cp data/config.json.example data/config.json
 
 Edit `data/config.json` to customize:
 
-- **tracks** — SMT, SAT, CP queries and keywords
+- **tracks** — define your research areas (name, query, keywords, optional color)
 - **scoring.tiers** — venue tiers with point weights
 - **scoring.citation_breakpoints** — citation -> score mapping
 - **filters** — title / source / venue blacklist
 - **recommendation** — daily count, quality slots, thresholds
 - **mail** — email sender config (sendmail or SMTP)
+
+Track example with custom color:
+```json
+"tracks": {
+  "SMT": {
+    "query": "SMT solver OR satisfiability modulo theories",
+    "keywords": ["smt", "solver", "z3"],
+    "color": "#2563eb"
+  }
+}
+```
+
+If `color` is omitted, a distinct color is auto-generated for each track.
 
 Default data directory: `~/.paperbot/`
