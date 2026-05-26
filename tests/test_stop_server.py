@@ -75,27 +75,12 @@ def test_kill_by_port_lsof_success():
     mock_kill.assert_called_once_with(12345, 15)
 
 
-def test_kill_by_port_fuser_fallback():
-    """_kill_by_port falls back to fuser when lsof is not available."""
-    lsof_error = FileNotFoundError()
+def test_kill_by_port_no_lsof():
+    """_kill_by_port returns False when lsof is not available."""
+    with patch("subprocess.run", side_effect=FileNotFoundError):
+        result = _kill_by_port(8765)
 
-    mock_fuser = MagicMock()
-    mock_fuser.returncode = 0
-    mock_fuser.stdout = "12345 12346"
-
-    def side_effect(cmd, **kwargs):
-        if cmd[0] == "lsof":
-            raise lsof_error
-        return mock_fuser
-
-    with patch("subprocess.run", side_effect=side_effect) as mock_run:
-        with patch("os.kill") as mock_kill:
-            result = _kill_by_port(8765)
-
-    assert result is True
-    assert mock_kill.call_count == 2
-    mock_kill.assert_any_call(12345, 15)
-    mock_kill.assert_any_call(12346, 15)
+    assert result is False
 
 
 def test_kill_by_port_nothing_found():

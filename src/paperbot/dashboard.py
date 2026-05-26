@@ -349,26 +349,25 @@ def run_server(db_path: Path, host: str = "127.0.0.1", port: int = 8000) -> None
 
 
 def _kill_by_port(port: int) -> bool:
-    """Try to find and kill a process listening on *port*."""
+    """Try to find and kill a process listening on *port* via lsof."""
     import subprocess
 
-    for cmd in (
-        ["lsof", "-ti", f":{port}"],
-        ["fuser", f"{port}/tcp"],
-    ):
-        try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
-            if result.returncode == 0 and result.stdout.strip():
-                killed = False
-                for pid_str in result.stdout.strip().split():
-                    try:
-                        os.kill(int(pid_str.strip()), 15)
-                        killed = True
-                    except (ValueError, ProcessLookupError, PermissionError):
-                        continue
-                return killed
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            continue
+    try:
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=2,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            killed = False
+            for pid_str in result.stdout.strip().split():
+                try:
+                    os.kill(int(pid_str.strip()), 15)
+                    killed = True
+                except (ValueError, ProcessLookupError, PermissionError):
+                    continue
+            return killed
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
     return False
 
 
