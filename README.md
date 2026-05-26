@@ -1,147 +1,179 @@
+<div align="center">
+
 # PaperBot
 
-Daily paper recommendation for researchers. Configurable tracks, dual-theme dashboard, translation, and PDF resolution.
+**Daily Paper Recommendations · Smart Filtering · One-Click Tracking**
 
-## What's New in v0.3.0
+PaperBot automatically fetches papers from [OpenAlex](https://openalex.org), filters and scores them
+based on your research interests, and delivers daily picks via Web Dashboard and email.
 
-- **Dynamic tracks** — tracks are no longer hardcoded; configure any research area in `config.json`
-- **Dark / light theme** — modern academic editorial design with theme toggle
-- **Paper translation** — DeepSeek API integration for Chinese translations (cached)
-- **PDF resolution** — multi-source open-access PDF finder (OpenAlex → Unpaywall → arXiv → Semantic Scholar)
-- **Audit logging** — all operations logged to SQLite and text file for cron debugging
-- **Email diagnostics** — SMTP errors are now printed with detailed messages
+<img src="assets/hero.png" alt="PaperBot Dashboard" width="900">
 
-## Project Structure
+</div>
 
-```
-paperbot/
-├── data/
-│   ├── config.json.example    # configuration template (copy to config.json)
-│   └── config.json            # your local config (gitignored)
-├── src/paperbot/
-│   ├── __init__.py
-│   ├── audit.py               # operation audit logging
-│   ├── cli.py                 # typer CLI entry point
-│   ├── config.py              # pydantic settings loader
-│   ├── dashboard.py           # web dashboard (HTTP server + SPA)
-│   ├── db.py                  # SQLite layer (papers, recommendations, marks)
-│   ├── fetch.py               # OpenAlex API fetcher
-│   ├── mail.py                # email notifications (sendmail / SMTP)
-│   ├── pdf_resolver.py        # open-access PDF URL resolver
-│   ├── recommend.py           # recommendation engine
-│   └── translate.py           # DeepSeek API translation
-├── pyproject.toml
-└── README.md
-```
+---
 
-## Requirements
+## 5-Minute Quickstart
 
-- Python >= 3.10
-- [uv](https://docs.astral.sh/uv/)
-
-## Install
+### 1. Install
 
 ```bash
+git clone <repo-url> && cd PaperBot
 uv pip install -e .
 ```
 
-## Usage
-
-### Recommended: `uv run`
-
-No need to activate the virtual environment manually:
+### 2. Configure
 
 ```bash
-# List all commands
-uv run paperbot --help
-
-# Show detailed options for a command
-uv run paperbot serve --help
-uv run paperbot fetch --help
+cp data/config.json.example data/config.json
 ```
 
-### Command Cheatsheet
+Edit `data/config.json` and set up your **tracks** (research directions). SMT / SAT / CP are pre-configured by default.
 
-| Command | Description | Common Options |
-|---------|-------------|----------------|
-| `fetch` | Fetch papers from OpenAlex | `--days 40`, `--email` |
-| `recommend` | Generate daily recommendations | `--count 3`, `--email` |
-| `mark` | Mark a paper status | `--status read` |
-| `stats` | Show database statistics | — |
-| `history` | Show recent reads | `--limit 10` |
-| `audit` | View operation audit log | `--stats`, `--limit 20` |
-| `serve` | Start the web dashboard | `--port 8765 --daemon` |
-
-### Examples
+### 3. Initialize Database
 
 ```bash
-# Fetch papers from the last 40 days
-uv run paperbot fetch --days 40
+# Fetch papers from the past year
+uv run paperbot init
+```
 
-# Generate 3 daily recommendations
-uv run paperbot recommend --count 3
+### 4. Launch Dashboard
 
-# Start dashboard (foreground)
-uv run paperbot serve --port 8765
+```bash
+uv run paperbot serve
+# Open http://localhost:8765
+```
 
-# Start dashboard (background)
-uv run paperbot serve --port 8765 --daemon
+### 5. Daily Recommendations (Manual)
 
-# Mark a paper as read
+```bash
+uv run paperbot recommend
+```
+
+---
+
+## Feature Overview
+
+| Feature | Description |
+|---------|-------------|
+| **Smart Fetching** | Auto-pull papers from OpenAlex by research direction, with deduplication and merging |
+| **Scoring & Ranking** | Score papers by venue tier + citation count |
+| **Web Dashboard** | Browse, search, mark status, write notes |
+| **Translation** | DeepSeek API translation for titles and abstracts (auto-cached) |
+| **PDF Resolution** | Multi-source open-access PDF lookup (OpenAlex → Unpaywall → arXiv → Semantic Scholar) |
+| **Email Delivery** | Daily recommendation emails, supports SMTP / local sendmail |
+| **Audit Logging** | All operations logged to SQLite + text log |
+
+---
+
+## Dashboard
+
+The Dashboard is a single-page web app with zero extra dependencies:
+
+- **Paper List** — Sorted by score, filterable by track / status / keywords
+- **Detail Modal** — Click title to view abstract, authors, citations, BibTeX
+- **Status Marking** — `read` / `starred` / `skip`, supports bulk operations
+- **Personal Notes** — Save private notes per paper
+- **One-Click Translation** — Chinese title and abstract translation (requires `DEEPSEEK_API_KEY`)
+- **PDF Access** — Auto-resolve and redirect to open-access PDF
+- **Dual Themes** — Dark / light mode, preference auto-saved
+
+> To update the hero image: launch `uv run paperbot serve`, visit http://localhost:8765, take a screenshot, and save it to `assets/hero.png`.
+
+---
+
+## Command Cheatsheet
+
+```bash
+# View all commands
+uv run paperbot --help
+
+# Fetch papers (default last 45 days)
+uv run paperbot fetch
+uv run paperbot fetch --days 60
+
+# Generate daily recommendations (default 3)
+uv run paperbot recommend
+uv run paperbot recommend --count 5
+
+# Mark paper status
 uv run paperbot mark "paper title" --status read
+uv run paperbot mark "https://openalex.org/W123" --status starred
 
 # View statistics
 uv run paperbot stats
 
-# View audit log (useful for cron debugging)
+# View recent reads
+uv run paperbot history --limit 10
+
+# Launch Dashboard (foreground)
+uv run paperbot serve --port 8765
+
+# Launch Dashboard (daemon)
+uv run paperbot serve --port 8765 --daemon
+
+# Stop daemon Dashboard
+uv run paperbot serve --stop
+
+# View audit log
+uv run paperbot audit --limit 20
 uv run paperbot audit --stats
-uv run paperbot audit --limit 10
 ```
 
-### Dashboard Features
+---
 
-Open http://localhost:8765 in your browser:
+## Configuration Guide
 
-- **Dual theme** — toggle dark / light mode (persisted in localStorage)
-- **Dynamic track pills** — track distribution shown in header
-- **Paper detail modal** — click any paper title to view details
-- **Translate** — translate title and abstract to Chinese via DeepSeek API
-- **PDF** — resolve and open open-access PDF
-- **BibTeX** — one-click copy
-- **Personal notes** — save notes per paper
+`data/config.json` contains the following main sections:
 
-### Translation
+### tracks — Research Directions
 
-Requires `DEEPSEEK_API_KEY` environment variable:
-
-```bash
-export DEEPSEEK_API_KEY=your_key_here
+```json
+"tracks": {
+  "SMT": {
+    "query": "\"SMT solver\" OR \"satisfiability modulo theories\"",
+    "keywords": ["smt solver", "z3", "cvc5"],
+    "color": "#2563eb"
+  }
+}
 ```
 
-Translations are cached in the database; the same paper is never translated twice.
+- `query` — Search query passed to OpenAlex
+- `keywords` — Title/abstract keyword filter
+- `color` — Track label color in Dashboard (optional, auto-generated if omitted)
 
-### PDF Resolution
+### scoring — Scoring Rules
 
-Click the **PDF** button on any paper. PaperBot tries these sources in order:
-
-1. OpenAlex metadata (free)
-2. Unpaywall API (free)
-3. arXiv search (free)
-4. Semantic Scholar (free)
-
-Resolved PDF URLs are cached in the database.
-
-### Email Notifications
-
-PaperBot supports email notifications via **local sendmail** (default) or **SMTP**.
-
-**Local sendmail** (no configuration needed):
-```bash
-paperbot recommend --email
-paperbot fetch --email
+```json
+"scoring": {
+  "tiers": {
+    "1": { "points": 20, "acronyms": ["CAV", "PLDI"], "phrases": ["Computer Aided Verification"] },
+    "2": { "points": 10, "acronyms": ["SAS", "FMCAD"], "phrases": [] }
+  },
+  "citation_breakpoints": [
+    { "up_to": 10, "points_per_citation": 1.0 },
+    { "up_to": 50, "points_per_citation": 0.5 },
+    { "up_to": null, "points_per_citation": 0.2 }
+  ],
+  "max_citation_points": 40
+}
 ```
 
-**SMTP** (configure in `data/config.json`):
+Total score = venue tier base points + citation conversion points (piecewise cumulative, capped at 40)
+
+### recommendation — Recommendation Strategy
+
+```json
+"recommendation": {
+  "daily_count": 3,          // Daily recommendation count
+  "quality_slots": 1,        // Slots reserved for high-score papers
+  "high_score_threshold": 5, // High score threshold
+  "recent_days": 30          // Recent paper definition (days)
+}
+```
+
+### mail — Email Config (Optional)
+
 ```json
 "mail": {
   "smtp_host": "smtp.gmail.com",
@@ -149,86 +181,83 @@ paperbot fetch --email
   "smtp_user": "your-email@gmail.com",
   "smtp_password": "your-app-password",
   "from_addr": "your-email@gmail.com",
-  "from_name": "PaperBot",
   "to_addrs": ["recipient@example.com"],
   "use_tls": true
 }
 ```
 
-Environment variable overrides: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`.
+Leave empty to use local sendmail (no configuration needed).
 
-### Scheduled Tasks (crontab)
+Environment variable overrides: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
 
-PaperBot uses system crontab for periodic tasks.
-
-```bash
-# Daily recommendation at 8:00
-0 8 * * * /path/to/paperbot recommend --email
-
-# Monthly fetch on 1st at 8:00
-0 8 1 * * /path/to/paperbot fetch --email
-```
-
-Current crontab:
-```bash
-crontab -l
-```
-
-### Audit Logging
-
-All `recommend` and `fetch` operations are logged to both SQLite (`audit_logs` table) and `~/.paperbot/audit.log` text file. Use this to debug cron issues:
+### translate — Translation (Optional)
 
 ```bash
-# View recent operations
-paperbot audit --limit 10
-
-# View summary statistics
-paperbot audit --stats
-
-# Tail the text log
-tail -f ~/.paperbot/audit.log
+export DEEPSEEK_API_KEY=your_key_here
 ```
 
-### Alternative: activate venv first
+Translation results are automatically cached in the database — the same paper is never translated twice.
+
+---
+
+## Automation (Crontab)
+
+Add the following to your crontab for fully automated daily delivery:
 
 ```bash
-source .venv/bin/activate
+# Edit crontab
+crontab -e
 
-# Now you can use paperbot directly
-paperbot --help
-paperbot fetch --days 40
-paperbot serve --port 8765 --daemon
-# ...
+# Daily recommendations + email at 8 AM
+0 8 * * * cd /path/to/PaperBot && uv run paperbot recommend --email
+
+# Weekly fetch on Monday at 2 AM
+0 2 * * 1 cd /path/to/PaperBot && uv run paperbot fetch --email
 ```
 
-## Configuration
+Use `paperbot audit --stats` to check success/failure status of each run, helpful for debugging cron issues.
 
-Copy the template and edit:
+---
+
+## Project Structure
+
+```
+PaperBot/
+├── data/
+│   ├── config.json.example    # Config template
+│   └── config.json            # Your local config (gitignored)
+├── src/paperbot/
+│   ├── cli.py                 # CLI entry point
+│   ├── dashboard.py           # Web Dashboard (HTTP server + SPA)
+│   ├── fetch.py               # OpenAlex fetcher
+│   ├── recommend.py           # Recommendation engine
+│   ├── translate.py           # DeepSeek translation
+│   ├── pdf_resolver.py        # Multi-source PDF resolver
+│   ├── db.py                  # SQLite data layer
+│   ├── mail.py                # Email delivery
+│   ├── audit.py               # Audit logging
+│   ├── config.py              # Config loader
+│   ├── models.py              # Data models
+│   └── utils.py               # Utility functions
+├── tests/                     # Test suite
+├── pyproject.toml
+└── README.md
+```
+
+---
+
+## Testing
 
 ```bash
-cp data/config.json.example data/config.json
+# Run all tests
+uv run pytest tests/ -q
+
+# Run with coverage
+uv run pytest tests/ --cov=paperbot --cov-report=term-missing
 ```
 
-Edit `data/config.json` to customize:
+---
 
-- **tracks** — define your research areas (name, query, keywords, optional color)
-- **scoring.tiers** — venue tiers with point weights
-- **scoring.citation_breakpoints** — citation -> score mapping
-- **filters** — title / source / venue blacklist
-- **recommendation** — daily count, quality slots, thresholds
-- **mail** — email sender config (sendmail or SMTP)
+## License
 
-Track example with custom color:
-```json
-"tracks": {
-  "SMT": {
-    "query": "SMT solver OR satisfiability modulo theories",
-    "keywords": ["smt", "solver", "z3"],
-    "color": "#2563eb"
-  }
-}
-```
-
-If `color` is omitted, a distinct color is auto-generated for each track.
-
-Default data directory: `~/.paperbot/`
+MIT
