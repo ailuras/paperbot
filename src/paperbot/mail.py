@@ -99,13 +99,21 @@ def _send_via_smtp(
 
     try:
         with smtplib.SMTP(cfg["host"], cfg["port"], timeout=30) as server:
+            server.set_debuglevel(0)
             if cfg.get("use_tls", True):
                 server.starttls()
             if cfg.get("user") and cfg.get("password"):
                 server.login(cfg["user"], cfg["password"])
             server.sendmail(from_addr, to_addrs, msg.as_string())
         return True
-    except Exception:
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"[SMTP Auth Error] {e.smtp_code}: {e.smtp_error}")
+        return False
+    except smtplib.SMTPException as e:
+        print(f"[SMTP Error] {e}")
+        return False
+    except Exception as e:
+        print(f"[Email Error] {type(e).__name__}: {e}")
         return False
 
 

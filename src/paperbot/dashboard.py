@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
+from paperbot.audit import get_audit_logs, get_audit_stats
 from paperbot.config import default_config_path, load_config
 from paperbot.db import (
     get_paper_by_id_or_title,
@@ -155,6 +156,18 @@ def make_handler(db_path: Path):
                     limit = int(qs.get("limit", "3"))
                     rows = get_recent_reads(db_path, limit=min(limit, 10))
                     _json_response(self, rows)
+
+                elif path == "/api/audit":
+                    action = qs.get("action") or None
+                    limit = int(qs.get("limit", "50"))
+                    offset = int(qs.get("offset", "0"))
+                    rows = get_audit_logs(db_path, action=action, limit=limit, offset=offset)
+                    _json_response(self, rows)
+
+                elif path == "/api/audit/stats":
+                    days = int(qs.get("days", "7"))
+                    data = get_audit_stats(db_path, days=min(days, 365))
+                    _json_response(self, data)
 
                 else:
                     self.send_error(404, "Not Found")
