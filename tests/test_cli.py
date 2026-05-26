@@ -121,7 +121,7 @@ def test_mark_command(cli_env: dict, sample_paper: dict):
     upsert_papers(db_path, [sample_paper])
 
     result = runner.invoke(
-        app, ["mark", sample_paper["id"], "--status", "read"], env=cli_env
+        app, ["mark", sample_paper.id, "--status", "read"], env=cli_env
     )
     assert result.exit_code == 0
     out = _strip_ansi(result.output)

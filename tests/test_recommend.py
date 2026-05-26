@@ -5,20 +5,21 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 from paperbot.config import RecommendationConfig, Settings, TrackConfig
+from paperbot.models import Paper
 from paperbot.recommend import recommend_papers
 
 
-def _make_paper(pid: str, score: float, pub_date: str) -> dict:
-    return {
-        "id": pid,
-        "title": f"Paper {pid}",
-        "publication_date": pub_date,
-        "publication_year": int(pub_date[:4]),
-        "score": score,
-        "cited_by_count": 0,
-        "venue": "CAV",
-        "track": "SMT",
-    }
+def _make_paper(pid: str, score: float, pub_date: str) -> Paper:
+    return Paper(
+        id=pid,
+        title=f"Paper {pid}",
+        publication_date=pub_date,
+        publication_year=int(pub_date[:4]),
+        score=score,
+        cited_by_count=0,
+        venue="CAV",
+        track="SMT",
+    )
 
 
 def test_recommend_quality_slots():
@@ -40,7 +41,7 @@ def test_recommend_quality_slots():
     results = recommend_papers(papers, cfg)
     assert len(results) == 3
     # First slot should be the high-score paper
-    assert results[0].paper["id"] == "W1"
+    assert results[0].paper.id == "W1"
     assert "Quality" in results[0].reason
 
 
@@ -63,7 +64,7 @@ def test_recommend_recent_fallback():
     results = recommend_papers(papers, cfg)
     assert len(results) == 2
     # Both are below threshold, so recency picks
-    ids = {r.paper["id"] for r in results}
+    ids = {r.paper.id for r in results}
     assert ids == {"W1", "W2"}
 
 
@@ -83,7 +84,7 @@ def test_recommend_no_duplicates():
         _make_paper("W2", 4.0, today),
     ]
     results = recommend_papers(papers, cfg)
-    ids = [r.paper["id"] for r in results]
+    ids = [r.paper.id for r in results]
     assert len(ids) == len(set(ids))
 
 

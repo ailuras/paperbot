@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 
 from paperbot.config import ScoringTier, Settings, TrackConfig
+from paperbot.models import Paper
 
 SELECT_FIELDS = ",".join(
     [
@@ -110,47 +111,47 @@ def _restore_abstract(inverted_index: dict[str, list[int]] | None) -> str:
     return " ".join(word for _, word in sorted(positions))
 
 
-def _parse_work(work: dict[str, Any], track: str, scorer: VenueScorer) -> dict[str, Any]:
+def _parse_work(work: dict[str, Any], track: str, scorer: VenueScorer) -> Paper:
     loc = work.get("primary_location") or {}
     source = loc.get("source") or {}
     venue = source.get("display_name") or ""
     citations = work.get("cited_by_count", 0) or 0
     tier = scorer.get_tier(venue)
 
-    return {
-        "id": work.get("id") or "",
-        "doi": work.get("doi") or "",
-        "title": work.get("display_name") or work.get("title") or "",
-        "authors": [
+    return Paper(
+        id=work.get("id") or "",
+        doi=work.get("doi") or None,
+        title=work.get("display_name") or work.get("title") or "",
+        authors=[
             a.get("author", {}).get("display_name")
             for a in (work.get("authorships") or [])
             if a.get("author", {}).get("display_name")
         ],
-        "publication_year": work.get("publication_year"),
-        "publication_date": work.get("publication_date") or "",
-        "venue": venue,
-        "cited_by_count": citations,
-        "abstract": _restore_abstract(work.get("abstract_inverted_index")),
-        "landing_page_url": loc.get("landing_page_url")
+        publication_year=work.get("publication_year"),
+        publication_date=work.get("publication_date") or "",
+        venue=venue,
+        cited_by_count=citations,
+        abstract=_restore_abstract(work.get("abstract_inverted_index")),
+        landing_page_url=loc.get("landing_page_url")
         or work.get("doi")
         or work.get("id")
         or "",
-        "pdf_url": loc.get("pdf_url")
+        pdf_url=loc.get("pdf_url")
         or (work.get("open_access") or {}).get("oa_url")
-        or "",
-        "track": track,
-        "score": scorer.calculate_score(venue, citations),
-        "tier": tier,
-    }
+        or None,
+        track=track,
+        score=scorer.calculate_score(venue, citations),
+        tier=tier,
+    )
 
 
-def _is_relevant(paper: dict[str, Any], track: str, settings: Settings) -> bool:
-    title_lower = (paper.get("title") or "").lower()
-    text = f"{title_lower} {(paper.get('abstract') or '').lower()}"
+def _is_relevant(paper: Paper, track: str, settings: Settings) -> bool:
+    title_lower = paper.title.lower()
+    text = f"{title_lower} {paper.abstract.lower()}"
     filters = settings.filters
     if any(token in title_lower for token in filters.title_blacklist):
         return False
-    if any(token in (paper.get("venue") or "").lower() for token in filters.source_blacklist):
+    if any(token in paper.venue.lower() for token in filters.source_blacklist):
         return False
     keywords = settings.tracks.get(track, TrackConfig(query="", keywords=[])).keywords
     return any(
@@ -213,24 +214,23 @@ def _search_papers(
     return papers
 
 
-def _dedupe_and_merge_tracks(papers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _dedupe_and_merge_tracks(papers: list[Paper]) -> list[Paper]:
     """Merge duplicate papers (same id) and combine tracks."""
-    by_id: dict[str, dict[str, Any]] = {}
+    by_id: dict[str, Paper] = {}
     for paper in papers:
-        pid = paper.get("id")
+        pid = paper.id
         if not pid:
             continue
         if pid in by_id:
             existing = by_id[pid]
-            tracks = {t.strip() for t in (existing.get("track") or "").split(",") if t.strip()}
-            new_track = paper.get("track")
-            if new_track:
-                tracks.add(new_track)
-            existing["track"] = ",".join(sorted(tracks))
-            # Keep the higher score
-            existing["score"] = max(existing.get("score", 0), paper.get("score", 0))
+            tracks = {t.strip() for t in existing.track.split(",") if t.strip()}
+            if paper.track:
+                tracks.add(paper.track)
+            # Update in place: combined track and higher score
+            existing.track = ",".join(sorted(tracks))
+            existing.score = max(existing.score, paper.score)
         else:
-            by_id[pid] = dict(paper)
+            by_id[pid] = paper
     return list(by_id.values())
 
 
@@ -238,7 +238,7 @@ def fetch_papers(
     settings: Settings,
     days: int | None = None,
     max_results: int | None = None,
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+) -> tuple[list[Paper], dict[str, Any]]:
     """Fetch papers from OpenAlex for all tracks.
 
     Returns (papers, stats).
@@ -252,7 +252,7 @@ def fetch_papers(
 
     scorer = VenueScorer(settings)
     track_stats: list[dict[str, Any]] = []
-    all_papers: list[dict[str, Any]] = []
+    all_papers: list[Paper] = []
 
     user_agent = "PaperBot/1.0"
     mailto = os.environ.get("OPENALEX_MAILTO") or openalex.mailto

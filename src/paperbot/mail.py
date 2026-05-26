@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from paperbot.config import Settings
+from paperbot.models import Paper
 from paperbot.utils import format_authors
 
 
@@ -118,18 +119,18 @@ def _send_via_smtp(
         return False
 
 
-def _paper_to_html(paper: dict[str, Any], index: int, translation: dict[str, str] | None = None) -> str:
-    """Convert a paper dict to HTML snippet."""
-    author_str = format_authors(paper)
+def _paper_to_html(paper: Paper, index: int, translation: dict[str, str] | None = None) -> str:
+    """Convert a Paper to HTML snippet."""
+    author_str = paper.author_str
 
-    venue = paper.get("venue") or "OpenAlex"
-    url = paper.get("landing_page_url") or paper.get("doi") or paper.get("id") or ""
-    abstract = paper.get("abstract", "")
-    score = paper.get("score", 0)
-    cited = paper.get("cited_by_count", 0)
-    track = paper.get("track", "")
-    tier = paper.get("tier", 0)
-    pub_date = paper.get("publication_date") or paper.get("publication_year") or "?"
+    venue = paper.venue or "OpenAlex"
+    url = paper.url
+    abstract = paper.abstract
+    score = paper.score
+    cited = paper.cited_by_count
+    track = paper.track
+    tier = paper.tier
+    pub_date = paper.year_or_date
 
     tier_badge = f"<span style='background:#b45309;color:#fef3c7;padding:2px 6px;border-radius:4px;font-size:12px;'>T{tier}</span>" if tier else ""
 
@@ -149,7 +150,7 @@ def _paper_to_html(paper: dict[str, Any], index: int, translation: dict[str, str
 
     return f"""
     <div style="border-left:4px solid #2563eb;padding-left:16px;margin-bottom:24px;">
-      <h3 style="margin:0 0 8px 0;color:#1e293b;">#{index} {paper.get('title', 'No Title')}</h3>
+      <h3 style="margin:0 0 8px 0;color:#1e293b;">#{index} {paper.title or 'No Title'}</h3>
       {trans_html}
       <div style="margin-bottom:8px;">
         {tier_badge}{track_badge}
@@ -163,7 +164,7 @@ def _paper_to_html(paper: dict[str, Any], index: int, translation: dict[str, str
 
 
 def _build_email_body(
-    papers: list[dict[str, Any]],
+    papers: list[Paper],
     title: str,
     date_str: str,
     stats: dict[str, Any] | None = None,
@@ -173,7 +174,7 @@ def _build_email_body(
     """Build full HTML email body."""
     translations = translations or {}
     papers_html = "\n".join(
-        _paper_to_html(p, i + 1, translations.get(p.get("id", "")))
+        _paper_to_html(p, i + 1, translations.get(p.id))
         for i, p in enumerate(papers)
     )
 
@@ -237,7 +238,7 @@ def _send_email(
 
 
 def send_recommendation_email(
-    papers: list[dict[str, Any]],
+    papers: list[Paper],
     settings: Settings,
     date_str: str | None = None,
     stats: dict[str, Any] | None = None,

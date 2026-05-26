@@ -8,6 +8,8 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
+from paperbot.models import Paper
+
 # ── Schema ──────────────────────────────────────────────────────────
 
 _SCHEMA = """
@@ -87,7 +89,7 @@ def init_db(db_path: Path) -> None:
 
 def upsert_papers(
     db_path: Path,
-    papers: list[dict[str, Any]],
+    papers: list[Paper],
 ) -> tuple[int, int]:
     """Bulk upsert papers. Returns (inserted, updated)."""
     inserted = 0
@@ -97,35 +99,28 @@ def upsert_papers(
         cursor = conn.cursor()
 
         for paper in papers:
-            paper_id = paper.get("id")
+            paper_id = paper.id
             if not paper_id:
                 continue
 
-            # Normalize authors to JSON string if it's a list
-            authors = paper.get("authors")
-            if isinstance(authors, list):
-                authors = json.dumps(authors, ensure_ascii=False)
-
-            # Convert tier to string if present
-            tier = paper.get("tier")
-            if tier is not None:
-                tier = str(tier)
+            # Normalize authors to JSON string for storage
+            authors_json = json.dumps(paper.authors, ensure_ascii=False) if paper.authors else None
 
             row = (
                 paper_id,
-                paper.get("doi"),
-                paper.get("title"),
-                authors,
-                paper.get("publication_year"),
-                paper.get("publication_date"),
-                paper.get("venue"),
-                paper.get("cited_by_count", 0),
-                paper.get("abstract"),
-                paper.get("landing_page_url"),
-                paper.get("pdf_url"),
-                paper.get("track"),
-                paper.get("score", 0.0),
-                tier,
+                paper.doi,
+                paper.title,
+                authors_json,
+                paper.publication_year,
+                paper.publication_date,
+                paper.venue,
+                paper.cited_by_count,
+                paper.abstract,
+                paper.landing_page_url,
+                paper.pdf_url,
+                paper.track,
+                paper.score,
+                str(paper.tier) if paper.tier is not None else None,
             )
 
             cursor.execute(
@@ -191,7 +186,7 @@ def get_unread_papers(
     track: str | None = None,
     limit: int | None = None,
     recent_days: int | None = None,
-) -> list[dict[str, Any]]:
+) -> list[Paper]:
     """Query candidate papers for recommendation.
 
     Excludes papers that have been read or skipped.
@@ -220,9 +215,9 @@ def get_unread_papers(
 
     with closing(_connect(db_path)) as conn:
         cursor = conn.execute(sql, params)
-        rows = [dict(row) for row in cursor.fetchall()]
+        papers = [Paper.from_dict(dict(row)) for row in cursor.fetchall()]
 
-    return rows
+    return papers
 
 
 def save_recommendation(
@@ -274,7 +269,7 @@ def get_recommendation_history(
 def get_recent_reads(
     db_path: Path,
     limit: int = 3,
-) -> list[dict[str, Any]]:
+) -> list[Paper]:
     """Return most recently read papers with full details."""
     with closing(_connect(db_path)) as conn:
         cursor = conn.execute(
@@ -288,9 +283,9 @@ def get_recent_reads(
             """,
             (limit,),
         )
-        rows = [dict(row) for row in cursor.fetchall()]
+        papers = [Paper.from_dict(dict(row)) for row in cursor.fetchall()]
 
-    return rows
+    return papers
 
 
 def set_paper_status(
@@ -317,14 +312,14 @@ def get_paper_by_id_or_title(
     db_path: Path,
     query: str,
     limit: int = 5,
-) -> list[dict[str, Any]]:
+) -> list[Paper]:
     """Search papers by exact ID or fuzzy title match."""
     with closing(_connect(db_path)) as conn:
         # Try exact match first
         cursor = conn.execute("SELECT * FROM papers WHERE id = ? LIMIT 1", (query,))
         row = cursor.fetchone()
         if row:
-            return [dict(row)]
+            return [Paper.from_dict(dict(row))]
 
         # Fuzzy title search
         cursor = conn.execute(
@@ -336,9 +331,9 @@ def get_paper_by_id_or_title(
             """,
             (f"%{query}%", limit),
         )
-        rows = [dict(row) for row in cursor.fetchall()]
+        papers = [Paper.from_dict(dict(row)) for row in cursor.fetchall()]
 
-    return rows
+    return papers
 
 
 def list_papers(
@@ -408,9 +403,9 @@ def list_papers(
         LIMIT ? OFFSET ?
         """
         cursor = conn.execute(sql, params + [limit, offset])
-        rows = [dict(row) for row in cursor.fetchall()]
+        papers = [Paper.from_dict(dict(row)) for row in cursor.fetchall()]
 
-    return {"total": total, "papers": rows, "limit": limit, "offset": offset}
+    return {"total": total, "papers": papers, "limit": limit, "offset": offset}
 
 
 def get_paper_note(db_path: Path, paper_id: str) -> str:

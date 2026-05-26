@@ -3,27 +3,30 @@
 from __future__ import annotations
 
 import random
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Any
 
 from paperbot.config import RecommendationConfig, Settings
+from paperbot.models import Paper
 
 
-def _parse_pub_date(paper: dict[str, Any]) -> date | None:
-    value = paper.get("publication_date") or ""
+def _parse_pub_date(paper: Paper) -> date | None:
+    value = paper.publication_date
+    from datetime import datetime
+
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
         return None
 
 
-def _is_recent(paper: dict[str, Any], cutoff: date) -> bool:
+def _is_recent(paper: Paper, cutoff: date) -> bool:
     pub_date = _parse_pub_date(paper)
     return pub_date is not None and pub_date >= cutoff
 
 
-def _paper_key(paper: dict[str, Any]) -> str:
-    return paper.get("id") or paper.get("doi") or paper.get("title") or ""
+def _paper_key(paper: Paper) -> str:
+    return paper.id or paper.doi or paper.title
 
 
 class RecommendationResult:
@@ -31,7 +34,7 @@ class RecommendationResult:
 
     def __init__(
         self,
-        paper: dict[str, Any],
+        paper: Paper,
         reason: str,
         slot_index: int,
     ):
@@ -41,11 +44,11 @@ class RecommendationResult:
 
     @property
     def paper_id(self) -> str:
-        return self.paper.get("id") or ""
+        return self.paper.id
 
 
 def recommend_papers(
-    papers: list[dict[str, Any]],
+    papers: list[Paper],
     settings: Settings,
     count: int | None = None,
 ) -> list[RecommendationResult]:
@@ -67,12 +70,12 @@ def recommend_papers(
 
     recent_cutoff = date.today() - timedelta(days=recent_days)
     recent_pool = [p for p in papers if _is_recent(p, recent_cutoff)]
-    high_score_pool = [p for p in papers if (p.get("score", 0) or 0) >= high_threshold]
+    high_score_pool = [p for p in papers if p.score >= high_threshold]
 
     exclude_ids: set[str] = set()
     selected: list[RecommendationResult] = []
 
-    def _pop_random(pool: list[dict[str, Any]]) -> dict[str, Any] | None:
+    def _pop_random(pool: list[Paper]) -> Paper | None:
         valid = [p for p in pool if _paper_key(p) not in exclude_ids]
         if not valid:
             return None

@@ -10,6 +10,7 @@ import pytest
 
 from paperbot.config import Settings, TrackConfig
 from paperbot.db import init_db
+from paperbot.models import Paper
 
 
 @pytest.fixture
@@ -51,69 +52,69 @@ def tmp_db_path(tmp_path: Path) -> Path:
 
 @pytest.fixture
 def sample_paper():
-    """Return a realistic paper dict for reuse."""
-    return {
-        "id": "https://openalex.org/W123456789",
-        "doi": "10.1000/test.123",
-        "title": "Test Paper on SMT Solvers",
-        "authors": ["Alice Researcher", "Bob Scientist"],
-        "publication_year": 2023,
-        "publication_date": "2023-06-15",
-        "venue": "Proceedings of CAV 2023",
-        "cited_by_count": 42,
-        "abstract": "This paper presents a novel approach to SMT solving.",
-        "landing_page_url": "https://example.com/paper",
-        "pdf_url": "https://example.com/paper.pdf",
-        "track": "SMT",
-        "score": 5.0,
-        "tier": 1,
-    }
+    """Return a realistic Paper for reuse."""
+    return Paper(
+        id="https://openalex.org/W123456789",
+        doi="10.1000/test.123",
+        title="Test Paper on SMT Solvers",
+        authors=["Alice Researcher", "Bob Scientist"],
+        publication_year=2023,
+        publication_date="2023-06-15",
+        venue="Proceedings of CAV 2023",
+        cited_by_count=42,
+        abstract="This paper presents a novel approach to SMT solving.",
+        landing_page_url="https://example.com/paper",
+        pdf_url="https://example.com/paper.pdf",
+        track="SMT",
+        score=5.0,
+        tier=1,
+    )
 
 
 @pytest.fixture
 def sample_papers():
-    """Return multiple paper dicts."""
+    """Return multiple Paper objects."""
     return [
-        {
-            "id": "https://openalex.org/W1",
-            "title": "Paper One",
-            "authors": ["Author A"],
-            "publication_year": 2024,
-            "publication_date": "2024-01-15",
-            "venue": "CAV 2024",
-            "cited_by_count": 100,
-            "abstract": "Abstract one.",
-            "landing_page_url": "https://example.com/1",
-            "track": "SMT",
-            "score": 5.0,
-            "tier": 1,
-        },
-        {
-            "id": "https://openalex.org/W2",
-            "title": "Paper Two",
-            "authors": ["Author B", "Author C"],
-            "publication_year": 2023,
-            "publication_date": "2023-12-01",
-            "venue": "TACAS 2023",
-            "cited_by_count": 20,
-            "abstract": "Abstract two.",
-            "landing_page_url": "https://example.com/2",
-            "track": "SAT",
-            "score": 3.0,
-            "tier": 2,
-        },
-        {
-            "id": "https://openalex.org/W3",
-            "title": "Paper Three",
-            "authors": ["Author D"],
-            "publication_year": 2024,
-            "publication_date": "2024-02-20",
-            "venue": "Some Workshop",
-            "cited_by_count": 5,
-            "abstract": "Abstract three.",
-            "landing_page_url": "https://example.com/3",
-            "track": "CP",
-            "score": 0.0,
-            "tier": 0,
-        },
+        Paper(
+            id="https://openalex.org/W1",
+            title="Paper One",
+            authors=["Author A"],
+            publication_year=2024,
+            publication_date="2024-01-15",
+            venue="CAV 2024",
+            cited_by_count=100,
+            abstract="Abstract one.",
+            landing_page_url="https://example.com/1",
+            track="SMT",
+            score=5.0,
+            tier=1,
+        ),
+        Paper(
+            id="https://openalex.org/W2",
+            title="Paper Two",
+            authors=["Author B", "Author C"],
+            publication_year=2023,
+            publication_date="2023-12-01",
+            venue="TACAS 2023",
+            cited_by_count=20,
+            abstract="Abstract two.",
+            landing_page_url="https://example.com/2",
+            track="SAT",
+            score=3.0,
+            tier=2,
+        ),
+        Paper(
+            id="https://openalex.org/W3",
+            title="Paper Three",
+            authors=["Author D"],
+            publication_year=2024,
+            publication_date="2024-02-20",
+            venue="Some Workshop",
+            cited_by_count=5,
+            abstract="Abstract three.",
+            landing_page_url="https://example.com/3",
+            track="CP",
+            score=0.0,
+            tier=0,
+        ),
     ]

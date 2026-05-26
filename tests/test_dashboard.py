@@ -108,7 +108,7 @@ def test_api_papers_empty(tmp_db_path: Path):
     assert data.get("papers") == []
 
 
-def test_api_papers_with_data(tmp_db_path: Path, sample_papers: list):
+def test_api_papers_with_data(tmp_db_path: Path, sample_papers):
     """GET /api/papers returns inserted papers."""
     upsert_papers(tmp_db_path, sample_papers)
     handler_cls = _make_handler(tmp_db_path)
@@ -119,11 +119,11 @@ def test_api_papers_with_data(tmp_db_path: Path, sample_papers: list):
     assert len(data.get("papers", [])) == 3
 
 
-def test_api_mark_paper(tmp_db_path: Path, sample_paper: dict):
+def test_api_mark_paper(tmp_db_path: Path, sample_paper):
     """POST /api/mark updates paper status."""
     upsert_papers(tmp_db_path, [sample_paper])
     handler_cls = _make_handler(tmp_db_path)
-    body = json.dumps({"id": sample_paper["id"], "status": "read"}).encode("utf-8")
+    body = json.dumps({"id": sample_paper.id, "status": "read"}).encode("utf-8")
     status, data = _request(handler_cls, "POST", "/api/mark", body)
     assert status == 200
     assert isinstance(data, dict)
@@ -136,22 +136,22 @@ def test_api_mark_paper(tmp_db_path: Path, sample_paper: dict):
     assert stats.get("pending") == 0
 
 
-def test_api_paper_detail(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_detail(tmp_db_path: Path, sample_paper):
     """GET /api/paper/:id returns paper details."""
     upsert_papers(tmp_db_path, [sample_paper])
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
     status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}")
     assert status == 200
     assert isinstance(data, dict)
-    assert data.get("title") == sample_paper["title"]
+    assert data.get("title") == sample_paper.title
 
 
-def test_api_paper_note(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_note(tmp_db_path: Path, sample_paper):
     """GET/POST /api/paper/:id/note works."""
     upsert_papers(tmp_db_path, [sample_paper])
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
 
     # GET empty note
     status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}/note")
@@ -180,15 +180,15 @@ def test_api_404(tmp_db_path: Path):
     assert status == 404
 
 
-def test_api_paper_translation_get(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_translation_get(tmp_db_path: Path, sample_paper):
     """GET /api/paper/:id/translation returns cached translation."""
     from paperbot.db import set_paper_translation, upsert_papers
 
     upsert_papers(tmp_db_path, [sample_paper])
-    set_paper_translation(tmp_db_path, sample_paper["id"], "测试标题", "测试摘要")
+    set_paper_translation(tmp_db_path, sample_paper.id, "测试标题", "测试摘要")
 
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
     status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}/translation")
 
     assert status == 200
@@ -197,15 +197,15 @@ def test_api_paper_translation_get(tmp_db_path: Path, sample_paper: dict):
     assert data.get("abstract_zh") == "测试摘要"
 
 
-def test_api_paper_translation_post_cached(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_translation_post_cached(tmp_db_path: Path, sample_paper):
     """POST /api/paper/:id/translate returns cache if available."""
     from paperbot.db import set_paper_translation, upsert_papers
 
     upsert_papers(tmp_db_path, [sample_paper])
-    set_paper_translation(tmp_db_path, sample_paper["id"], "缓存标题", "缓存摘要")
+    set_paper_translation(tmp_db_path, sample_paper.id, "缓存标题", "缓存摘要")
 
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
     status, data = _request(handler_cls, "POST", f"/api/paper/{encoded_id}/translate")
 
     assert status == 200
@@ -213,15 +213,15 @@ def test_api_paper_translation_post_cached(tmp_db_path: Path, sample_paper: dict
     assert data.get("source") == "cache"
 
 
-def test_api_paper_pdf_get(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_pdf_get(tmp_db_path: Path, sample_paper):
     """GET /api/paper/:id/pdf returns cached PDF URL."""
     from paperbot.db import set_paper_pdf, upsert_papers
 
     upsert_papers(tmp_db_path, [sample_paper])
-    set_paper_pdf(tmp_db_path, sample_paper["id"], "https://example.com/paper.pdf", "openalex")
+    set_paper_pdf(tmp_db_path, sample_paper.id, "https://example.com/paper.pdf", "openalex")
 
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
     status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}/pdf")
 
     assert status == 200
@@ -230,14 +230,14 @@ def test_api_paper_pdf_get(tmp_db_path: Path, sample_paper: dict):
     assert data.get("pdf_source") == "openalex"
 
 
-def test_api_paper_pdf_get_empty(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_pdf_get_empty(tmp_db_path: Path, sample_paper):
     """GET /api/paper/:id/pdf returns empty when no cache."""
     from paperbot.db import upsert_papers
 
     upsert_papers(tmp_db_path, [sample_paper])
 
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
     status, data = _request(handler_cls, "GET", f"/api/paper/{encoded_id}/pdf")
 
     assert status == 200
@@ -263,15 +263,16 @@ def test_api_paper_pdf_missing_paper(tmp_db_path: Path):
     assert "error" in data
 
 
-def test_api_paper_pdf_no_doi(tmp_db_path: Path, sample_paper: dict):
+def test_api_paper_pdf_no_doi(tmp_db_path: Path, sample_paper):
     """POST resolve-pdf returns 400 if paper has no DOI."""
     from paperbot.db import upsert_papers
+    from paperbot.models import Paper
 
-    paper_no_doi = {**sample_paper, "doi": None}
+    paper_no_doi = Paper(**{**sample_paper.to_dict(), "doi": None})
     upsert_papers(tmp_db_path, [paper_no_doi])
 
     handler_cls = _make_handler(tmp_db_path)
-    encoded_id = sample_paper["id"].replace("https://", "https%3A%2F%2F")
+    encoded_id = sample_paper.id.replace("https://", "https%3A%2F%2F")
     status, data = _request(handler_cls, "POST", f"/api/paper/{encoded_id}/resolve-pdf")
 
     assert status == 400
@@ -317,16 +318,16 @@ def test_api_audit_stats(tmp_db_path: Path):
     assert data["total"] == 1
 
 
-def test_api_recent_reads(tmp_db_path: Path, sample_papers: list):
+def test_api_recent_reads(tmp_db_path: Path, sample_papers):
     """GET /api/recent-reads returns recently read papers."""
     from paperbot.db import upsert_papers, set_paper_status
 
     upsert_papers(tmp_db_path, sample_papers)
-    set_paper_status(tmp_db_path, sample_papers[0]["id"], "read")
+    set_paper_status(tmp_db_path, sample_papers[0].id, "read")
 
     handler_cls = _make_handler(tmp_db_path)
     status, data = _request(handler_cls, "GET", "/api/recent-reads")
     assert status == 200
     assert isinstance(data, list)
     assert len(data) == 1
-    assert data[0]["title"] == sample_papers[0]["title"]
+    assert data[0]["title"] == sample_papers[0].title

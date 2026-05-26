@@ -118,7 +118,7 @@ def make_handler(db_path: Path):
                     keyword = qs.get("keyword") or None
                     sort_by = qs.get("sort_by") or "score"
                     sort_order = qs.get("sort_order") or "desc"
-                    data = list_papers(
+                    result = list_papers(
                         db_path,
                         track=track,
                         status=status,
@@ -128,7 +128,9 @@ def make_handler(db_path: Path):
                         limit=min(limit, _MAX_PAGE_SIZE),
                         offset=max(offset, 0),
                     )
-                    _json_response(self, data)
+                    # Serialize Paper objects for JSON response
+                    result["papers"] = [p.to_dict() for p in result["papers"]]
+                    _json_response(self, result)
 
                 elif path.startswith("/api/paper/") and path.endswith("/note"):
                     paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/note")])
@@ -152,7 +154,7 @@ def make_handler(db_path: Path):
                     paper_id = urllib.parse.unquote(path[len("/api/paper/"):])
                     matches = get_paper_by_id_or_title(db_path, paper_id, limit=1)
                     if matches:
-                        _json_response(self, matches[0])
+                        _json_response(self, matches[0].to_dict())
                     else:
                         _json_response(self, {"error": "Paper not found"}, 404)
 
@@ -166,7 +168,7 @@ def make_handler(db_path: Path):
                 elif path == "/api/recent-reads":
                     limit = int(qs.get("limit", "3"))
                     rows = get_recent_reads(db_path, limit=min(limit, _MAX_RECENT_READS))
-                    _json_response(self, rows)
+                    _json_response(self, [p.to_dict() for p in rows])
 
                 elif path == "/api/audit":
                     action = qs.get("action") or None
@@ -278,8 +280,8 @@ def make_handler(db_path: Path):
                     paper = matches[0]
                     from paperbot.translate import translate_paper
                     result = translate_paper(
-                        title=paper.get("title", ""),
-                        abstract=paper.get("abstract"),
+                        title=paper.title,
+                        abstract=paper.abstract,
                     )
                     set_paper_translation(
                         db_path, paper_id, result.title_zh, result.abstract_zh
@@ -312,12 +314,12 @@ def make_handler(db_path: Path):
                         _json_response(self, {"error": "Paper not found"}, 404)
                         return
                     paper = matches[0]
-                    doi = paper.get("doi", "")
+                    doi = paper.doi or ""
                     if not doi:
                         _json_response(self, {"error": "No DOI available"}, 400)
                         return
                     with PdfResolver() as resolver:
-                        result = resolver.resolve(doi, title=paper.get("title", ""))
+                        result = resolver.resolve(doi, title=paper.title)
                     if result:
                         set_paper_pdf(db_path, paper_id, result.url, result.source)
                         _json_response(self, {

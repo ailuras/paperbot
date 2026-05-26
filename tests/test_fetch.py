@@ -12,6 +12,7 @@ from paperbot.fetch import (
     _parse_work,
     _restore_abstract,
 )
+from paperbot.models import Paper
 
 
 def test_venue_scorer_acronym_match(sample_config_dict: dict):
@@ -113,14 +114,14 @@ def test_restore_abstract_empty():
 def test_is_relevant_keyword_match(sample_config_dict: dict):
     """_is_relevant matches keywords with word boundaries."""
     cfg = Settings(**sample_config_dict)
-    paper = {"title": "A New SMT Solver", "abstract": "We present a solver.", "venue": "CAV"}
+    paper = Paper(title="A New SMT Solver", abstract="We present a solver.", venue="CAV")
     assert _is_relevant(paper, "SMT", cfg) is True
 
 
 def test_is_relevant_no_match(sample_config_dict: dict):
     """_is_relevant rejects papers without track keywords."""
     cfg = Settings(**sample_config_dict)
-    paper = {"title": "Neural Networks", "abstract": "Deep learning.", "venue": "NeurIPS"}
+    paper = Paper(title="Neural Networks", abstract="Deep learning.", venue="NeurIPS")
     assert _is_relevant(paper, "SMT", cfg) is False
 
 
@@ -136,23 +137,23 @@ def test_is_relevant_title_blacklist(sample_config_dict: dict):
             },
         }
     )
-    paper = {"title": "A Survey of SMT Solvers", "abstract": "", "venue": "CAV"}
+    paper = Paper(title="A Survey of SMT Solvers", abstract="", venue="CAV")
     assert _is_relevant(paper, "SMT", cfg) is False
 
 
 def test_dedupe_and_merge_tracks():
     """Duplicate papers by id are merged, tracks combined."""
     papers = [
-        {"id": "W1", "title": "Paper", "track": "SMT", "score": 5.0},
-        {"id": "W1", "title": "Paper", "track": "SAT", "score": 3.0},
-        {"id": "W2", "title": "Other", "track": "CP", "score": 1.0},
+        Paper(id="W1", title="Paper", track="SMT", score=5.0),
+        Paper(id="W1", title="Paper", track="SAT", score=3.0),
+        Paper(id="W2", title="Other", track="CP", score=1.0),
     ]
     result = _dedupe_and_merge_tracks(papers)
     assert len(result) == 2
 
-    w1 = next(p for p in result if p["id"] == "W1")
-    assert w1["track"] == "SAT,SMT"  # sorted alphabetically
-    assert w1["score"] == 5.0  # higher score wins
+    w1 = next(p for p in result if p.id == "W1")
+    assert w1.track == "SAT,SMT"  # sorted alphabetically
+    assert w1.score == 5.0  # higher score wins
 
 
 def test_parse_work(sample_config_dict: dict):
@@ -180,11 +181,11 @@ def test_parse_work(sample_config_dict: dict):
         "open_access": {"oa_url": "https://oa.example.com"},
     }
     paper = _parse_work(work, "SMT", scorer)
-    assert paper["id"] == "https://openalex.org/W123"
-    assert paper["title"] == "Test Paper"
-    assert paper["authors"] == ["Alice", "Bob"]
-    assert paper["track"] == "SMT"
-    assert paper["tier"] == 1
-    assert paper["abstract"] == "This is test"
-    assert paper["landing_page_url"] == "https://example.com"
-    assert paper["pdf_url"] == "https://example.com/pdf"
+    assert paper.id == "https://openalex.org/W123"
+    assert paper.title == "Test Paper"
+    assert paper.authors == ["Alice", "Bob"]
+    assert paper.track == "SMT"
+    assert paper.tier == 1
+    assert paper.abstract == "This is test"
+    assert paper.landing_page_url == "https://example.com"
+    assert paper.pdf_url == "https://example.com/pdf"

@@ -27,9 +27,10 @@ from paperbot.db import (
 )
 from paperbot.fetch import fetch_papers
 from paperbot.mail import send_fetch_report_email, send_recommendation_email
+from paperbot.models import Paper
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper
-from paperbot.utils import _abbr, format_authors, format_date
+from paperbot.utils import _abbr, format_date
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
 console = Console()
@@ -106,8 +107,8 @@ def recommend(
             else:
                 try:
                     trans = translate_paper(
-                        title=r.paper.get("title", ""),
-                        abstract=r.paper.get("abstract"),
+                        title=r.paper.title,
+                        abstract=r.paper.abstract,
                     )
                     _set_trans(db_path, pid, trans.title_zh, trans.abstract_zh)
                     translations[pid] = {"title_zh": trans.title_zh, "abstract_zh": trans.abstract_zh}
@@ -120,7 +121,7 @@ def recommend(
                 "date": today,
                 "slot": r.slot_index,
                 "reason": r.reason,
-                "paper": r.paper,
+                "paper": r.paper.to_dict(),
             }
             if r.paper_id in translations:
                 out["translation"] = translations[r.paper_id]
@@ -129,26 +130,22 @@ def recommend(
         console.print(f"Daily Papers · {today}")
         for r in results:
             p = r.paper
-            author_str = format_authors(p)
-
-            venue = p.get("venue") or "OpenAlex"
-            abbr = _abbr(venue)
-            url = p.get("landing_page_url") or p.get("doi") or ""
-            abstract = p.get("abstract", "")
+            abbr = _abbr(p.venue or "OpenAlex")
+            url = p.url
             trans = translations.get(r.paper_id, {})
 
             console.print("=====")
             if trans.get("title_zh"):
-                console.print(f"[{abbr}] {p.get('title', 'No Title')}")
+                console.print(f"[{abbr}] {p.title}")
                 console.print(f"[cyan]翻译: {trans['title_zh']}[/cyan]")
             else:
-                console.print(f"[{abbr}] {p.get('title', 'No Title')}")
+                console.print(f"[{abbr}] {p.title}")
             if url:
                 console.print(f"Link: {url}")
             console.print("-----")
-            console.print(f"Authors: {author_str}")
+            console.print(f"Authors: {p.author_str}")
             console.print("-----")
-            console.print(f"Abstract: {abstract}")
+            console.print(f"Abstract: {p.abstract}")
             if trans.get("abstract_zh"):
                 console.print(f"[cyan]摘要翻译: {trans['abstract_zh']}[/cyan]")
 
@@ -344,21 +341,23 @@ def mark(
         console.print(f"[yellow]Multiple matches found for '{paper_query}':[/yellow]")
         table = Table("#", "ID", "Title", "Track", "Score")
         for i, p in enumerate(matches, 1):
+            pid = p.id
+            title = p.title
             table.add_row(
                 str(i),
-                p.get("id", "")[:40] + "..." if len(p.get("id", "")) > 40 else p.get("id", ""),
-                p.get("title", "")[:50] + "..." if len(p.get("title", "")) > 50 else p.get("title", ""),
-                p.get("track", "?"),
-                str(p.get("score", 0)),
+                pid[:40] + "..." if len(pid) > 40 else pid,
+                title[:50] + "..." if len(title) > 50 else title,
+                p.track or "?",
+                str(p.score),
             )
         console.print(table)
         console.print("[dim]Please use the exact paper ID.[/dim]")
         raise typer.Exit(1)
 
     paper = matches[0]
-    paper_id = paper["id"]
+    paper_id = paper.id
     set_paper_status(db_path, paper_id, status)
-    console.print(f"[green]Marked '{paper.get('title', paper_id)}' as {status}.[/green]")
+    console.print(f"[green]Marked '{paper.title or paper_id}' as {status}.[/green]")
 
 
 @app.command()
@@ -394,20 +393,17 @@ def history(
     console.print("Recent Reads")
 
     for i, p in enumerate(rows, 1):
-        author_str = format_authors(p)
-
-        venue = p.get("venue") or "OpenAlex"
-        abbr = _abbr(venue)
-        url = p.get("landing_page_url") or p.get("doi") or ""
-        abstract = p.get("abstract", "")
-        mark_time = p.get("changed_at", "")
+        abbr = _abbr(p.venue or "OpenAlex")
+        url = p.url
+        abstract = p.abstract
+        mark_time = p.changed_at
 
         console.print("=====")
-        console.print(f"[{abbr}] {p.get('title', 'No Title')}")
+        console.print(f"[{abbr}] {p.title or 'No Title'}")
         if url:
             console.print(f"Link: {url}")
         console.print("-----")
-        console.print(f"Authors: {author_str}")
+        console.print(f"Authors: {p.author_str}")
         if mark_time:
             console.print(f"Marked: {mark_time}")
         console.print("-----")
