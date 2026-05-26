@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import urllib.parse
+from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from paperbot.db import (
     get_paper_pdf,
     get_paper_translation,
     get_recent_reads,
+    get_recommendation_history,
     get_stats,
     get_unread_papers,
     list_papers,
@@ -31,6 +33,8 @@ from paperbot.db import (
 from paperbot.fetch import fetch_papers
 from paperbot.pdf_resolver import PdfResolver
 from paperbot.recommend import recommend_papers
+from paperbot.translate import translate_paper
+from paperbot.utils import format_date
 
 # ── Query-parameter limits ────────────────────────────────────────────
 
@@ -159,7 +163,6 @@ def make_handler(db_path: Path):
                         _json_response(self, {"error": "Paper not found"}, 404)
 
                 elif path == "/api/recommendations":
-                    from paperbot.db import get_recommendation_history
 
                     days = int(qs.get("days", "7"))
                     rows = get_recommendation_history(db_path, days=min(days, _MAX_AUDIT_DAYS))
@@ -232,8 +235,6 @@ def make_handler(db_path: Path):
                     })
 
                 elif path == "/api/recommend":
-                    from datetime import datetime
-
                     cfg = load_config(default_config_path())
                     papers = get_unread_papers(db_path)
                     if not papers:
@@ -245,7 +246,7 @@ def make_handler(db_path: Path):
                         _json_response(self, {"success": True, "count": 0, "message": "No papers selected"})
                         return
 
-                    today = datetime.now().strftime("%Y-%m-%d")
+                    today = format_date()
                     picks = [{"paper_id": r.paper_id, "slot_index": r.slot_index} for r in results]
                     save_recommendation(db_path, today, picks)
                     for r in results:
@@ -278,7 +279,6 @@ def make_handler(db_path: Path):
                         _json_response(self, {"error": "Paper not found"}, 404)
                         return
                     paper = matches[0]
-                    from paperbot.translate import translate_paper
                     result = translate_paper(
                         title=paper.title,
                         abstract=paper.abstract,

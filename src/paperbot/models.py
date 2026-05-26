@@ -7,6 +7,17 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+class PaperStatus:
+    """Valid paper statuses."""
+
+    PENDING = "pending"
+    READ = "read"
+    STARRED = "starred"
+    SKIP = "skip"
+
+    ALL = {PENDING, READ, STARRED, SKIP}
+
+
 @dataclass
 class Paper:
     """A research paper with metadata and scoring information."""

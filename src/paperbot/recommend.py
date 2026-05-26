@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from paperbot.config import RecommendationConfig, Settings
@@ -12,7 +12,6 @@ from paperbot.models import Paper
 
 def _parse_pub_date(paper: Paper) -> date | None:
     value = paper.publication_date
-    from datetime import datetime
 
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()

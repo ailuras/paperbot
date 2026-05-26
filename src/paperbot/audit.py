@@ -33,12 +33,29 @@ CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_logs(timestamp);
 """
 
 
+class AuditStatus:
+    """Valid audit entry statuses."""
+
+    SUCCESS = "success"
+    ERROR = "error"
+    SKIPPED = "skipped"
+
+
+def format_audit_status(status: str) -> tuple[str, str]:
+    """Return (icon, color) for a given audit status."""
+    if status == AuditStatus.SUCCESS:
+        return "✓", "green"
+    if status == AuditStatus.SKIPPED:
+        return "→", "yellow"
+    return "✗", "red"
+
+
 @dataclass
 class AuditEntry:
     action: str
     target_id: str = ""
     details: dict[str, Any] = field(default_factory=dict)
-    status: str = "success"
+    status: str = AuditStatus.SUCCESS
     error_message: str = ""
     duration_ms: int = 0
 
@@ -144,7 +161,7 @@ def log_to_file(data_dir: Path, entry: AuditEntry) -> None:
     """Append a human-readable entry to the audit text log."""
     path = _file_log_path(data_dir)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    status_icon = "✓" if entry.status == "success" else "✗" if entry.status == "error" else "→"
+    status_icon = format_audit_status(entry.status)[0]
     line = (
         f"[{ts}] {status_icon} {entry.action}"
         f"{f' #{entry.target_id}' if entry.target_id else ''}"
@@ -190,13 +207,13 @@ def audit(
 
             try:
                 result = func(*args, **kwargs)
-                entry.status = "success"
+                entry.status = AuditStatus.SUCCESS
                 # Capture return value as detail if it's a simple type
                 if isinstance(result, (int, float, str, bool)):
                     entry.details["result"] = result
                 return result
             except Exception as e:
-                entry.status = "error"
+                entry.status = AuditStatus.ERROR
                 entry.error_message = str(e)
                 raise
             finally:

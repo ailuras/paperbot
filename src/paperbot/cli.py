@@ -5,29 +5,30 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime
 from pathlib import Path
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
-from paperbot.audit import AuditEntry, get_audit_logs, get_audit_stats, init_audit, log_audit, log_to_file
-from paperbot.config import default_config_path, load_config
+from paperbot.audit import AuditEntry, AuditStatus, format_audit_status, get_audit_logs, get_audit_stats, init_audit, log_audit, log_to_file
+from paperbot.config import default_config_path, load_config, load_default_config
 from paperbot.dashboard import run_server as run_dashboard, stop_server
 from paperbot.db import (
     get_paper_by_id_or_title,
+    get_paper_translation,
     get_recent_reads,
     get_stats,
     get_unread_papers,
     init_db,
     save_recommendation,
     set_paper_status,
+    set_paper_translation,
     upsert_papers,
 )
 from paperbot.fetch import fetch_papers
 from paperbot.mail import send_fetch_report_email, send_recommendation_email
-from paperbot.models import Paper
+from paperbot.models import Paper, PaperStatus
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper
 from paperbot.utils import _abbr, format_date
@@ -37,7 +38,7 @@ console = Console()
 
 
 def _db_path() -> Path:
-    cfg = load_config(default_config_path())
+    cfg = load_default_config()
     db_path = cfg.data_dir / "paperbot.db"
     init_db(db_path)
     init_audit(db_path)
@@ -64,7 +65,7 @@ def recommend(
 ) -> None:
     """Generate today's paper recommendations."""
     start_time = time.time()
-    cfg = load_config(default_config_path())
+    cfg = load_default_config()
     db_path = _db_path()
     data_dir = cfg.data_dir
     audit_entry = AuditEntry(action="recommend")
@@ -76,7 +77,7 @@ def recommend(
     papers = get_unread_papers(db_path)
     if not papers:
         console.print("[yellow]No unread papers available.[/yellow]")
-        audit_entry.status = "skipped"
+        audit_entry.status = AuditStatus.SKIPPED
         audit_entry.details = {"reason": "no_unread_papers", "pending": 0}
         _log_audit(db_path, data_dir, audit_entry, start_time)
         raise typer.Exit(0)
@@ -85,7 +86,7 @@ def recommend(
     results = recommend_papers(papers, cfg, count=count)
     if not results:
         console.print("[yellow]Could not select any papers.[/yellow]")
-        audit_entry.status = "skipped"
+        audit_entry.status = AuditStatus.SKIPPED
         audit_entry.details = {"reason": "no_selection", "pending": len(papers)}
         _log_audit(db_path, data_dir, audit_entry, start_time)
         raise typer.Exit(0)
@@ -95,13 +96,12 @@ def recommend(
     # Translate if enabled
     translations: dict[str, dict[str, str]] = {}
     if do_translate:
-        from paperbot.db import get_paper_translation as _get_trans, set_paper_translation as _set_trans
         console.print("[blue]Translating recommendations...[/blue]")
         for r in results:
             pid = r.paper_id
             if not pid:
                 continue
-            cached = _get_trans(db_path, pid)
+            cached = get_paper_translation(db_path, pid)
             if cached.get("title_zh"):
                 translations[pid] = cached
             else:
@@ -110,7 +110,7 @@ def recommend(
                         title=r.paper.title,
                         abstract=r.paper.abstract,
                     )
-                    _set_trans(db_path, pid, trans.title_zh, trans.abstract_zh)
+                    set_paper_translation(db_path, pid, trans.title_zh, trans.abstract_zh)
                     translations[pid] = {"title_zh": trans.title_zh, "abstract_zh": trans.abstract_zh}
                 except Exception as e:
                     console.print(f"[dim]Translation failed for {pid}: {e}[/dim]")
@@ -182,7 +182,7 @@ def recommend(
                 console.print("[green]Email sent.[/green]")
             else:
                 console.print("[yellow]Email not sent (check mail config).[/yellow]")
-                audit_entry.status = "error"
+                audit_entry.status = AuditStatus.ERROR
                 audit_entry.error_message = "email_failed"
         else:
             audit_entry.details = {
@@ -196,7 +196,7 @@ def recommend(
         _log_audit(db_path, data_dir, audit_entry, start_time)
     else:
         console.print("[yellow]Dry run — not saved.[/yellow]")
-        audit_entry.status = "skipped"
+        audit_entry.status = AuditStatus.SKIPPED
         audit_entry.details = {"reason": "dry_run", "pending": len(papers), "translated": do_translate}
         _log_audit(db_path, data_dir, audit_entry, start_time)
 
@@ -209,7 +209,7 @@ def fetch(
 ) -> None:
     """Fetch papers from OpenAlex."""
     start_time = time.time()
-    cfg = load_config(default_config_path())
+    cfg = load_default_config()
     db_path = _db_path()
     data_dir = cfg.data_dir
     audit_entry = AuditEntry(action="fetch")
@@ -233,14 +233,14 @@ def fetch(
     if dry_run:
         console.print()
         console.print("[yellow]Dry run — not saved.[/yellow]")
-        audit_entry.status = "skipped"
+        audit_entry.status = AuditStatus.SKIPPED
         audit_entry.details = {"reason": "dry_run", **stats}
         _log_audit(db_path, data_dir, audit_entry, start_time)
         raise typer.Exit(0)
 
     if not papers:
         console.print("[yellow]No papers to save.[/yellow]")
-        audit_entry.status = "skipped"
+        audit_entry.status = AuditStatus.SKIPPED
         audit_entry.details = {"reason": "no_papers", **stats}
         _log_audit(db_path, data_dir, audit_entry, start_time)
         raise typer.Exit(0)
@@ -260,7 +260,7 @@ def fetch(
             stats=stats,
             papers_count=inserted + updated,
             settings=cfg,
-            date_str=datetime.now().strftime("%Y-%m-%d"),
+            date_str=format_date(),
         )
         audit_entry.details["email"] = email
         audit_entry.details["email_sent"] = sent
@@ -268,7 +268,7 @@ def fetch(
             console.print("[green]Email report sent.[/green]")
         else:
             console.print("[yellow]Email not sent (check mail config).[/yellow]")
-            audit_entry.status = "error"
+            audit_entry.status = AuditStatus.ERROR
             audit_entry.error_message = "email_failed"
     else:
         audit_entry.details["email"] = False
@@ -282,7 +282,7 @@ def init(
     dry_run: bool = typer.Option(False, help="Preview without saving"),
 ) -> None:
     """Initialize the database by fetching papers from the last year."""
-    cfg = load_config(default_config_path())
+    cfg = load_default_config()
     db_path = _db_path()
 
     console.print("[blue]Initializing database — fetching from OpenAlex...[/blue]")
@@ -325,9 +325,8 @@ def mark(
     status: str = typer.Option(..., "--status", help="Status: read|starred|skip"),
 ) -> None:
     """Mark a paper with a status."""
-    valid_statuses = {"read", "starred", "skip", "pending"}
-    if status not in valid_statuses:
-        console.print(f"[red]Invalid status '{status}'. Must be one of: {', '.join(sorted(valid_statuses))}[/red]")
+    if status not in PaperStatus.ALL:
+        console.print(f"[red]Invalid status '{status}'. Must be one of: {', '.join(sorted(PaperStatus.ALL))}[/red]")
         raise typer.Exit(1)
 
     db_path = _db_path()
@@ -424,7 +423,7 @@ def serve(
     import os
     import sys
 
-    cfg = load_config(default_config_path())
+    cfg = load_default_config()
     db_path = cfg.data_dir / "paperbot.db"
 
     if stop:
@@ -499,8 +498,7 @@ def audit(
         duration = entry.get("duration_ms", 0)
         error = entry.get("error_message", "")
 
-        color = "green" if status == "success" else "yellow" if status == "skipped" else "red"
-        icon = "✓" if status == "success" else "→" if status == "skipped" else "✗"
+        icon, color = format_audit_status(status)
 
         line = f"[{ts}] {icon} [bold {color}]{action_name}[/bold {color}] ({duration}ms)"
         if error:

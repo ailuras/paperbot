@@ -93,6 +93,11 @@ def default_config_path() -> Path:
     return Path(__file__).resolve().parents[2] / "data" / "config.json"
 
 
+def load_default_config() -> Settings:
+    """Load config from the default path (env var or package data dir)."""
+    return load_config(default_config_path())
+
+
 def load_config(path: Path | str | None = None) -> Settings:
     if path is None:
         env = os.getenv("PAPERBOT_CONFIG")

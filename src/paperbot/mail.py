@@ -13,7 +13,7 @@ from typing import Any
 
 from paperbot.config import Settings
 from paperbot.models import Paper
-from paperbot.utils import format_authors
+from paperbot.utils import format_date
 
 
 def _smtp_config(settings: Settings) -> dict[str, Any]:
@@ -48,6 +48,10 @@ def _has_local_sendmail() -> str | None:
     return None
 
 
+def _format_from_header(from_addr: str, from_name: str) -> str:
+    return f"{from_name} <{from_addr}>" if from_name else from_addr
+
+
 def _send_via_local(
     to_addrs: list[str],
     subject: str,
@@ -61,7 +65,7 @@ def _send_via_local(
         return False
 
     # Build raw email with headers
-    display_from = f"{from_name} <{from_addr}>" if from_name else from_addr
+    display_from = _format_from_header(from_addr, from_name)
     headers = (
         f"From: {display_from}\r\n"
         f"To: {', '.join(to_addrs)}\r\n"
@@ -95,7 +99,7 @@ def _send_via_smtp(
     """Send email using SMTP."""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = f"{from_name} <{from_addr}>" if from_name else from_addr
+    msg["From"] = _format_from_header(from_addr, from_name)
     msg["To"] = ", ".join(to_addrs)
     msg.attach(MIMEText(body, "html", "utf-8"))
 
@@ -251,10 +255,7 @@ def send_recommendation_email(
     """
     cfg = _smtp_config(settings)
 
-    if date_str is None:
-        from paperbot.utils import format_date
-
-        date_str = format_date()
+    date_str = date_str or format_date()
 
     html_body = _build_email_body(
         papers, "Daily Recommendations", date_str, stats,
@@ -281,10 +282,7 @@ def send_fetch_report_email(
     """
     cfg = _smtp_config(settings)
 
-    if date_str is None:
-        from paperbot.utils import format_date
-
-        date_str = format_date()
+    date_str = date_str or format_date()
 
     track_rows = "\n".join(
         f"<tr><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;'>{ts['track']}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{ts['raw']}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{ts['filtered']}</td></tr>"
