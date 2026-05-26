@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import sqlite3
-import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -22,7 +20,6 @@ from paperbot.db import (
     get_recent_reads,
     get_stats,
     get_unread_papers,
-    init_db,
     list_papers,
     save_recommendation,
     set_paper_note,
@@ -34,7 +31,14 @@ from paperbot.db import (
 from paperbot.fetch import fetch_papers
 from paperbot.pdf_resolver import PdfResolver
 from paperbot.recommend import recommend_papers
-from paperbot.translate import translate_paper
+
+# ── Query-parameter limits ────────────────────────────────────────────
+
+_DEFAULT_PAGE_SIZE = 50
+_MAX_PAGE_SIZE = 200
+_MAX_AUDIT_DAYS = 365
+_MAX_RECENT_READS = 10
+_DEFAULT_FETCH_DAYS = 40
 
 def _load_template() -> str:
     """Load the dashboard HTML template from package resources."""
@@ -60,11 +64,6 @@ def _html_response(handler: BaseHTTPRequestHandler, html: str, status: int = 200
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
-
-
-def _parse_qs(path: str) -> dict[str, str]:
-    parsed = urllib.parse.urlparse(path)
-    return dict(urllib.parse.parse_qsl(parsed.query))
 
 
 def _read_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
@@ -112,7 +111,7 @@ def make_handler(db_path: Path):
                     _json_response(self, {"tracks": tracks, "dashboard_url": cfg.mail.dashboard_url})
 
                 elif path == "/api/papers":
-                    limit = int(qs.get("limit", "50"))
+                    limit = int(qs.get("limit", str(_DEFAULT_PAGE_SIZE)))
                     offset = int(qs.get("offset", "0"))
                     track = qs.get("track") or None
                     status = qs.get("status") or None
@@ -126,7 +125,7 @@ def make_handler(db_path: Path):
                         keyword=keyword,
                         sort_by=sort_by,
                         sort_order=sort_order,
-                        limit=min(limit, 200),
+                        limit=min(limit, _MAX_PAGE_SIZE),
                         offset=max(offset, 0),
                     )
                     _json_response(self, data)
@@ -161,24 +160,24 @@ def make_handler(db_path: Path):
                     from paperbot.db import get_recommendation_history
 
                     days = int(qs.get("days", "7"))
-                    rows = get_recommendation_history(db_path, days=min(days, 365))
+                    rows = get_recommendation_history(db_path, days=min(days, _MAX_AUDIT_DAYS))
                     _json_response(self, rows)
 
                 elif path == "/api/recent-reads":
                     limit = int(qs.get("limit", "3"))
-                    rows = get_recent_reads(db_path, limit=min(limit, 10))
+                    rows = get_recent_reads(db_path, limit=min(limit, _MAX_RECENT_READS))
                     _json_response(self, rows)
 
                 elif path == "/api/audit":
                     action = qs.get("action") or None
-                    limit = int(qs.get("limit", "50"))
+                    limit = int(qs.get("limit", str(_DEFAULT_PAGE_SIZE)))
                     offset = int(qs.get("offset", "0"))
                     rows = get_audit_logs(db_path, action=action, limit=limit, offset=offset)
                     _json_response(self, rows)
 
                 elif path == "/api/audit/stats":
                     days = int(qs.get("days", "7"))
-                    data = get_audit_stats(db_path, days=min(days, 365))
+                    data = get_audit_stats(db_path, days=min(days, _MAX_AUDIT_DAYS))
                     _json_response(self, data)
 
                 else:
@@ -217,7 +216,7 @@ def make_handler(db_path: Path):
 
                 elif path == "/api/update":
                     cfg = load_config(default_config_path())
-                    papers, stats = fetch_papers(cfg, days=40)
+                    papers, stats = fetch_papers(cfg, days=_DEFAULT_FETCH_DAYS)
                     if papers:
                         inserted, updated = upsert_papers(db_path, papers)
                     else:

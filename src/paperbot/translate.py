@@ -12,6 +12,13 @@ DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-v4-flash"
 
+# Lower temperature for stable, deterministic translations
+_TEMPERATURE = 0.3
+# Enough for long abstracts (typical academic abstract ~200-500 tokens)
+_MAX_TOKENS = 4096
+# Network timeout for API calls
+_REQUEST_TIMEOUT = 60
+
 
 @dataclass(frozen=True)
 class TranslationResult:
@@ -36,11 +43,11 @@ def _call_deepseek(text: str, system_prompt: str) -> str:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": text},
         ],
-        "temperature": 0.3,
-        "max_tokens": 4096,
+        "temperature": _TEMPERATURE,
+        "max_tokens": _MAX_TOKENS,
     }
 
-    resp = requests.post(url, headers=headers, json=payload, timeout=60)
+    resp = requests.post(url, headers=headers, json=payload, timeout=_REQUEST_TIMEOUT)
     resp.raise_for_status()
     data = resp.json()
     return data["choices"][0]["message"]["content"].strip()

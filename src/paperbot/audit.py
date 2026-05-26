@@ -7,6 +7,7 @@ import logging
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -141,8 +142,6 @@ def _file_log_path(data_dir: Path) -> Path:
 
 def log_to_file(data_dir: Path, entry: AuditEntry) -> None:
     """Append a human-readable entry to the audit text log."""
-    from datetime import datetime
-
     path = _file_log_path(data_dir)
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     status_icon = "✓" if entry.status == "success" else "✗" if entry.status == "error" else "→"
