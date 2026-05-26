@@ -134,3 +134,73 @@ def test_audit_command(cli_env: dict):
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "No audit entries found" in out
+
+
+def test_recommend_dry_run(cli_env: dict, sample_papers, monkeypatch):
+    """recommend --dry-run prints candidates without saving."""
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, sample_papers)
+
+    from paperbot import cli
+
+    monkeypatch.setattr(cli, "get_unread_papers", lambda _db: sample_papers)
+
+    def _fake_recommend(papers, cfg, count=None):
+        from paperbot.recommend import RecommendationResult
+
+        return [RecommendationResult(papers[0], "Quality Pick", 0)]
+
+    monkeypatch.setattr(cli, "recommend_papers", _fake_recommend)
+
+    result = runner.invoke(app, ["recommend", "--dry-run"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Dry run" in out
+    assert sample_papers[0].title in out
+
+
+def test_fetch_dry_run(cli_env: dict, monkeypatch):
+    """fetch --dry-run prints report without saving."""
+    from paperbot import cli
+
+    def _fake_fetch(cfg, days=None):
+        return [], {
+            "range": "2024-01-01 ~ 2024-01-15",
+            "days": 15,
+            "track_stats": [{"track": "SMT", "raw": 5, "filtered": 3}],
+            "total_raw": 5,
+            "total_filtered": 3,
+        }
+
+    monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
+
+    result = runner.invoke(app, ["fetch", "--dry-run"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Dry run" in out
+    assert "SMT" in out
+
+
+def test_history_command(cli_env: dict, sample_papers):
+    """history command lists recently read papers."""
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, sample_papers)
+
+    from paperbot.db import set_paper_status
+
+    set_paper_status(db_path, sample_papers[0].id, "read")
+
+    result = runner.invoke(app, ["history"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert sample_papers[0].title in out
+
+
+def test_history_empty(cli_env: dict):
+    """history command handles empty state."""
+    result = runner.invoke(app, ["history"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "No recent reads" in out

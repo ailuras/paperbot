@@ -109,4 +109,8 @@ class Paper:
     @property
     def year_or_date(self) -> str:
         """Publication year or date string for display."""
-        return self.publication_date or str(self.publication_year) or "?"
+        if self.publication_date:
+            return self.publication_date
+        if self.publication_year is not None:
+            return str(self.publication_year)
+        return "?"
