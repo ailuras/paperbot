@@ -141,7 +141,14 @@ def _paper_to_html(paper: dict[str, Any], index: int) -> str:
     pub_date = paper.get("publication_date") or paper.get("publication_year") or "?"
 
     tier_badge = f"<span style='background:#b45309;color:#fef3c7;padding:2px 6px;border-radius:4px;font-size:12px;'>T{tier}</span>" if tier else ""
-    track_badge = f"<span style='background:#1e40af;color:#dbeafe;padding:2px 6px;border-radius:4px;font-size:12px;margin-left:4px;'>{track}</span>" if track else ""
+
+    # Dynamic track color based on track name hash
+    track_badge = ""
+    if track:
+        _h = hash(track) % 360
+        track_bg = f"hsl({_h}, 55%, 35%)"
+        track_fg = f"hsl({_h}, 70%, 90%)"
+        track_badge = f"<span style='background:{track_bg};color:{track_fg};padding:2px 6px;border-radius:4px;font-size:12px;margin-left:4px;'>{track}</span>"
 
     return f"""
     <div style="border-left:4px solid #2563eb;padding-left:16px;margin-bottom:24px;">

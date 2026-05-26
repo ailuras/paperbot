@@ -646,14 +646,7 @@
       letter-spacing: 0.06em;
       line-height: 1.4;
     }
-    .track-tag.smt { background: #1e3a5f; color: #a8c8ec; }
-    .track-tag.sat { background: #1a4a2a; color: #a8d8b8; }
-    .track-tag.cp  { background: #5c2a1a; color: #ecc8a8; }
-    .track-tag.mix { background: #3a1a5a; color: #d8c0f0; }
-    [data-theme="light"] .track-tag.smt { background: #dbeafe; color: #1e3a5f; }
-    [data-theme="light"] .track-tag.sat { background: #dcfce7; color: #1a4a2a; }
-    [data-theme="light"] .track-tag.cp  { background: #ffedd5; color: #5c2a1a; }
-    [data-theme="light"] .track-tag.mix { background: #f3e8ff; color: #3a1a5a; }
+    /* Track tag colors are injected dynamically via JS based on config */
 
     .venue-tag {
       display: inline-flex;
@@ -1161,9 +1154,6 @@
         <input type="search" id="keyword" placeholder="Search title or abstract...">
         <select id="track-filter">
           <option value="">All Tracks</option>
-          <option value="SMT">SMT</option>
-          <option value="SAT">SAT</option>
-          <option value="CP">CP</option>
         </select>
         <select id="sort-by">
           <option value="score">Score</option>
@@ -1223,6 +1213,9 @@
     let currentTotal = 0;
     let currentPaperId = '';
     const PAGE_SIZE = 20;
+
+    // Dynamic track configuration loaded from backend
+    let TRACK_CONFIG = {};
 
     /* ================================================================
        THEME SYSTEM
@@ -1476,12 +1469,11 @@
     }
 
     function trackTag(track) {
-      const t = (track || '?').toLowerCase();
-      let cls = 'mix';
-      if (t === 'smt') cls = 'smt';
-      else if (t === 'sat') cls = 'sat';
-      else if (t === 'cp') cls = 'cp';
-      return `<span class="track-tag ${cls}">${track || '?'}</span>`;
+      const name = track || '?';
+      const lower = name.toLowerCase();
+      // Use dynamic class based on track name
+      const cls = 'track-' + lower.replace(/[^a-z0-9]/g, '-');
+      return `<span class="track-tag ${cls}">${name}</span>`;
     }
 
     function venueTag(venue, tier) {
@@ -1865,17 +1857,13 @@
           const dateLabel = isToday ? `${date} (Today)` : date;
 
           const itemsHtml = items.map((item, i) => {
-            const track = item.track || '';
-            const trackCls = track.toLowerCase() === 'smt' ? 'smt' :
-                             track.toLowerCase() === 'sat' ? 'sat' :
-                             track.toLowerCase() === 'cp' ? 'cp' : 'mix';
             return `<div class="history-item">
               <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0;">
                 <span class="history-item-rank">#${i + 1}</span>
                 <span class="history-item-title" onclick="showPaperDetail('${item.paper_id}')">${item.title || 'Untitled'}</span>
               </div>
               <div class="history-item-meta">
-                <span class="track-tag ${trackCls}">${track || '?'}</span>
+                ${trackTag(item.track)}
                 <span class="history-item-score">${(item.score||0).toFixed(1)}</span>
               </div>
             </div>`;
@@ -1891,8 +1879,53 @@
       }
     }
 
+    async function loadConfig() {
+      try {
+        const cfg = await api('/api/config');
+        TRACK_CONFIG = cfg.tracks || {};
+
+        // Generate dynamic track styles
+        const styleEl = document.createElement('style');
+        styleEl.id = 'dynamic-track-styles';
+        let css = '';
+        Object.entries(TRACK_CONFIG).forEach(([name, info], idx) => {
+          const lower = name.toLowerCase().replace(/[^a-z0-9]/g, '-');
+          const cls = `.track-tag.track-${lower}`;
+          // Use configured color or generate from HSL palette
+          let bg, fg;
+          if (info.color) {
+            bg = info.color;
+            fg = '#fff';
+          } else {
+            const hue = (idx * 137) % 360; // golden angle for distinct colors
+            bg = `hsl(${hue}, 55%, 35%)`;
+            fg = `hsl(${hue}, 70%, 90%)`;
+          }
+          css += `${cls} { background: ${bg}; color: ${fg}; }\n`;
+          if (!info.color) {
+            const lightBg = `hsl(${hue}, 50%, 92%)`;
+            const lightFg = `hsl(${hue}, 70%, 25%)`;
+            css += `[data-theme="light"] ${cls} { background: ${lightBg}; color: ${lightFg}; }\n`;
+          }
+        });
+        styleEl.textContent = css;
+        document.head.appendChild(styleEl);
+
+        // Populate track filter dropdown
+        const filterSel = document.getElementById('track-filter');
+        if (filterSel) {
+          // Keep "All Tracks" option, add dynamic ones
+          filterSel.innerHTML = '<option value="">All Tracks</option>' +
+            Object.keys(TRACK_CONFIG).map(t => `<option value="${t}">${t}</option>`).join('');
+        }
+      } catch (e) {
+        console.error('Failed to load config:', e);
+      }
+    }
+
     async function init() {
       document.getElementById('last-updated').textContent = new Date().toLocaleString();
+      await loadConfig();
       await loadStats();
       await loadRecommendationHistory();
       await loadRecentReads();

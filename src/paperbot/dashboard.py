@@ -99,6 +99,16 @@ def make_handler(db_path: Path):
                     data = get_stats(db_path)
                     _json_response(self, data)
 
+                elif path == "/api/config":
+                    cfg = load_config(default_config_path())
+                    tracks = {}
+                    for name, tcfg in cfg.tracks.items():
+                        tracks[name] = {
+                            "query": tcfg.query,
+                            "color": tcfg.color or "",
+                        }
+                    _json_response(self, {"tracks": tracks, "dashboard_url": cfg.mail.dashboard_url})
+
                 elif path == "/api/papers":
                     limit = int(qs.get("limit", "50"))
                     offset = int(qs.get("offset", "0"))

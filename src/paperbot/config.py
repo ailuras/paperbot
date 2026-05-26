@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 class TrackConfig(BaseModel):
     query: str
     keywords: list[str]
+    color: str = ""  # optional CSS color override for track badges
 
 
 class OpenAlexConfig(BaseModel):
