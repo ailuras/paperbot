@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
@@ -79,10 +80,9 @@ def _connect(db_path: Path) -> sqlite3.Connection:
 
 def init_db(db_path: Path) -> None:
     """Create tables if they don't exist."""
-    conn = _connect(db_path)
-    conn.executescript(_SCHEMA)
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        conn.executescript(_SCHEMA)
+        conn.commit()
 
 
 def upsert_papers(
@@ -90,99 +90,99 @@ def upsert_papers(
     papers: list[dict[str, Any]],
 ) -> tuple[int, int]:
     """Bulk upsert papers. Returns (inserted, updated)."""
-    conn = _connect(db_path)
-    cursor = conn.cursor()
-
     inserted = 0
     updated = 0
 
-    for paper in papers:
-        paper_id = paper.get("id")
-        if not paper_id:
-            continue
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.cursor()
 
-        # Normalize authors to JSON string if it's a list
-        authors = paper.get("authors")
-        if isinstance(authors, list):
-            authors = json.dumps(authors, ensure_ascii=False)
+        for paper in papers:
+            paper_id = paper.get("id")
+            if not paper_id:
+                continue
 
-        # Convert tier to string if present
-        tier = paper.get("tier")
-        if tier is not None:
-            tier = str(tier)
+            # Normalize authors to JSON string if it's a list
+            authors = paper.get("authors")
+            if isinstance(authors, list):
+                authors = json.dumps(authors, ensure_ascii=False)
 
-        row = (
-            paper_id,
-            paper.get("doi"),
-            paper.get("title"),
-            authors,
-            paper.get("publication_year"),
-            paper.get("publication_date"),
-            paper.get("venue"),
-            paper.get("cited_by_count", 0),
-            paper.get("abstract"),
-            paper.get("landing_page_url"),
-            paper.get("pdf_url"),
-            paper.get("track"),
-            paper.get("score", 0.0),
-            tier,
-        )
+            # Convert tier to string if present
+            tier = paper.get("tier")
+            if tier is not None:
+                tier = str(tier)
 
-        cursor.execute(
-            """
-            SELECT 1 FROM papers WHERE id = ?
-            """,
-            (paper_id,),
-        )
-        exists = cursor.fetchone() is not None
-
-        if exists:
-            cursor.execute(
-                """
-                UPDATE papers SET
-                    doi = ?,
-                    title = ?,
-                    authors = ?,
-                    publication_year = ?,
-                    publication_date = ?,
-                    venue = ?,
-                    cited_by_count = ?,
-                    abstract = ?,
-                    landing_page_url = ?,
-                    pdf_url = ?,
-                    track = ?,
-                    score = ?,
-                    tier = ?,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                row[1:] + (paper_id,),
+            row = (
+                paper_id,
+                paper.get("doi"),
+                paper.get("title"),
+                authors,
+                paper.get("publication_year"),
+                paper.get("publication_date"),
+                paper.get("venue"),
+                paper.get("cited_by_count", 0),
+                paper.get("abstract"),
+                paper.get("landing_page_url"),
+                paper.get("pdf_url"),
+                paper.get("track"),
+                paper.get("score", 0.0),
+                tier,
             )
-            updated += 1
-        else:
+
             cursor.execute(
                 """
-                INSERT INTO papers (
-                    id, doi, title, authors, publication_year, publication_date,
-                    venue, cited_by_count, abstract, landing_page_url, pdf_url,
-                    track, score, tier
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                row,
-            )
-            # Auto-mark new papers as pending
-            cursor.execute(
-                """
-                INSERT INTO paper_states (paper_id, status, changed_at)
-                VALUES (?, 'pending', datetime('now'))
-                ON CONFLICT(paper_id) DO NOTHING
+                SELECT 1 FROM papers WHERE id = ?
                 """,
                 (paper_id,),
             )
-            inserted += 1
+            exists = cursor.fetchone() is not None
 
-    conn.commit()
-    conn.close()
+            if exists:
+                cursor.execute(
+                    """
+                    UPDATE papers SET
+                        doi = ?,
+                        title = ?,
+                        authors = ?,
+                        publication_year = ?,
+                        publication_date = ?,
+                        venue = ?,
+                        cited_by_count = ?,
+                        abstract = ?,
+                        landing_page_url = ?,
+                        pdf_url = ?,
+                        track = ?,
+                        score = ?,
+                        tier = ?,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    row[1:] + (paper_id,),
+                )
+                updated += 1
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO papers (
+                        id, doi, title, authors, publication_year, publication_date,
+                        venue, cited_by_count, abstract, landing_page_url, pdf_url,
+                        track, score, tier
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    row,
+                )
+                # Auto-mark new papers as pending
+                cursor.execute(
+                    """
+                    INSERT INTO paper_states (paper_id, status, changed_at)
+                    VALUES (?, 'pending', datetime('now'))
+                    ON CONFLICT(paper_id) DO NOTHING
+                    """,
+                    (paper_id,),
+                )
+                inserted += 1
+
+        conn.commit()
+
     return inserted, updated
 
 
@@ -196,7 +196,6 @@ def get_unread_papers(
 
     Excludes papers that have been read or skipped.
     """
-    conn = _connect(db_path)
     params: list[Any] = []
 
     sql = """
@@ -206,7 +205,8 @@ def get_unread_papers(
     """
 
     if recent_days is not None:
-        sql += " AND p.publication_date >= date('now', '-{} days')".format(recent_days)
+        sql += " AND p.publication_date >= date('now', ?)"
+        params.append(f"-{recent_days} days")
 
     if track:
         sql += " AND p.track LIKE ?"
@@ -218,9 +218,10 @@ def get_unread_papers(
         sql += " LIMIT ?"
         params.append(limit)
 
-    cursor = conn.execute(sql, params)
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(sql, params)
+        rows = [dict(row) for row in cursor.fetchall()]
+
     return rows
 
 
@@ -233,21 +234,20 @@ def save_recommendation(
 
     picks: list of dicts with keys: paper_id, slot_index
     """
-    conn = _connect(db_path)
-    for pick in picks:
-        conn.execute(
-            """
-            INSERT INTO recommendations (date, paper_id, slot_index)
-            VALUES (?, ?, ?)
-            """,
-            (
-                date,
-                pick["paper_id"],
-                pick.get("slot_index"),
-            ),
-        )
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        for pick in picks:
+            conn.execute(
+                """
+                INSERT INTO recommendations (date, paper_id, slot_index)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    date,
+                    pick["paper_id"],
+                    pick.get("slot_index"),
+                ),
+            )
+        conn.commit()
 
 
 def get_recommendation_history(
@@ -255,18 +255,19 @@ def get_recommendation_history(
     days: int = 7,
 ) -> list[dict[str, Any]]:
     """Return past recommendations grouped by date."""
-    conn = _connect(db_path)
-    cursor = conn.execute(
-        """
-        SELECT r.*, p.title, p.track, p.score
-        FROM recommendations r
-        JOIN papers p ON r.paper_id = p.id
-        WHERE r.date >= date('now', '-{} days')
-        ORDER BY r.date DESC, r.slot_index ASC
-        """.format(days),
-    )
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(
+            """
+            SELECT r.*, p.title, p.track, p.score
+            FROM recommendations r
+            JOIN papers p ON r.paper_id = p.id
+            WHERE r.date >= date('now', ?)
+            ORDER BY r.date DESC, r.slot_index ASC
+            """,
+            (f"-{days} days",),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+
     return rows
 
 
@@ -275,20 +276,20 @@ def get_recent_reads(
     limit: int = 3,
 ) -> list[dict[str, Any]]:
     """Return most recently read papers with full details."""
-    conn = _connect(db_path)
-    cursor = conn.execute(
-        """
-        SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
-        FROM papers p
-        JOIN paper_states ps ON p.id = ps.paper_id
-        WHERE ps.status = 'read'
-        ORDER BY ps.changed_at DESC
-        LIMIT ?
-        """,
-        (limit,),
-    )
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(
+            """
+            SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
+            FROM papers p
+            JOIN paper_states ps ON p.id = ps.paper_id
+            WHERE ps.status = 'read'
+            ORDER BY ps.changed_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+
     return rows
 
 
@@ -298,19 +299,18 @@ def set_paper_status(
     status: str,
 ) -> None:
     """Mark a paper with a status (read, skip, starred, pending)."""
-    conn = _connect(db_path)
-    conn.execute(
-        """
-        INSERT INTO paper_states (paper_id, status, changed_at)
-        VALUES (?, ?, datetime('now'))
-        ON CONFLICT(paper_id) DO UPDATE SET
-            status = excluded.status,
-            changed_at = datetime('now')
-        """,
-        (paper_id, status),
-    )
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO paper_states (paper_id, status, changed_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(paper_id) DO UPDATE SET
+                status = excluded.status,
+                changed_at = datetime('now')
+            """,
+            (paper_id, status),
+        )
+        conn.commit()
 
 
 def get_paper_by_id_or_title(
@@ -319,27 +319,25 @@ def get_paper_by_id_or_title(
     limit: int = 5,
 ) -> list[dict[str, Any]]:
     """Search papers by exact ID or fuzzy title match."""
-    conn = _connect(db_path)
+    with closing(_connect(db_path)) as conn:
+        # Try exact match first
+        cursor = conn.execute("SELECT * FROM papers WHERE id = ? LIMIT 1", (query,))
+        row = cursor.fetchone()
+        if row:
+            return [dict(row)]
 
-    # Try exact match first
-    cursor = conn.execute("SELECT * FROM papers WHERE id = ? LIMIT 1", (query,))
-    row = cursor.fetchone()
-    if row:
-        conn.close()
-        return [dict(row)]
+        # Fuzzy title search
+        cursor = conn.execute(
+            """
+            SELECT * FROM papers
+            WHERE title LIKE ?
+            ORDER BY score DESC
+            LIMIT ?
+            """,
+            (f"%{query}%", limit),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
 
-    # Fuzzy title search
-    cursor = conn.execute(
-        """
-        SELECT * FROM papers
-        WHERE title LIKE ?
-        ORDER BY score DESC
-        LIMIT ?
-        """,
-        (f"%{query}%", limit),
-    )
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
     return rows
 
 
@@ -354,7 +352,6 @@ def list_papers(
     offset: int = 0,
 ) -> dict[str, Any]:
     """Return paginated paper list with optional filters and sorting."""
-    conn = _connect(db_path)
     params: list[Any] = []
 
     where_clauses: list[str] = []
@@ -381,122 +378,119 @@ def list_papers(
     if where_clauses:
         where_sql = "WHERE " + " AND ".join(where_clauses)
 
-    count_sql = f"""
-    SELECT COUNT(*) FROM papers p
-    LEFT JOIN paper_states ps ON p.id = ps.paper_id
-    {where_sql}
-    """
-    total = conn.execute(count_sql, params).fetchone()[0]
+    with closing(_connect(db_path)) as conn:
+        count_sql = f"""
+        SELECT COUNT(*) FROM papers p
+        LEFT JOIN paper_states ps ON p.id = ps.paper_id
+        {where_sql}
+        """
+        total = conn.execute(count_sql, params).fetchone()[0]
 
-    # Validate sort column
-    valid_sort_cols = {"score", "cited_by_count", "publication_date", "created_at", "title", "changed_at"}
-    sort_col = sort_by if sort_by in valid_sort_cols else "score"
-    order = "DESC" if sort_order.lower() == "desc" else "ASC"
+        # Validate sort column
+        valid_sort_cols = {"score", "cited_by_count", "publication_date", "created_at", "title", "changed_at"}
+        sort_col = sort_by if sort_by in valid_sort_cols else "score"
+        order = "DESC" if sort_order.lower() == "desc" else "ASC"
 
-    # Determine sort column prefix (p.* vs ps.*)
-    if sort_col == "changed_at":
-        sort_prefix = "ps"
-        secondary = "p.score DESC"
-    else:
-        sort_prefix = "p"
-        secondary = "p.cited_by_count DESC" if sort_col == "score" else "p.score DESC"
+        # Determine sort column prefix (p.* vs ps.*)
+        if sort_col == "changed_at":
+            sort_prefix = "ps"
+            secondary = "p.score DESC"
+        else:
+            sort_prefix = "p"
+            secondary = "p.cited_by_count DESC" if sort_col == "score" else "p.score DESC"
 
-    sql = f"""
-    SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
-    FROM papers p
-    LEFT JOIN paper_states ps ON p.id = ps.paper_id
-    {where_sql}
-    ORDER BY {sort_prefix}.{sort_col} {order}, {secondary}
-    LIMIT ? OFFSET ?
-    """
-    cursor = conn.execute(sql, params + [limit, offset])
-    rows = [dict(row) for row in cursor.fetchall()]
-    conn.close()
+        sql = f"""
+        SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
+        FROM papers p
+        LEFT JOIN paper_states ps ON p.id = ps.paper_id
+        {where_sql}
+        ORDER BY {sort_prefix}.{sort_col} {order}, {secondary}
+        LIMIT ? OFFSET ?
+        """
+        cursor = conn.execute(sql, params + [limit, offset])
+        rows = [dict(row) for row in cursor.fetchall()]
 
     return {"total": total, "papers": rows, "limit": limit, "offset": offset}
 
 
 def get_paper_note(db_path: Path, paper_id: str) -> str:
     """Get note for a paper."""
-    conn = _connect(db_path)
-    cursor = conn.execute(
-        "SELECT note FROM paper_notes WHERE paper_id = ?",
-        (paper_id,),
-    )
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else ""
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(
+            "SELECT note FROM paper_notes WHERE paper_id = ?",
+            (paper_id,),
+        )
+        row = cursor.fetchone()
+        return row[0] if row else ""
 
 
 def set_paper_note(db_path: Path, paper_id: str, note: str) -> None:
     """Save or update note for a paper."""
-    conn = _connect(db_path)
-    conn.execute(
-        """
-        INSERT INTO paper_notes (paper_id, note, updated_at)
-        VALUES (?, ?, datetime('now'))
-        ON CONFLICT(paper_id) DO UPDATE SET
-            note = excluded.note,
-            updated_at = datetime('now')
-        """,
-        (paper_id, note),
-    )
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO paper_notes (paper_id, note, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(paper_id) DO UPDATE SET
+                note = excluded.note,
+                updated_at = datetime('now')
+            """,
+            (paper_id, note),
+        )
+        conn.commit()
 
 
 def get_stats(db_path: Path) -> dict[str, Any]:
     """Return database statistics."""
-    conn = _connect(db_path)
     stats: dict[str, Any] = {}
 
-    row = conn.execute("SELECT COUNT(*) FROM papers").fetchone()
-    stats["total_papers"] = row[0] if row else 0
+    with closing(_connect(db_path)) as conn:
+        row = conn.execute("SELECT COUNT(*) FROM papers").fetchone()
+        stats["total_papers"] = row[0] if row else 0
 
-    row = conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()
-    stats["total_recommendations"] = row[0] if row else 0
+        row = conn.execute("SELECT COUNT(*) FROM recommendations").fetchone()
+        stats["total_recommendations"] = row[0] if row else 0
 
-    row = conn.execute("SELECT COUNT(*) FROM paper_states").fetchone()
-    stats["total_states"] = row[0] if row else 0
+        row = conn.execute("SELECT COUNT(*) FROM paper_states").fetchone()
+        stats["total_states"] = row[0] if row else 0
 
-    cursor = conn.execute(
-        "SELECT track, COUNT(*) FROM papers GROUP BY track"
-    )
-    stats["by_track"] = {row[0] or "unknown": row[1] for row in cursor}
+        cursor = conn.execute(
+            "SELECT track, COUNT(*) FROM papers GROUP BY track"
+        )
+        stats["by_track"] = {row[0] or "unknown": row[1] for row in cursor}
 
-    cursor = conn.execute(
-        "SELECT status, COUNT(*) FROM paper_states GROUP BY status"
-    )
-    stats["by_status"] = {row[0] or "unknown": row[1] for row in cursor}
+        cursor = conn.execute(
+            "SELECT status, COUNT(*) FROM paper_states GROUP BY status"
+        )
+        stats["by_status"] = {row[0] or "unknown": row[1] for row in cursor}
 
-    row = conn.execute(
-        """
-        SELECT COUNT(DISTINCT date) FROM recommendations
-        WHERE date >= date('now', '-7 days')
-        """
-    ).fetchone()
-    stats["recommendations_last_7_days"] = row[0] if row else 0
+        row = conn.execute(
+            """
+            SELECT COUNT(DISTINCT date) FROM recommendations
+            WHERE date >= date('now', '-7 days')
+            """
+        ).fetchone()
+        stats["recommendations_last_7_days"] = row[0] if row else 0
 
-    # Pending / read / starred counts (recommended merged into read)
-    cursor = conn.execute(
-        """
-        SELECT
-            COUNT(CASE WHEN ps.status = 'pending' THEN 1 END) as pending,
-            COUNT(CASE WHEN ps.status IN ('read', 'recommended') THEN 1 END) as read,
-            COUNT(CASE WHEN ps.status = 'starred' THEN 1 END) as starred,
-            COUNT(CASE WHEN ps.status = 'skip' THEN 1 END) as skipped
-        FROM papers p
-        LEFT JOIN paper_states ps ON p.id = ps.paper_id
-        """
-    )
-    row = cursor.fetchone()
-    if row:
-        stats["pending"] = row[0]
-        stats["read"] = row[1]
-        stats["starred"] = row[2]
-        stats["skipped"] = row[3]
+        # Pending / read / starred counts (recommended merged into read)
+        cursor = conn.execute(
+            """
+            SELECT
+                COUNT(CASE WHEN ps.status = 'pending' THEN 1 END) as pending,
+                COUNT(CASE WHEN ps.status IN ('read', 'recommended') THEN 1 END) as read,
+                COUNT(CASE WHEN ps.status = 'starred' THEN 1 END) as starred,
+                COUNT(CASE WHEN ps.status = 'skip' THEN 1 END) as skipped
+            FROM papers p
+            LEFT JOIN paper_states ps ON p.id = ps.paper_id
+            """
+        )
+        row = cursor.fetchone()
+        if row:
+            stats["pending"] = row[0]
+            stats["read"] = row[1]
+            stats["starred"] = row[2]
+            stats["skipped"] = row[3]
 
-    conn.close()
     return stats
 
 
@@ -505,16 +499,15 @@ def get_stats(db_path: Path) -> dict[str, Any]:
 
 def get_paper_translation(db_path: Path, paper_id: str) -> dict[str, str]:
     """Get cached translation for a paper."""
-    conn = _connect(db_path)
-    cursor = conn.execute(
-        "SELECT title_zh, abstract_zh FROM paper_translations WHERE paper_id = ?",
-        (paper_id,),
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return {"title_zh": row[0] or "", "abstract_zh": row[1] or ""}
-    return {"title_zh": "", "abstract_zh": ""}
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(
+            "SELECT title_zh, abstract_zh FROM paper_translations WHERE paper_id = ?",
+            (paper_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"title_zh": row[0] or "", "abstract_zh": row[1] or ""}
+        return {"title_zh": "", "abstract_zh": ""}
 
 
 def set_paper_translation(
@@ -524,20 +517,19 @@ def set_paper_translation(
     abstract_zh: str,
 ) -> None:
     """Save or update translation for a paper."""
-    conn = _connect(db_path)
-    conn.execute(
-        """
-        INSERT INTO paper_translations (paper_id, title_zh, abstract_zh, updated_at)
-        VALUES (?, ?, ?, datetime('now'))
-        ON CONFLICT(paper_id) DO UPDATE SET
-            title_zh = excluded.title_zh,
-            abstract_zh = excluded.abstract_zh,
-            updated_at = datetime('now')
-        """,
-        (paper_id, title_zh, abstract_zh),
-    )
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO paper_translations (paper_id, title_zh, abstract_zh, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(paper_id) DO UPDATE SET
+                title_zh = excluded.title_zh,
+                abstract_zh = excluded.abstract_zh,
+                updated_at = datetime('now')
+            """,
+            (paper_id, title_zh, abstract_zh),
+        )
+        conn.commit()
 
 
 # ── PDF URL cache ─────────────────────────────────────────────────────
@@ -545,16 +537,15 @@ def set_paper_translation(
 
 def get_paper_pdf(db_path: Path, paper_id: str) -> dict[str, str] | None:
     """Get cached PDF URL for a paper."""
-    conn = _connect(db_path)
-    cursor = conn.execute(
-        "SELECT pdf_url, pdf_source FROM paper_pdfs WHERE paper_id = ?",
-        (paper_id,),
-    )
-    row = cursor.fetchone()
-    conn.close()
-    if row:
-        return {"pdf_url": row[0], "pdf_source": row[1] or ""}
-    return None
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(
+            "SELECT pdf_url, pdf_source FROM paper_pdfs WHERE paper_id = ?",
+            (paper_id,),
+        )
+        row = cursor.fetchone()
+        if row:
+            return {"pdf_url": row[0], "pdf_source": row[1] or ""}
+        return None
 
 
 def set_paper_pdf(
@@ -564,17 +555,16 @@ def set_paper_pdf(
     pdf_source: str = "",
 ) -> None:
     """Save or update PDF URL for a paper."""
-    conn = _connect(db_path)
-    conn.execute(
-        """
-        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
-        VALUES (?, ?, ?, datetime('now'))
-        ON CONFLICT(paper_id) DO UPDATE SET
-            pdf_url = excluded.pdf_url,
-            pdf_source = excluded.pdf_source,
-            resolved_at = datetime('now')
-        """,
-        (paper_id, pdf_url, pdf_source),
-    )
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        conn.execute(
+            """
+            INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(paper_id) DO UPDATE SET
+                pdf_url = excluded.pdf_url,
+                pdf_source = excluded.pdf_source,
+                resolved_at = datetime('now')
+            """,
+            (paper_id, pdf_url, pdf_source),
+        )
+        conn.commit()

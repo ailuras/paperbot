@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
+from typing import Any
 
 import requests
 
@@ -26,6 +27,12 @@ class PdfResolver:
         self.session.headers.update({
             "User-Agent": f"PaperBot/1.0 (mailto:{email})" if email else "PaperBot/1.0",
         })
+
+    def __enter__(self) -> PdfResolver:
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        self.session.close()
 
     # ── Layer 1: OpenAlex metadata (free) ─────────────────────────────
 

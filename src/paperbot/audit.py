@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from paperbot.db import _connect
 
 
 # ── Database schema ───────────────────────────────────────────────────
@@ -39,19 +42,11 @@ class AuditEntry:
     duration_ms: int = 0
 
 
-def _connect(db_path: Path) -> sqlite3.Connection:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
 def init_audit(db_path: Path) -> None:
     """Create audit log tables if they don't exist."""
-    conn = _connect(db_path)
-    conn.executescript(_AUDIT_SCHEMA)
-    conn.commit()
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        conn.executescript(_AUDIT_SCHEMA)
+        conn.commit()
 
 
 def log_audit(
@@ -59,24 +54,24 @@ def log_audit(
     entry: AuditEntry,
 ) -> int:
     """Write an audit entry to the database."""
-    conn = _connect(db_path)
-    cursor = conn.execute(
-        """
-        INSERT INTO audit_logs (action, target_id, details, status, error_message, duration_ms)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        (
-            entry.action,
-            entry.target_id,
-            json.dumps(entry.details, ensure_ascii=False) if entry.details else None,
-            entry.status,
-            entry.error_message or None,
-            entry.duration_ms,
-        ),
-    )
-    conn.commit()
-    row_id = cursor.lastrowid or 0
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO audit_logs (action, target_id, details, status, error_message, duration_ms)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry.action,
+                entry.target_id,
+                json.dumps(entry.details, ensure_ascii=False) if entry.details else None,
+                entry.status,
+                entry.error_message or None,
+                entry.duration_ms,
+            ),
+        )
+        conn.commit()
+        row_id = cursor.lastrowid or 0
+
     return row_id
 
 
@@ -87,7 +82,6 @@ def get_audit_logs(
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """Query audit logs with optional filtering."""
-    conn = _connect(db_path)
     params: list[Any] = []
     sql = "SELECT * FROM audit_logs"
     if action:
@@ -96,43 +90,45 @@ def get_audit_logs(
     sql += " ORDER BY timestamp DESC LIMIT ? OFFSET ?"
     params.extend([limit, offset])
 
-    cursor = conn.execute(sql, params)
-    rows = []
-    for row in cursor:
-        d = dict(row)
-        if d.get("details"):
-            try:
-                d["details"] = json.loads(d["details"])
-            except json.JSONDecodeError:
-                pass
-        rows.append(d)
-    conn.close()
+    with closing(_connect(db_path)) as conn:
+        cursor = conn.execute(sql, params)
+        rows = []
+        for row in cursor:
+            d = dict(row)
+            if d.get("details"):
+                try:
+                    d["details"] = json.loads(d["details"])
+                except json.JSONDecodeError:
+                    pass
+            rows.append(d)
+
     return rows
 
 
 def get_audit_stats(db_path: Path, days: int = 7) -> dict[str, Any]:
     """Return audit statistics for the last N days."""
-    conn = _connect(db_path)
-    total = conn.execute(
-        "SELECT COUNT(*) FROM audit_logs WHERE timestamp >= date('now', '-{} days')".format(days)
-    ).fetchone()[0]
+    with closing(_connect(db_path)) as conn:
+        total = conn.execute(
+            "SELECT COUNT(*) FROM audit_logs WHERE timestamp >= date('now', ?)",
+            (f"-{days} days",),
+        ).fetchone()[0]
 
-    cursor = conn.execute(
-        """
-        SELECT action, status, COUNT(*)
-        FROM audit_logs
-        WHERE timestamp >= date('now', '-{} days')
-        GROUP BY action, status
-        """.format(days)
-    )
-    by_action = {}
-    for row in cursor:
-        action, status, count = row
-        if action not in by_action:
-            by_action[action] = {}
-        by_action[action][status] = count
+        cursor = conn.execute(
+            """
+            SELECT action, status, COUNT(*)
+            FROM audit_logs
+            WHERE timestamp >= date('now', ?)
+            GROUP BY action, status
+            """,
+            (f"-{days} days",),
+        )
+        by_action = {}
+        for row in cursor:
+            action, status, count = row
+            if action not in by_action:
+                by_action[action] = {}
+            by_action[action][status] = count
 
-    conn.close()
     return {"total": total, "by_action": by_action}
 
 

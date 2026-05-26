@@ -314,8 +314,8 @@ def make_handler(db_path: Path):
                     if not doi:
                         _json_response(self, {"error": "No DOI available"}, 400)
                         return
-                    resolver = PdfResolver()
-                    result = resolver.resolve(doi, title=paper.get("title", ""))
+                    with PdfResolver() as resolver:
+                        result = resolver.resolve(doi, title=paper.get("title", ""))
                     if result:
                         set_paper_pdf(db_path, paper_id, result.url, result.source)
                         _json_response(self, {
