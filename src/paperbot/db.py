@@ -269,19 +269,20 @@ def get_recommendation_history(
 def get_recent_reads(
     db_path: Path,
     limit: int = 3,
+    status: str = "read",
 ) -> list[Paper]:
-    """Return most recently read papers with full details."""
+    """Return most recently marked papers with full details."""
     with closing(_connect(db_path)) as conn:
         cursor = conn.execute(
             """
             SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
             FROM papers p
             JOIN paper_states ps ON p.id = ps.paper_id
-            WHERE ps.status = 'read'
+            WHERE ps.status = ?
             ORDER BY ps.changed_at DESC
             LIMIT ?
             """,
-            (limit,),
+            (status, limit),
         )
         papers = [Paper.from_dict(dict(row)) for row in cursor.fetchall()]
 

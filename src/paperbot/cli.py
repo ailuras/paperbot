@@ -372,19 +372,20 @@ def stats() -> None:
 
 @app.command()
 def history(
-    limit: int = typer.Option(10, help="Number of recent reads to show"),
+    limit: int = typer.Option(10, help="Number of recent papers to show"),
+    status: str = typer.Option("read", help="Filter by status: read / starred / skip / pending"),
 ) -> None:
-    """Show recent read papers."""
+    """Show recent papers by status."""
     db_path = _db_path()
-    rows = get_recent_reads(db_path, limit=limit)
+    rows = get_recent_reads(db_path, limit=limit, status=status)
 
     if not rows:
-        console.print("[yellow]No recent reads.[/yellow]")
+        console.print(f"[yellow]No recent {status} papers.[/yellow]")
         raise typer.Exit(0)
 
-    console.print("Recent Reads")
+    console.print(f"Recent {status.title()}")
 
-    for i, p in enumerate(rows, 1):
+    for p in rows:
         abbr = _abbr(p.venue or "OpenAlex")
         url = p.url
         abstract = p.abstract

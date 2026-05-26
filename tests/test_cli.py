@@ -203,4 +203,55 @@ def test_history_empty(cli_env: dict):
     result = runner.invoke(app, ["history"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "No recent reads" in out
+    assert "No recent read" in out
+
+
+def test_history_with_status(cli_env: dict, sample_papers):
+    """history --status filters by paper state."""
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, sample_papers)
+
+    from paperbot.db import set_paper_status
+
+    set_paper_status(db_path, sample_papers[0].id, "starred")
+
+    result = runner.invoke(
+        app, ["history", "--status", "starred"], env=cli_env
+    )
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Recent Starred" in out
+    assert sample_papers[0].title in out
+
+
+def test_history_status_empty(cli_env: dict):
+    """history --status handles empty state gracefully."""
+    result = runner.invoke(app, ["history", "--status", "skip"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "No recent skip" in out
+
+
+def test_serve_stop_not_running(cli_env: dict):
+    """serve --stop reports not running when no server is active."""
+    result = runner.invoke(app, ["serve", "--stop"], env=cli_env)
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "not running" in out.lower()
+
+
+def test_serve_restart_not_running(cli_env: dict):
+    """serve --restart starts server when none is running."""
+    from unittest.mock import patch
+
+    with patch("paperbot.cli.stop_server", return_value=False):
+        with patch("paperbot.cli.run_dashboard") as mock_run:
+            result = runner.invoke(
+                app, ["serve", "--restart", "--port", "9999"], env=cli_env
+            )
+
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Restarting" in out
+    mock_run.assert_called_once()

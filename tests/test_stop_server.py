@@ -70,7 +70,7 @@ def test_kill_by_port_lsof_success():
     assert result is True
     mock_run.assert_called_once_with(
         ["lsof", "-ti", ":8765"],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True, text=True, timeout=2,
     )
     mock_kill.assert_called_once_with(12345, 15)
 

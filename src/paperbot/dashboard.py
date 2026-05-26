@@ -357,7 +357,7 @@ def _kill_by_port(port: int) -> bool:
         ["fuser", f"{port}/tcp"],
     ):
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
             if result.returncode == 0 and result.stdout.strip():
                 killed = False
                 for pid_str in result.stdout.strip().split():
