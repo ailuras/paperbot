@@ -411,21 +411,24 @@ def serve(
     daemon: bool = typer.Option(False, help="Run in background (detach from terminal)"),
     log_file: str = typer.Option("", help="Log file path (default: ~/.paperbot/dashboard.log)"),
     stop: bool = typer.Option(False, help="Stop the running dashboard server"),
+    restart: bool = typer.Option(False, help="Restart the dashboard server (stop if running, then start)"),
 ) -> None:
-    """Start or stop the local web dashboard."""
+    """Start, stop, or restart the local web dashboard."""
     import os
     import sys
 
     cfg = load_default_config()
     db_path = cfg.data_dir / "paperbot.db"
 
-    if stop:
+    if stop or restart:
         stopped = stop_server(cfg.data_dir, port=port)
         if stopped:
             console.print("[green]Dashboard stopped.[/green]")
-        else:
+        elif stop:
             console.print("[yellow]Dashboard is not running.[/yellow]")
-        raise typer.Exit(0)
+            raise typer.Exit(0)
+        if restart:
+            console.print("[dim]Restarting...[/dim]")
 
     init_db(db_path)
 
