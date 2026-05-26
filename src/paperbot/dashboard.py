@@ -348,16 +348,44 @@ def run_server(db_path: Path, host: str = "127.0.0.1", port: int = 8000) -> None
         pid_path.unlink(missing_ok=True)
 
 
-def stop_server(data_dir: Path) -> bool:
-    """Stop the running dashboard server."""
+def _kill_by_port(port: int) -> bool:
+    """Try to find and kill a process listening on *port*."""
+    import subprocess
+
+    for cmd in (
+        ["lsof", "-ti", f":{port}"],
+        ["fuser", f"{port}/tcp"],
+    ):
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                killed = False
+                for pid_str in result.stdout.strip().split():
+                    try:
+                        os.kill(int(pid_str.strip()), 15)
+                        killed = True
+                    except (ValueError, ProcessLookupError, PermissionError):
+                        continue
+                return killed
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            continue
+    return False
+
+
+def stop_server(data_dir: Path, port: int = 8765) -> bool:
+    """Stop the running dashboard server.
+
+    First tries the PID file; if that is missing falls back to
+    port-based process discovery (lsof / fuser).
+    """
     pid_path = _pid_file(data_dir)
-    if not pid_path.exists():
-        return False
-    try:
-        pid = int(pid_path.read_text().strip())
-        os.kill(pid, 15)  # SIGTERM
-        pid_path.unlink(missing_ok=True)
-        return True
-    except (ValueError, ProcessLookupError, PermissionError):
-        pid_path.unlink(missing_ok=True)
-        return False
+    if pid_path.exists():
+        try:
+            pid = int(pid_path.read_text().strip())
+            os.kill(pid, 15)  # SIGTERM
+            pid_path.unlink(missing_ok=True)
+            return True
+        except (ValueError, ProcessLookupError, PermissionError):
+            pid_path.unlink(missing_ok=True)
+
+    return _kill_by_port(port)

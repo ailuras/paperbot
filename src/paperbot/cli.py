@@ -420,7 +420,7 @@ def serve(
     db_path = cfg.data_dir / "paperbot.db"
 
     if stop:
-        stopped = stop_server(cfg.data_dir)
+        stopped = stop_server(cfg.data_dir, port=port)
         if stopped:
             console.print("[green]Dashboard stopped.[/green]")
         else:
