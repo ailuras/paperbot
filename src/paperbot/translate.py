@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from paperbot.models import Paper
 
 import requests
 
@@ -88,6 +91,27 @@ def translate_paper(title: str, abstract: str | None = None) -> TranslationResul
         abstract_zh=abstract_zh,
         source="api",
     )
+
+
+def translate_paper_cached(db_path: Path, paper: Paper) -> dict[str, str]:
+    """Translate a paper with DB caching.
+
+    Checks the translation cache first; on miss, calls the API and stores
+    the result.  Returns a dict with title_zh, abstract_zh, and source.
+    """
+    from paperbot.db import get_paper_translation, set_paper_translation
+
+    cached = get_paper_translation(db_path, paper.id)
+    if cached.get("title_zh"):
+        return {**cached, "source": "cache"}
+
+    result = translate_paper(title=paper.title, abstract=paper.abstract)
+    set_paper_translation(db_path, paper.id, result.title_zh, result.abstract_zh)
+    return {
+        "title_zh": result.title_zh,
+        "abstract_zh": result.abstract_zh,
+        "source": "api",
+    }
 
 
 def translate_text(text: str, target_language: str = "中文") -> str:

@@ -12,25 +12,23 @@ from rich.console import Console
 from rich.table import Table
 
 from paperbot.audit import AuditEntry, AuditStatus, format_audit_status, get_audit_logs, get_audit_stats, init_audit, log_audit, log_to_file
-from paperbot.config import default_config_path, load_config, load_default_config
+from paperbot.config import load_default_config
 from paperbot.dashboard import run_server as run_dashboard, stop_server
 from paperbot.db import (
     get_paper_by_id_or_title,
-    get_paper_translation,
     get_recent_reads,
     get_stats,
     get_unread_papers,
     init_db,
     save_recommendation,
     set_paper_status,
-    set_paper_translation,
     upsert_papers,
 )
 from paperbot.fetch import fetch_papers
 from paperbot.mail import send_fetch_report_email, send_recommendation_email
 from paperbot.models import Paper, PaperStatus
 from paperbot.recommend import recommend_papers
-from paperbot.translate import translate_paper
+from paperbot.translate import translate_paper_cached
 from paperbot.utils import _abbr, format_date
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
@@ -101,19 +99,14 @@ def recommend(
             pid = r.paper_id
             if not pid:
                 continue
-            cached = get_paper_translation(db_path, pid)
-            if cached.get("title_zh"):
-                translations[pid] = cached
-            else:
-                try:
-                    trans = translate_paper(
-                        title=r.paper.title,
-                        abstract=r.paper.abstract,
-                    )
-                    set_paper_translation(db_path, pid, trans.title_zh, trans.abstract_zh)
-                    translations[pid] = {"title_zh": trans.title_zh, "abstract_zh": trans.abstract_zh}
-                except Exception as e:
-                    console.print(f"[dim]Translation failed for {pid}: {e}[/dim]")
+            try:
+                trans = translate_paper_cached(db_path, r.paper)
+                translations[pid] = {
+                    "title_zh": trans["title_zh"],
+                    "abstract_zh": trans["abstract_zh"],
+                }
+            except Exception as e:
+                console.print(f"[dim]Translation failed for {pid}: {e}[/dim]")
 
     if json_output:
         for r in results:

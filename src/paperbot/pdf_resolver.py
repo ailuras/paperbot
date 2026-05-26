@@ -5,7 +5,10 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from paperbot.models import Paper
 
 import requests
 
@@ -193,3 +196,33 @@ class PdfResolver:
             return result
 
         return None
+
+
+def resolve_paper_pdf_cached(db_path: Path, paper: Paper) -> dict[str, str] | None:
+    """Resolve a paper's PDF URL with DB caching.
+
+    Checks the PDF cache first; on miss, uses PdfResolver to find the
+    PDF and stores the result.  Returns a dict with pdf_url, pdf_source,
+    and source, or None if no DOI is available.
+    """
+    from paperbot.db import get_paper_pdf, set_paper_pdf
+
+    cached = get_paper_pdf(db_path, paper.id)
+    if cached:
+        return {**cached, "source": "cache"}
+
+    doi = paper.doi or ""
+    if not doi:
+        return None
+
+    with PdfResolver() as resolver:
+        result = resolver.resolve(doi, title=paper.title)
+
+    if result:
+        set_paper_pdf(db_path, paper.id, result.url, result.source)
+        return {
+            "pdf_url": result.url,
+            "pdf_source": result.source,
+            "source": "api",
+        }
+    return {"pdf_url": "", "pdf_source": "", "source": "none"}
