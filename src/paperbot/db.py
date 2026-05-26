@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS papers (
     publication_year INTEGER,
     publication_date TEXT,
     venue TEXT,
+    venue_abbr TEXT,
     cited_by_count INTEGER DEFAULT 0,
     abstract TEXT,
     landing_page_url TEXT,
@@ -84,6 +85,13 @@ def init_db(db_path: Path) -> None:
     """Create tables if they don't exist."""
     with closing(_connect(db_path)) as conn:
         conn.executescript(_SCHEMA)
+        # Migrate: add venue_abbr if missing
+        cols = {
+            r[1]
+            for r in conn.execute("PRAGMA table_info(papers)")
+        }
+        if "venue_abbr" not in cols:
+            conn.execute("ALTER TABLE papers ADD COLUMN venue_abbr TEXT")
         conn.commit()
 
 
@@ -114,6 +122,7 @@ def upsert_papers(
                 paper.publication_year,
                 paper.publication_date,
                 paper.venue,
+                paper.venue_abbr,
                 paper.cited_by_count,
                 paper.abstract,
                 paper.landing_page_url,
@@ -141,6 +150,7 @@ def upsert_papers(
                         publication_year = ?,
                         publication_date = ?,
                         venue = ?,
+                        venue_abbr = ?,
                         cited_by_count = ?,
                         abstract = ?,
                         landing_page_url = ?,
@@ -159,9 +169,9 @@ def upsert_papers(
                     """
                     INSERT INTO papers (
                         id, doi, title, authors, publication_year, publication_date,
-                        venue, cited_by_count, abstract, landing_page_url, pdf_url,
+                        venue, venue_abbr, cited_by_count, abstract, landing_page_url, pdf_url,
                         track, score, tier
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     row,
                 )

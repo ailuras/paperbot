@@ -36,6 +36,7 @@ class Paper:
     track: str = ""
     score: float = 0.0
     tier: int = 0
+    venue_abbr: str = ""
     created_at: str = ""
     updated_at: str = ""
     # Joined from paper_states
@@ -79,6 +80,7 @@ class Paper:
             track=data.get("track", ""),
             score=data.get("score", 0.0) or 0.0,
             tier=tier,
+            venue_abbr=data.get("venue_abbr", ""),
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
             status=data.get("status", "pending") or "pending",

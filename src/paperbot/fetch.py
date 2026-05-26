@@ -12,6 +12,7 @@ import httpx
 
 from paperbot.config import ScoringTier, Settings, TrackConfig
 from paperbot.models import Paper
+from paperbot.utils import compute_venue_abbr
 
 SELECT_FIELDS = ",".join(
     [
@@ -117,6 +118,7 @@ def _parse_work(work: dict[str, Any], track: str, scorer: VenueScorer) -> Paper:
     venue = source.get("display_name") or ""
     citations = work.get("cited_by_count", 0) or 0
     tier = scorer.get_tier(venue)
+    venue_abbr = compute_venue_abbr(venue)
 
     return Paper(
         id=work.get("id") or "",
@@ -130,6 +132,7 @@ def _parse_work(work: dict[str, Any], track: str, scorer: VenueScorer) -> Paper:
         publication_year=work.get("publication_year"),
         publication_date=work.get("publication_date") or "",
         venue=venue,
+        venue_abbr=venue_abbr,
         cited_by_count=citations,
         abstract=_restore_abstract(work.get("abstract_inverted_index")),
         landing_page_url=loc.get("landing_page_url")
