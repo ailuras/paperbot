@@ -188,3 +188,56 @@ def test_get_stats_counts(tmp_db_path: Path, sample_papers: list):
     assert stats["starred"] == 1
     assert stats["skipped"] == 1
     assert stats["by_track"] == {"SMT": 1, "SAT": 1, "CP": 1}
+
+
+def test_paper_translation_cache(tmp_db_path: Path, sample_paper: dict):
+    """get_paper_translation and set_paper_translation round-trip."""
+    from paperbot.db import get_paper_translation, set_paper_translation
+
+    upsert_papers(tmp_db_path, [sample_paper])
+
+    # Initially empty
+    assert get_paper_translation(tmp_db_path, sample_paper["id"]) == {
+        "title_zh": "",
+        "abstract_zh": "",
+    }
+
+    # Save translation
+    set_paper_translation(
+        tmp_db_path, sample_paper["id"], "测试标题", "测试摘要"
+    )
+    cached = get_paper_translation(tmp_db_path, sample_paper["id"])
+    assert cached["title_zh"] == "测试标题"
+    assert cached["abstract_zh"] == "测试摘要"
+
+    # Update translation
+    set_paper_translation(
+        tmp_db_path, sample_paper["id"], "更新标题", "更新摘要"
+    )
+    cached = get_paper_translation(tmp_db_path, sample_paper["id"])
+    assert cached["title_zh"] == "更新标题"
+    assert cached["abstract_zh"] == "更新摘要"
+
+
+def test_paper_pdf_cache(tmp_db_path: Path, sample_paper: dict):
+    """get_paper_pdf and set_paper_pdf round-trip."""
+    from paperbot.db import get_paper_pdf, set_paper_pdf
+
+    upsert_papers(tmp_db_path, [sample_paper])
+
+    # Initially empty
+    assert get_paper_pdf(tmp_db_path, sample_paper["id"]) is None
+
+    # Save PDF URL
+    set_paper_pdf(tmp_db_path, sample_paper["id"], "https://example.com/paper.pdf", "openalex")
+    cached = get_paper_pdf(tmp_db_path, sample_paper["id"])
+    assert cached is not None
+    assert cached["pdf_url"] == "https://example.com/paper.pdf"
+    assert cached["pdf_source"] == "openalex"
+
+    # Update PDF URL
+    set_paper_pdf(tmp_db_path, sample_paper["id"], "https://arxiv.org/pdf/1234.pdf", "arxiv")
+    cached = get_paper_pdf(tmp_db_path, sample_paper["id"])
+    assert cached is not None
+    assert cached["pdf_url"] == "https://arxiv.org/pdf/1234.pdf"
+    assert cached["pdf_source"] == "arxiv"

@@ -123,6 +123,19 @@ def make_handler(db_path: Path):
                     note = get_paper_note(db_path, paper_id)
                     _json_response(self, {"paper_id": paper_id, "note": note})
 
+                elif path.startswith("/api/paper/") and path.endswith("/translation"):
+                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/translation")])
+                    trans = get_paper_translation(db_path, paper_id)
+                    _json_response(self, {"paper_id": paper_id, **trans})
+
+                elif path.startswith("/api/paper/") and path.endswith("/pdf"):
+                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/pdf")])
+                    pdf = get_paper_pdf(db_path, paper_id)
+                    if pdf:
+                        _json_response(self, {"paper_id": paper_id, **pdf})
+                    else:
+                        _json_response(self, {"paper_id": paper_id, "pdf_url": "", "pdf_source": ""})
+
                 elif path.startswith("/api/paper/"):
                     paper_id = urllib.parse.unquote(path[len("/api/paper/"):])
                     matches = get_paper_by_id_or_title(db_path, paper_id, limit=1)
@@ -142,19 +155,6 @@ def make_handler(db_path: Path):
                     limit = int(qs.get("limit", "3"))
                     rows = get_recent_reads(db_path, limit=min(limit, 10))
                     _json_response(self, rows)
-
-                elif path.startswith("/api/paper/") and path.endswith("/translation"):
-                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/translation")])
-                    trans = get_paper_translation(db_path, paper_id)
-                    _json_response(self, {"paper_id": paper_id, **trans})
-
-                elif path.startswith("/api/paper/") and path.endswith("/pdf"):
-                    paper_id = urllib.parse.unquote(path[len("/api/paper/"):path.rfind("/pdf")])
-                    pdf = get_paper_pdf(db_path, paper_id)
-                    if pdf:
-                        _json_response(self, {"paper_id": paper_id, **pdf})
-                    else:
-                        _json_response(self, {"paper_id": paper_id, "pdf_url": "", "pdf_source": ""})
 
                 else:
                     self.send_error(404, "Not Found")
