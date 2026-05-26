@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from paperbot.config import Settings
+from paperbot.utils import format_authors
 
 
 def _smtp_config(settings: Settings) -> dict[str, Any]:
@@ -119,17 +120,7 @@ def _send_via_smtp(
 
 def _paper_to_html(paper: dict[str, Any], index: int, translation: dict[str, str] | None = None) -> str:
     """Convert a paper dict to HTML snippet."""
-    authors = paper.get("authors", [])
-    if isinstance(authors, str):
-        try:
-            import json
-
-            authors = json.loads(authors)
-        except Exception:
-            authors = [authors]
-    author_str = ", ".join(authors[:3])
-    if len(authors) > 3:
-        author_str += ", et al."
+    author_str = format_authors(paper)
 
     venue = paper.get("venue") or "OpenAlex"
     url = paper.get("landing_page_url") or paper.get("doi") or paper.get("id") or ""
@@ -260,9 +251,9 @@ def send_recommendation_email(
     cfg = _smtp_config(settings)
 
     if date_str is None:
-        from datetime import datetime
+        from paperbot.utils import format_date
 
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        date_str = format_date()
 
     html_body = _build_email_body(
         papers, "Daily Recommendations", date_str, stats,
@@ -290,9 +281,9 @@ def send_fetch_report_email(
     cfg = _smtp_config(settings)
 
     if date_str is None:
-        from datetime import datetime
+        from paperbot.utils import format_date
 
-        date_str = datetime.now().strftime("%Y-%m-%d")
+        date_str = format_date()
 
     track_rows = "\n".join(
         f"<tr><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;'>{ts['track']}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{ts['raw']}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{ts['filtered']}</td></tr>"

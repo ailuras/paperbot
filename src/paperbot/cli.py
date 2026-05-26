@@ -28,6 +28,7 @@ from paperbot.fetch import fetch_papers
 from paperbot.mail import send_fetch_report_email, send_recommendation_email
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper
+from paperbot.utils import _abbr, format_authors, format_date
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
 console = Console()
@@ -87,7 +88,7 @@ def recommend(
         _log_audit(db_path, data_dir, audit_entry, start_time)
         raise typer.Exit(0)
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    today = format_date()
 
     # Translate if enabled
     translations: dict[str, dict[str, str]] = {}
@@ -112,12 +113,6 @@ def recommend(
                 except Exception as e:
                     console.print(f"[dim]Translation failed for {pid}: {e}[/dim]")
 
-    def _abbr(venue: str) -> str:
-        if not venue:
-            return "?"
-        m = __import__("re").search(r"\b[A-Z]{2,}\b", venue)
-        return m.group(0) if m else venue[:10]
-
     if json_output:
         for r in results:
             out = {
@@ -133,15 +128,7 @@ def recommend(
         console.print(f"Daily Papers · {today}")
         for r in results:
             p = r.paper
-            authors = p.get("authors", [])
-            if isinstance(authors, str):
-                try:
-                    authors = json.loads(authors)
-                except json.JSONDecodeError:
-                    authors = [authors]
-            author_str = ", ".join(authors[:3])
-            if len(authors) > 3:
-                author_str += ", et al."
+            author_str = format_authors(p)
 
             venue = p.get("venue") or "OpenAlex"
             abbr = _abbr(venue)
@@ -235,7 +222,7 @@ def fetch(
     hl = "━" * 16
     console.print()
     console.print(hl)
-    console.print(f"[bold]Fetch Report · {datetime.now().strftime('%Y-%m-%d')}[/bold]")
+    console.print(f"[bold]Fetch Report · {format_date()}[/bold]")
     console.print(hl)
     console.print(f"Range: {stats['range']} ({stats['days']} days)")
     console.print()
@@ -306,7 +293,7 @@ def init(
     hl = "━" * 16
     console.print()
     console.print(hl)
-    console.print(f"[bold]Fetch Report · {datetime.now().strftime('%Y-%m-%d')}[/bold]")
+    console.print(f"[bold]Fetch Report · {format_date()}[/bold]")
     console.print(hl)
     console.print(f"Range: {stats['range']} ({stats['days']} days)")
     console.print()
@@ -403,24 +390,10 @@ def history(
         console.print("[yellow]No recent reads.[/yellow]")
         raise typer.Exit(0)
 
-    def _abbr(venue: str) -> str:
-        if not venue:
-            return "?"
-        m = __import__("re").search(r"\b[A-Z]{2,}\b", venue)
-        return m.group(0) if m else venue[:10]
-
     console.print("Recent Reads")
 
     for i, p in enumerate(rows, 1):
-        authors = p.get("authors", [])
-        if isinstance(authors, str):
-            try:
-                authors = json.loads(authors)
-            except json.JSONDecodeError:
-                authors = [authors]
-        author_str = ", ".join(authors[:3])
-        if len(authors) > 3:
-            author_str += ", et al."
+        author_str = format_authors(p)
 
         venue = p.get("venue") or "OpenAlex"
         abbr = _abbr(venue)
