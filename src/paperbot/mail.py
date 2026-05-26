@@ -117,7 +117,7 @@ def _send_via_smtp(
         return False
 
 
-def _paper_to_html(paper: dict[str, Any], index: int) -> str:
+def _paper_to_html(paper: dict[str, Any], index: int, translation: dict[str, str] | None = None) -> str:
     """Convert a paper dict to HTML snippet."""
     authors = paper.get("authors", [])
     if isinstance(authors, str):
@@ -150,9 +150,16 @@ def _paper_to_html(paper: dict[str, Any], index: int) -> str:
         track_fg = f"hsl({_h}, 70%, 90%)"
         track_badge = f"<span style='background:{track_bg};color:{track_fg};padding:2px 6px;border-radius:4px;font-size:12px;margin-left:4px;'>{track}</span>"
 
+    trans_html = ""
+    if translation and translation.get("title_zh"):
+        trans_html += f'<div style="color:#b45309;font-size:15px;font-weight:600;margin:4px 0 8px 0;">{translation["title_zh"]}</div>'
+    if translation and translation.get("abstract_zh"):
+        trans_html += f'<div style="color:#78716c;font-size:13px;line-height:1.6;margin-bottom:8px;border-left:3px solid #d6d3d1;padding-left:10px;">{translation["abstract_zh"]}</div>'
+
     return f"""
     <div style="border-left:4px solid #2563eb;padding-left:16px;margin-bottom:24px;">
       <h3 style="margin:0 0 8px 0;color:#1e293b;">#{index} {paper.get('title', 'No Title')}</h3>
+      {trans_html}
       <div style="margin-bottom:8px;">
         {tier_badge}{track_badge}
         <span style="color:#64748b;font-size:14px;margin-left:8px;">{venue} · {pub_date} · Cited {cited} · Score {score:.1f}</span>
@@ -170,9 +177,14 @@ def _build_email_body(
     date_str: str,
     stats: dict[str, Any] | None = None,
     dashboard_url: str = "http://localhost:8765",
+    translations: dict[str, dict[str, str]] | None = None,
 ) -> str:
     """Build full HTML email body."""
-    papers_html = "\n".join(_paper_to_html(p, i + 1) for i, p in enumerate(papers))
+    translations = translations or {}
+    papers_html = "\n".join(
+        _paper_to_html(p, i + 1, translations.get(p.get("id", "")))
+        for i, p in enumerate(papers)
+    )
 
     stats_html = ""
     if stats:
@@ -238,6 +250,7 @@ def send_recommendation_email(
     settings: Settings,
     date_str: str | None = None,
     stats: dict[str, Any] | None = None,
+    translations: dict[str, dict[str, str]] | None = None,
 ) -> bool:
     """Send daily recommendation email.
 
@@ -254,6 +267,7 @@ def send_recommendation_email(
     html_body = _build_email_body(
         papers, "Daily Recommendations", date_str, stats,
         dashboard_url=cfg.get("dashboard_url", "http://localhost:8765"),
+        translations=translations,
     )
     return _send_email(
         cfg.get("to_addrs", []),

@@ -57,6 +57,13 @@ class RecommendationConfig(BaseModel):
     recent_days: int = 30
 
 
+class TranslateConfig(BaseModel):
+    enabled: bool = False
+    target_language: str = "中文"
+    model: str = "deepseek-v4-flash"
+    include_in_email: bool = True
+
+
 class MailConfig(BaseModel):
     smtp_host: str = ""
     smtp_port: int = 587
@@ -76,6 +83,7 @@ class Settings(BaseModel):
     filters: FiltersConfig = Field(default_factory=FiltersConfig)
     scoring: ScoringConfig
     recommendation: RecommendationConfig = Field(default_factory=RecommendationConfig)
+    translate: TranslateConfig = Field(default_factory=TranslateConfig)
     mail: MailConfig = Field(default_factory=MailConfig)
 
     model_config = {"populate_by_name": True}

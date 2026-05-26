@@ -27,6 +27,7 @@ from paperbot.db import (
 from paperbot.fetch import fetch_papers
 from paperbot.mail import send_fetch_report_email, send_recommendation_email
 from paperbot.recommend import recommend_papers
+from paperbot.translate import translate_paper
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
 console = Console()
@@ -56,6 +57,7 @@ def recommend(
     json_output: bool = typer.Option(False, "--json", help="Output NDJSON"),
     dry_run: bool = typer.Option(False, help="Preview without saving"),
     email: bool = typer.Option(False, "--email", help="Send result via email (used by crontab)"),
+    translate: bool = typer.Option(False, "--translate", help="Translate title and abstract (overrides config)"),
 ) -> None:
     """Generate today's paper recommendations."""
     start_time = time.time()
@@ -63,6 +65,9 @@ def recommend(
     db_path = _db_path()
     data_dir = cfg.data_dir
     audit_entry = AuditEntry(action="recommend")
+
+    # Determine if translation is enabled
+    do_translate = translate or cfg.translate.enabled
 
     # Fetch candidate pool
     papers = get_unread_papers(db_path)
@@ -84,6 +89,29 @@ def recommend(
 
     today = datetime.now().strftime("%Y-%m-%d")
 
+    # Translate if enabled
+    translations: dict[str, dict[str, str]] = {}
+    if do_translate:
+        from paperbot.db import get_paper_translation as _get_trans, set_paper_translation as _set_trans
+        console.print("[blue]Translating recommendations...[/blue]")
+        for r in results:
+            pid = r.paper_id
+            if not pid:
+                continue
+            cached = _get_trans(db_path, pid)
+            if cached.get("title_zh"):
+                translations[pid] = cached
+            else:
+                try:
+                    trans = translate_paper(
+                        title=r.paper.get("title", ""),
+                        abstract=r.paper.get("abstract"),
+                    )
+                    _set_trans(db_path, pid, trans.title_zh, trans.abstract_zh)
+                    translations[pid] = {"title_zh": trans.title_zh, "abstract_zh": trans.abstract_zh}
+                except Exception as e:
+                    console.print(f"[dim]Translation failed for {pid}: {e}[/dim]")
+
     def _abbr(venue: str) -> str:
         if not venue:
             return "?"
@@ -92,12 +120,15 @@ def recommend(
 
     if json_output:
         for r in results:
-            console.print(json.dumps({
+            out = {
                 "date": today,
                 "slot": r.slot_index,
                 "reason": r.reason,
                 "paper": r.paper,
-            }, ensure_ascii=False))
+            }
+            if r.paper_id in translations:
+                out["translation"] = translations[r.paper_id]
+            console.print(json.dumps(out, ensure_ascii=False))
     else:
         console.print(f"Daily Papers · {today}")
         for r in results:
@@ -116,15 +147,22 @@ def recommend(
             abbr = _abbr(venue)
             url = p.get("landing_page_url") or p.get("doi") or ""
             abstract = p.get("abstract", "")
+            trans = translations.get(r.paper_id, {})
 
             console.print("=====")
-            console.print(f"[{abbr}] {p.get('title', 'No Title')}")
+            if trans.get("title_zh"):
+                console.print(f"[{abbr}] {p.get('title', 'No Title')}")
+                console.print(f"[cyan]翻译: {trans['title_zh']}[/cyan]")
+            else:
+                console.print(f"[{abbr}] {p.get('title', 'No Title')}")
             if url:
                 console.print(f"Link: {url}")
             console.print("-----")
             console.print(f"Authors: {author_str}")
             console.print("-----")
             console.print(f"Abstract: {abstract}")
+            if trans.get("abstract_zh"):
+                console.print(f"[cyan]摘要翻译: {trans['abstract_zh']}[/cyan]")
 
         console.print("=====")
         console.print(f"Pending: {len(papers)} | Selected: {len(results)}")
@@ -138,10 +176,14 @@ def recommend(
         console.print(f"[green]Saved {len(results)} recommendations.[/green]")
 
         if email:
+            # Include translations in email if configured
+            email_papers = [r.paper for r in results]
+            include_trans = do_translate and cfg.translate.include_in_email
             sent = send_recommendation_email(
-                papers=[r.paper for r in results],
+                papers=email_papers,
                 settings=cfg,
                 date_str=today,
+                translations=translations if include_trans else None,
             )
             audit_entry.details = {
                 "date": today,
@@ -149,6 +191,7 @@ def recommend(
                 "pending": len(papers),
                 "email": email,
                 "email_sent": sent,
+                "translated": do_translate,
             }
             if sent:
                 console.print("[green]Email sent.[/green]")
@@ -162,13 +205,14 @@ def recommend(
                 "selected": len(results),
                 "pending": len(papers),
                 "email": False,
+                "translated": do_translate,
             }
 
         _log_audit(db_path, data_dir, audit_entry, start_time)
     else:
         console.print("[yellow]Dry run — not saved.[/yellow]")
         audit_entry.status = "skipped"
-        audit_entry.details = {"reason": "dry_run", "pending": len(papers)}
+        audit_entry.details = {"reason": "dry_run", "pending": len(papers), "translated": do_translate}
         _log_audit(db_path, data_dir, audit_entry, start_time)
 
 
