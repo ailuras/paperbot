@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from datetime import datetime
 from pathlib import Path
@@ -48,8 +49,8 @@ def _log_audit(db_path: Path, data_dir: Path, entry: AuditEntry, start_time: flo
     try:
         log_audit(db_path, entry)
         log_to_file(data_dir, entry)
-    except Exception:
-        pass  # Never fail main operation due to audit logging
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Audit logging failed: %s", exc)
 
 
 @app.command()

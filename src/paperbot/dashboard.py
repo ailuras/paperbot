@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
+import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -183,6 +185,7 @@ def make_handler(db_path: Path):
                     self.send_error(404, "Not Found")
 
             except Exception as e:
+                logging.getLogger(__name__).exception("Dashboard GET %s failed", path)
                 _json_response(self, {"error": str(e)}, 500)
 
         def do_POST(self) -> None:
@@ -336,6 +339,7 @@ def make_handler(db_path: Path):
                     self.send_error(404, "Not Found")
 
             except Exception as e:
+                logging.getLogger(__name__).exception("Dashboard POST %s failed", path)
                 _json_response(self, {"error": str(e)}, 500)
 
     return DashboardHandler

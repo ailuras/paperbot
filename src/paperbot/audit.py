@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import sqlite3
+import logging
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
@@ -206,8 +206,8 @@ def audit(
                     log_audit(db_path, entry)
                     if data_dir:
                         log_to_file(data_dir, entry)
-                except Exception:
-                    pass  # Never fail the main operation due to audit logging
+                except Exception as exc:
+                    logging.getLogger(__name__).warning("Audit logging failed: %s", exc)
 
         return wrapper
 

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -68,7 +71,7 @@ class PdfResolver:
                 return PdfSource(url=oa_url, source="openalex:oa_url")
 
         except Exception:
-            pass
+            logger.debug("OpenAlex PDF lookup failed for %s", doi, exc_info=True)
         return None
 
     # ── Layer 2: Unpaywall ────────────────────────────────────────────
@@ -96,7 +99,7 @@ class PdfResolver:
                     license=best.get("license"),
                 )
         except Exception:
-            pass
+            logger.debug("Unpaywall PDF lookup failed for %s", doi, exc_info=True)
         return None
 
     # ── Layer 3: arXiv (by title search) ──────────────────────────────
@@ -128,7 +131,7 @@ class PdfResolver:
                         source="arxiv",
                     )
         except Exception:
-            pass
+            logger.debug("arXiv PDF lookup failed for %r", title, exc_info=True)
         return None
 
     # ── Layer 4: Semantic Scholar ─────────────────────────────────────
@@ -152,7 +155,7 @@ class PdfResolver:
                     source=f"semantic_scholar:{oa_pdf.get('status', 'unknown')}",
                 )
         except Exception:
-            pass
+            logger.debug("Semantic Scholar PDF lookup failed for %s", doi, exc_info=True)
         return None
 
     # ── Public API ────────────────────────────────────────────────────
