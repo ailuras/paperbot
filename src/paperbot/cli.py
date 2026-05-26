@@ -53,6 +53,16 @@ def _log_audit(db_path: Path, data_dir: Path, entry: AuditEntry, start_time: flo
         logging.getLogger(__name__).warning("Audit logging failed: %s", exc)
 
 
+def _handle_email_result(sent: bool, audit_entry: AuditEntry, success_msg: str) -> None:
+    """Update audit entry and console output after sending an email."""
+    if sent:
+        console.print(f"[green]{success_msg}[/green]")
+    else:
+        console.print("[yellow]Email not sent (check mail config).[/yellow]")
+        audit_entry.status = AuditStatus.ERROR
+        audit_entry.error_message = "email_failed"
+
+
 @app.command()
 def recommend(
     count: int = typer.Option(3, help="Number of papers to recommend"),
@@ -171,12 +181,7 @@ def recommend(
                 "email_sent": sent,
                 "translated": do_translate,
             }
-            if sent:
-                console.print("[green]Email sent.[/green]")
-            else:
-                console.print("[yellow]Email not sent (check mail config).[/yellow]")
-                audit_entry.status = AuditStatus.ERROR
-                audit_entry.error_message = "email_failed"
+            _handle_email_result(sent, audit_entry, "Email sent.")
         else:
             audit_entry.details = {
                 "date": today,
@@ -257,12 +262,7 @@ def fetch(
         )
         audit_entry.details["email"] = email
         audit_entry.details["email_sent"] = sent
-        if sent:
-            console.print("[green]Email report sent.[/green]")
-        else:
-            console.print("[yellow]Email not sent (check mail config).[/yellow]")
-            audit_entry.status = AuditStatus.ERROR
-            audit_entry.error_message = "email_failed"
+        _handle_email_result(sent, audit_entry, "Email report sent.")
     else:
         audit_entry.details["email"] = False
 
