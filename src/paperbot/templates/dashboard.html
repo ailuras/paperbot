@@ -668,6 +668,24 @@
     [data-theme="light"] .venue-tag.t3 { background: #e5e7eb; color: #3a3a3a; }
     [data-theme="light"] .venue-tag.t0 { background: #f0ede8; color: #8a8270; }
 
+    .preprint-tag {
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.68rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      font-family: var(--font-mono);
+      line-height: 1.4;
+      background: #3d5a80;
+      color: #e0f0ff;
+    }
+    [data-theme="light"] .preprint-tag {
+      background: #dbeafe;
+      color: #1e3a5f;
+    }
+
     /* ================================================================
        PAGINATION
        ================================================================ */
@@ -1372,7 +1390,7 @@
         return `<div class="recent-read-card">
           <div class="recent-read-title"><span class="recent-read-rank">#${i+1}</span> <a onclick="showPaperDetail('${p.id}')">${p.title||'Untitled'}</a></div>
           <div class="paper-meta">${authorStr}${extraAuthors}</div>
-          <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${dateStr} <span class="sep">·</span> ${p.venue||'Unknown'} <span class="sep">·</span> Cited ${p.cited_by_count||0} <span class="sep">·</span> Score ${(p.score||0).toFixed(1)}</div>
+          <div class="paper-meta">${venueTag(p.venue, p.tier)} ${preprintTag(p)} ${trackTag(p.track)} ${dateStr} <span class="sep">·</span> ${p.venue||'Unknown'} <span class="sep">·</span> Cited ${p.cited_by_count||0} <span class="sep">·</span> Score ${(p.score||0).toFixed(1)}</div>
           ${markTime ? `<div class="paper-meta" style="opacity:0.6;">${markTime}</div>` : ''}
           ${absDisplay ? `<div class="recent-read-abstract">${absDisplay}</div>` : ''}
         </div>`;
@@ -1481,6 +1499,20 @@
       if (!abbr) return '';
       const t = tier || '0';
       return `<span class="venue-tag t${t}">${abbr}</span>`;
+    }
+
+    function preprintTag(p) {
+      const url = (p.landing_page_url || '').toLowerCase();
+      const venueStr = (p.venue || '').toLowerCase();
+      // arXiv paper
+      if (url.includes('arxiv.org') || venueStr.includes('arxiv')) {
+        return `<span class="preprint-tag">arXiv</span>`;
+      }
+      // No venue = likely unpublished / preprint
+      if (!p.venue || p.venue === 'Unknown') {
+        return `<span class="preprint-tag">Preprint</span>`;
+      }
+      return '';
     }
 
     async function markPaper(id, status) {
@@ -1771,7 +1803,7 @@
           <div class="paper-content">
             <div class="paper-title">${statusBadge(p.status||'pending')} <a onclick="showPaperDetail('${p.id}')">${p.title||'Untitled'}</a></div>
             <div class="paper-meta">${authorStr}${extraAuthors}</div>
-            <div class="paper-meta">${venueTag(p.venue, p.tier)} ${trackTag(p.track)} ${meta}</div>
+            <div class="paper-meta">${venueTag(p.venue, p.tier)} ${preprintTag(p)} ${trackTag(p.track)} ${meta}</div>
           </div>
           <div class="paper-actions">${actionBtns.join('')}</div>
         </div>`;
