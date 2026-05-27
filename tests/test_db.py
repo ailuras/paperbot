@@ -70,9 +70,16 @@ def test_set_paper_status(tmp_db_path: Path, sample_paper):
     """set_paper_status transitions work."""
     upsert_papers(tmp_db_path, [sample_paper])
 
+    set_paper_status(tmp_db_path, sample_paper.id, "recommended")
+    stats = get_stats(tmp_db_path)
+    assert stats["recommended"] == 1
+    assert stats["read"] == 0
+    assert stats["pending"] == 0
+
     set_paper_status(tmp_db_path, sample_paper.id, "read")
     stats = get_stats(tmp_db_path)
     assert stats["read"] == 1
+    assert stats["recommended"] == 0
     assert stats["pending"] == 0
 
     set_paper_status(tmp_db_path, sample_paper.id, "starred")
@@ -85,22 +92,28 @@ def test_get_unread_papers(tmp_db_path: Path, sample_papers):
     """get_unread_papers returns only pending papers."""
     upsert_papers(tmp_db_path, sample_papers)
     set_paper_status(tmp_db_path, sample_papers[0].id, "read")
+    set_paper_status(tmp_db_path, sample_papers[1].id, "recommended")
 
     unread = get_unread_papers(tmp_db_path)
-    assert len(unread) == 2
+    assert len(unread) == 1
     ids = {p.id for p in unread}
     assert sample_papers[0].id not in ids
+    assert sample_papers[1].id not in ids
 
 
 def test_list_papers_filter_by_status(tmp_db_path: Path, sample_papers):
     """list_papers filters by status correctly."""
     upsert_papers(tmp_db_path, sample_papers)
     set_paper_status(tmp_db_path, sample_papers[0].id, "read")
+    set_paper_status(tmp_db_path, sample_papers[1].id, "recommended")
 
     result = list_papers(tmp_db_path, status="pending")
-    assert result["total"] == 2
+    assert result["total"] == 1
 
     result = list_papers(tmp_db_path, status="read")
+    assert result["total"] == 1
+
+    result = list_papers(tmp_db_path, status="recommended")
     assert result["total"] == 1
 
 
@@ -160,6 +173,7 @@ def test_get_recent_reads(tmp_db_path: Path, sample_papers):
     upsert_papers(tmp_db_path, sample_papers)
     set_paper_status(tmp_db_path, sample_papers[0].id, "read")
     set_paper_status(tmp_db_path, sample_papers[1].id, "read")
+    set_paper_status(tmp_db_path, sample_papers[2].id, "recommended")
 
     reads = get_recent_reads(tmp_db_path, limit=10)
     assert len(reads) == 2
@@ -182,14 +196,15 @@ def test_get_stats_counts(tmp_db_path: Path, sample_papers):
     """get_stats returns accurate aggregated counts."""
     upsert_papers(tmp_db_path, sample_papers)
     set_paper_status(tmp_db_path, sample_papers[0].id, "read")
-    set_paper_status(tmp_db_path, sample_papers[1].id, "starred")
+    set_paper_status(tmp_db_path, sample_papers[1].id, "recommended")
     set_paper_status(tmp_db_path, sample_papers[2].id, "skip")
 
     stats = get_stats(tmp_db_path)
     assert stats["total_papers"] == 3
     assert stats["pending"] == 0
+    assert stats["recommended"] == 1
     assert stats["read"] == 1
-    assert stats["starred"] == 1
+    assert stats["starred"] == 0
     assert stats["skipped"] == 1
     assert stats["by_track"] == {"SMT": 1, "SAT": 1, "CP": 1}
 

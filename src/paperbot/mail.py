@@ -6,10 +6,11 @@ import os
 import shutil
 import smtplib
 import subprocess
+from html import escape
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from paperbot.config import Settings
 from paperbot.models import Paper
@@ -22,12 +23,24 @@ def _smtp_config(settings: Settings) -> dict[str, Any]:
     if mail_cfg is None:
         return {}
 
+    def _env_or_config(env_name: str, value: Any) -> Any:
+        return os.getenv(env_name) or value
+
+    def _env_int_or_config(env_name: str, value: int) -> int:
+        raw = os.getenv(env_name)
+        if raw:
+            try:
+                return int(raw)
+            except ValueError:
+                return value
+        return value
+
     return {
-        "host": getattr(mail_cfg, "smtp_host", os.getenv("SMTP_HOST", "")),
-        "port": getattr(mail_cfg, "smtp_port", int(os.getenv("SMTP_PORT", "587"))),
-        "user": getattr(mail_cfg, "smtp_user", os.getenv("SMTP_USER", "")),
-        "password": getattr(mail_cfg, "smtp_password", os.getenv("SMTP_PASSWORD", "")),
-        "from_addr": getattr(mail_cfg, "from_addr", os.getenv("SMTP_FROM", "")),
+        "host": _env_or_config("SMTP_HOST", getattr(mail_cfg, "smtp_host", "")),
+        "port": _env_int_or_config("SMTP_PORT", getattr(mail_cfg, "smtp_port", 587)),
+        "user": _env_or_config("SMTP_USER", getattr(mail_cfg, "smtp_user", "")),
+        "password": _env_or_config("SMTP_PASSWORD", getattr(mail_cfg, "smtp_password", "")),
+        "from_addr": _env_or_config("SMTP_FROM", getattr(mail_cfg, "from_addr", "")),
         "from_name": getattr(mail_cfg, "from_name", "PaperBot"),
         "to_addrs": getattr(mail_cfg, "to_addrs", []),
         "use_tls": getattr(mail_cfg, "use_tls", True),
@@ -50,6 +63,26 @@ def _has_local_sendmail() -> str | None:
 
 def _format_from_header(from_addr: str, from_name: str) -> str:
     return f"{from_name} <{from_addr}>" if from_name else from_addr
+
+
+def _html(value: Any) -> str:
+    return escape("" if value is None else str(value), quote=True)
+
+
+def _safe_http_url(value: str) -> str:
+    value = value or ""
+    parsed = urlparse(value)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    return _html(value)
+
+
+def _paper_link(paper: Paper) -> str:
+    for candidate in (paper.landing_page_url, paper.doi or "", paper.id):
+        url = _safe_http_url(candidate)
+        if url:
+            return url
+    return ""
 
 
 def _send_via_local(
@@ -125,16 +158,16 @@ def _send_via_smtp(
 
 def _paper_to_html(paper: Paper, index: int, translation: dict[str, str] | None = None) -> str:
     """Convert a Paper to HTML snippet."""
-    author_str = paper.author_str
+    author_str = _html(paper.author_str)
 
-    venue = paper.venue or "OpenAlex"
-    url = paper.url
-    abstract = paper.abstract
+    venue = _html(paper.venue or "OpenAlex")
+    url = _paper_link(paper)
+    abstract = _html(paper.abstract)
     score = paper.score
     cited = paper.cited_by_count
     track = paper.track
     tier = paper.tier
-    pub_date = paper.year_or_date
+    pub_date = _html(paper.year_or_date)
 
     tier_badge = f"<span style='background:#b45309;color:#fef3c7;padding:2px 6px;border-radius:4px;font-size:12px;'>T{tier}</span>" if tier else ""
 
@@ -144,17 +177,17 @@ def _paper_to_html(paper: Paper, index: int, translation: dict[str, str] | None 
         _h = hash(track) % 360
         track_bg = f"hsl({_h}, 55%, 35%)"
         track_fg = f"hsl({_h}, 70%, 90%)"
-        track_badge = f"<span style='background:{track_bg};color:{track_fg};padding:2px 6px;border-radius:4px;font-size:12px;margin-left:4px;'>{track}</span>"
+        track_badge = f"<span style='background:{track_bg};color:{track_fg};padding:2px 6px;border-radius:4px;font-size:12px;margin-left:4px;'>{_html(track)}</span>"
 
     trans_html = ""
     if translation and translation.get("title_zh"):
-        trans_html += f'<div style="color:#b45309;font-size:15px;font-weight:600;margin:4px 0 8px 0;">{translation["title_zh"]}</div>'
+        trans_html += f'<div style="color:#b45309;font-size:15px;font-weight:600;margin:4px 0 8px 0;">{_html(translation["title_zh"])}</div>'
     if translation and translation.get("abstract_zh"):
-        trans_html += f'<div style="color:#78716c;font-size:13px;line-height:1.6;margin-bottom:8px;border-left:3px solid #d6d3d1;padding-left:10px;">{translation["abstract_zh"]}</div>'
+        trans_html += f'<div style="color:#78716c;font-size:13px;line-height:1.6;margin-bottom:8px;border-left:3px solid #d6d3d1;padding-left:10px;">{_html(translation["abstract_zh"])}</div>'
 
     return f"""
     <div style="border-left:4px solid #2563eb;padding-left:16px;margin-bottom:24px;">
-      <h3 style="margin:0 0 8px 0;color:#1e293b;">#{index} {paper.title or 'No Title'}</h3>
+      <h3 style="margin:0 0 8px 0;color:#1e293b;">#{index} {_html(paper.title or 'No Title')}</h3>
       {trans_html}
       <div style="margin-bottom:8px;">
         {tier_badge}{track_badge}
@@ -182,6 +215,7 @@ def _build_email_body(
         for i, p in enumerate(papers)
     )
 
+    safe_dashboard_url = _safe_http_url(dashboard_url)
     stats_html = ""
     if stats:
         stats_html = f"""
@@ -203,13 +237,13 @@ def _build_email_body(
 </style>
 </head>
 <body>
-  <h2>{title} · {date_str}</h2>
+  <h2>{_html(title)} · {_html(date_str)}</h2>
   {stats_html}
   {papers_html}
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
   <p style="color:#94a3b8;font-size:12px;text-align:center;">
     PaperBot — daily paper recommendation for SMT/SAT/CP researchers<br>
-    <a href="{dashboard_url}" style="color:#64748b;">Open Dashboard</a>
+    {f'<a href="{safe_dashboard_url}" style="color:#64748b;">Open Dashboard</a>' if safe_dashboard_url else 'Open Dashboard'}
   </p>
 </body>
 </html>"""
@@ -284,8 +318,9 @@ def send_fetch_report_email(
 
     date_str = date_str or format_date()
 
+    safe_dashboard_url = _safe_http_url(cfg.get("dashboard_url", "http://localhost:8765"))
     track_rows = "\n".join(
-        f"<tr><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;'>{ts['track']}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{ts['raw']}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{ts['filtered']}</td></tr>"
+        f"<tr><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;'>{_html(ts.get('track', ''))}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{_html(ts.get('raw', 0))}</td><td style='padding:6px 12px;border-bottom:1px solid #e2e8f0;text-align:right;'>{_html(ts.get('filtered', 0))}</td></tr>"
         for ts in stats.get("track_stats", [])
     )
 
@@ -293,11 +328,11 @@ def send_fetch_report_email(
 <html>
 <head><meta charset="utf-8"></head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;line-height:1.6;color:#334155;max-width:600px;margin:0 auto;padding:24px;">
-  <h2 style="color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:8px;">Fetch Report · {date_str}</h2>
+  <h2 style="color:#1e293b;border-bottom:2px solid #e2e8f0;padding-bottom:8px;">Fetch Report · {_html(date_str)}</h2>
 
   <div style="background:#f8fafc;border-radius:8px;padding:16px;margin-bottom:20px;">
-    <p style="margin:0;color:#64748b;"><strong>Range:</strong> {stats.get('range', '')}</p>
-    <p style="margin:8px 0 0 0;color:#64748b;"><strong>Days:</strong> {stats.get('days', 0)}</p>
+    <p style="margin:0;color:#64748b;"><strong>Range:</strong> {_html(stats.get('range', ''))}</p>
+    <p style="margin:8px 0 0 0;color:#64748b;"><strong>Days:</strong> {_html(stats.get('days', 0))}</p>
   </div>
 
   <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px;">
@@ -311,14 +346,14 @@ def send_fetch_report_email(
 
   <div style="background:#ecfdf5;border-radius:8px;padding:16px;">
     <p style="margin:0;color:#059669;font-weight:600;">
-      Total Raw: {stats.get('total_raw', 0)} | Filtered: {stats.get('total_filtered', 0)} | Saved: {papers_count}
+      Total Raw: {_html(stats.get('total_raw', 0))} | Filtered: {_html(stats.get('total_filtered', 0))} | Saved: {_html(papers_count)}
     </p>
   </div>
 
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;">
   <p style="color:#94a3b8;font-size:12px;text-align:center;">
     PaperBot — daily paper recommendation for SMT/SAT/CP researchers<br>
-    <a href="{cfg.get('dashboard_url', 'http://localhost:8765')}" style="color:#64748b;">Open Dashboard</a>
+    {f'<a href="{safe_dashboard_url}" style="color:#64748b;">Open Dashboard</a>' if safe_dashboard_url else 'Open Dashboard'}
   </p>
 </body>
 </html>"""

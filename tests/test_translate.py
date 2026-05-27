@@ -17,7 +17,7 @@ def test_translate_paper_success():
     }
     mock_response.raise_for_status = MagicMock()
 
-    with patch("paperbot.translate.requests.post", return_value=mock_response):
+    with patch("paperbot.translate.httpx.post", return_value=mock_response):
         result = translate_paper("Test Title", "Test abstract.")
 
     assert result.title_zh == "测试标题"
@@ -34,14 +34,13 @@ def test_translate_paper_empty_abstract():
     mock_response.raise_for_status = MagicMock()
 
     call_count = 0
-    original_post = None
 
     def counting_post(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         return mock_response
 
-    with patch("paperbot.translate.requests.post", side_effect=counting_post):
+    with patch("paperbot.translate.httpx.post", side_effect=counting_post):
         result = translate_paper("Test Title", "")
 
     assert call_count == 1  # Only title translated
@@ -63,7 +62,7 @@ def test_translate_paper_none_abstract():
         call_count += 1
         return mock_response
 
-    with patch("paperbot.translate.requests.post", side_effect=counting_post):
+    with patch("paperbot.translate.httpx.post", side_effect=counting_post):
         result = translate_paper("Test Title", None)
 
     assert call_count == 1
@@ -78,7 +77,7 @@ def test_translate_text():
     }
     mock_response.raise_for_status = MagicMock()
 
-    with patch("paperbot.translate.requests.post", return_value=mock_response):
+    with patch("paperbot.translate.httpx.post", return_value=mock_response):
         result = translate_text("Hello World", target_language="中文")
 
     assert result == "你好世界"
@@ -89,7 +88,7 @@ def test_translate_api_error():
     mock_response = MagicMock()
     mock_response.raise_for_status.side_effect = Exception("API Error")
 
-    with patch("paperbot.translate.requests.post", return_value=mock_response):
+    with patch("paperbot.translate.httpx.post", return_value=mock_response):
         try:
             translate_paper("Test")
             assert False, "Should have raised"
@@ -108,7 +107,7 @@ def test_translate_uses_correct_model():
         mock.raise_for_status = MagicMock()
         return mock
 
-    with patch("paperbot.translate.requests.post", side_effect=capture_post):
+    with patch("paperbot.translate.httpx.post", side_effect=capture_post):
         translate_paper("Title", "Abstract")
 
     assert captured["payload"]["model"] == "deepseek-v4-flash"

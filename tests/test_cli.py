@@ -112,6 +112,7 @@ def test_stats_command(cli_env: dict):
     out = _strip_ansi(result.output)
     assert "Total Papers" in out
     assert "States:" in out
+    assert "Recommended" in out
 
 
 def test_mark_command(cli_env: dict, sample_paper: dict):
@@ -158,6 +159,29 @@ def test_recommend_dry_run(cli_env: dict, sample_papers, monkeypatch):
     out = _strip_ansi(result.output)
     assert "Dry run" in out
     assert sample_papers[0].title in out
+
+
+def test_recommend_marks_recommended(cli_env: dict, sample_papers, monkeypatch):
+    """recommend persists selected papers as recommended, not read."""
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, sample_papers)
+
+    from paperbot import cli
+    from paperbot.db import get_stats
+
+    def _fake_recommend(papers, cfg, count=None):
+        from paperbot.recommend import RecommendationResult
+
+        return [RecommendationResult(papers[0], "Quality Pick", 0)]
+
+    monkeypatch.setattr(cli, "recommend_papers", _fake_recommend)
+
+    result = runner.invoke(app, ["recommend", "--count", "1"], env=cli_env)
+    assert result.exit_code == 0
+    stats = get_stats(db_path)
+    assert stats["recommended"] == 1
+    assert stats["read"] == 0
 
 
 def test_fetch_dry_run(cli_env: dict, monkeypatch):

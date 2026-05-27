@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import random
 from datetime import date, datetime, timedelta
-from typing import Any
 
-from paperbot.config import RecommendationConfig, Settings
+from paperbot.config import Settings
 from paperbot.models import Paper
 
 

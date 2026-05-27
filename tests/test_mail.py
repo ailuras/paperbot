@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from paperbot.mail import _build_email_body, _paper_to_html
+from paperbot.config import MailConfig, Settings, TrackConfig
+from paperbot.mail import _build_email_body, _paper_to_html, _smtp_config
 from paperbot.models import Paper
 
 
@@ -80,4 +81,70 @@ def test_build_email_body_structure():
     assert "Total: 10" in html
     assert "Open Dashboard" in html
 
+
+def test_paper_to_html_escapes_untrusted_fields():
+    """External paper and translation fields are escaped in email HTML."""
+    paper = Paper(
+        id="https://openalex.org/W1",
+        title="<script>alert(1)</script>",
+        authors=["Alice <img>"],
+        venue="<b>CAV</b>",
+        publication_date="2024-01-01",
+        publication_year=2024,
+        cited_by_count=10,
+        score=5.0,
+        track='SMT"><script>',
+        tier=1,
+        landing_page_url="javascript:alert(1)",
+        abstract="<b>abstract</b>",
+    )
+    html = _paper_to_html(
+        paper,
+        1,
+        {"title_zh": "<img src=x>", "abstract_zh": "<script>x</script>"},
+    )
+
+    assert "<script>" not in html
+    assert "javascript:" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "&lt;b&gt;abstract&lt;/b&gt;" in html
+    assert 'href="https://openalex.org/W1"' in html
+
+
+def test_build_email_body_filters_dashboard_url():
+    """Email dashboard link only renders safe HTTP URLs."""
+    html = _build_email_body([], "Title", "2024-01-15", dashboard_url="javascript:alert(1)")
+    assert "javascript:" not in html
+    assert "Open Dashboard" in html
+
+
+def test_smtp_env_overrides_config(monkeypatch):
+    """SMTP env vars take precedence over config values."""
+    settings = Settings(
+        tracks={"SMT": TrackConfig(query="q", keywords=["k"])},
+        scoring={
+            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
+        },
+        mail=MailConfig(
+            smtp_host="config-host",
+            smtp_port=2525,
+            smtp_user="config-user",
+            smtp_password="config-pass",
+            from_addr="config@example.com",
+        ),
+    )
+    monkeypatch.setenv("SMTP_HOST", "env-host")
+    monkeypatch.setenv("SMTP_PORT", "1025")
+    monkeypatch.setenv("SMTP_USER", "env-user")
+    monkeypatch.setenv("SMTP_PASSWORD", "env-pass")
+    monkeypatch.setenv("SMTP_FROM", "env@example.com")
+
+    cfg = _smtp_config(settings)
+
+    assert cfg["host"] == "env-host"
+    assert cfg["port"] == 1025
+    assert cfg["user"] == "env-user"
+    assert cfg["password"] == "env-pass"
+    assert cfg["from_addr"] == "env@example.com"
 

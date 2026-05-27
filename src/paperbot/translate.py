@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from paperbot.models import Paper
+import httpx
 
-import requests
+from paperbot.models import Paper
 
 DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -50,7 +50,7 @@ def _call_deepseek(text: str, system_prompt: str) -> str:
         "max_tokens": _MAX_TOKENS,
     }
 
-    resp = requests.post(url, headers=headers, json=payload, timeout=_REQUEST_TIMEOUT)
+    resp = httpx.post(url, headers=headers, json=payload, timeout=_REQUEST_TIMEOUT)
     resp.raise_for_status()
     data = resp.json()
     return data["choices"][0]["message"]["content"].strip()

@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """One-time script: backfill venue_abbr for existing papers."""
 
-from pathlib import Path
-
 from paperbot.config import default_config_path, load_config
 from paperbot.db import _connect
 from paperbot.utils import compute_venue_abbr

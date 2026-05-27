@@ -8,9 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from paperbot.models import Paper
+import httpx
 
-import requests
+from paperbot.models import Paper
 
 logger = logging.getLogger(__name__)
 
@@ -29,10 +29,9 @@ class PdfResolver:
     def __init__(self, email: str = "", semantic_scholar_key: str = "") -> None:
         self.email = email
         self.s2_key = semantic_scholar_key
-        self.session = requests.Session()
-        self.session.headers.update({
-            "User-Agent": f"PaperBot/1.0 (mailto:{email})" if email else "PaperBot/1.0",
-        })
+        self.session = httpx.Client(
+            headers={"User-Agent": f"PaperBot/1.0 (mailto:{email})" if email else "PaperBot/1.0"}
+        )
 
     def __enter__(self) -> PdfResolver:
         return self

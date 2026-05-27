@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-import json
-import os
 from pathlib import Path
 
-import pytest
-
-from paperbot.config import default_config_path, load_config
+from paperbot.config import default_config_path, load_config, load_default_config
 
 
 def test_load_config_from_file(tmp_config_file: Path):
@@ -38,6 +34,14 @@ def test_env_override_data_dir(tmp_config_file: Path, tmp_path: Path, monkeypatc
     monkeypatch.setenv("PAPERBOT_DATA_DIR", str(custom_dir))
     cfg = load_config(tmp_config_file)
     assert cfg.data_dir == custom_dir
+
+
+def test_load_default_config_uses_env_config(tmp_config_file: Path, tmp_path: Path, monkeypatch):
+    """load_default_config honors PAPERBOT_CONFIG."""
+    monkeypatch.setenv("PAPERBOT_CONFIG", str(tmp_config_file))
+    monkeypatch.setenv("PAPERBOT_DATA_DIR", str(tmp_path / "data"))
+    cfg = load_default_config()
+    assert cfg.tracks["SMT"].query == "smt solver"
 
 
 def test_openalex_defaults():

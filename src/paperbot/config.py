@@ -95,7 +95,7 @@ def default_config_path() -> Path:
 
 def load_default_config() -> Settings:
     """Load config from the default path (env var or package data dir)."""
-    return load_config(default_config_path())
+    return load_config()
 
 
 def load_config(path: Path | str | None = None) -> Settings:

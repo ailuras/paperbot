@@ -12,10 +12,11 @@ class PaperStatus:
 
     PENDING = "pending"
     READ = "read"
+    RECOMMENDED = "recommended"
     STARRED = "starred"
     SKIP = "skip"
 
-    ALL = {PENDING, READ, STARRED, SKIP}
+    ALL = {PENDING, READ, RECOMMENDED, STARRED, SKIP}
 
 
 @dataclass

@@ -98,6 +98,7 @@ uv run paperbot recommend --count 5
 
 # Mark paper status
 uv run paperbot mark "paper title" --status read
+uv run paperbot mark "paper title" --status recommended
 uv run paperbot mark "https://openalex.org/W123" --status starred
 
 # View statistics

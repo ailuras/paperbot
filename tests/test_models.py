@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from paperbot.models import Paper, PaperStatus
 
 
@@ -11,9 +9,10 @@ def test_paper_status_constants():
     """PaperStatus defines the expected statuses."""
     assert PaperStatus.PENDING == "pending"
     assert PaperStatus.READ == "read"
+    assert PaperStatus.RECOMMENDED == "recommended"
     assert PaperStatus.STARRED == "starred"
     assert PaperStatus.SKIP == "skip"
-    assert PaperStatus.ALL == {"pending", "read", "starred", "skip"}
+    assert PaperStatus.ALL == {"pending", "recommended", "read", "starred", "skip"}
 
 
 def test_paper_from_dict_json_authors():

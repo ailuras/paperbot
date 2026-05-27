@@ -15,13 +15,22 @@ def _make_handler(db_path: Path):
     return handler_cls
 
 
-def _request(handler_cls, method: str, path: str, body: bytes | None = None) -> tuple[int, dict | str]:
+def _request(
+    handler_cls,
+    method: str,
+    path: str,
+    body: bytes | None = None,
+    extra_headers: dict[str, str] | None = None,
+    return_headers: bool = False,
+):
     """Simulate an HTTP request and return (status, body)."""
     from io import BytesIO
 
     # Build request bytes
     request_line = f"{method} {path} HTTP/1.1\r\n"
     headers = "Host: localhost\r\n"
+    for name, value in (extra_headers or {}).items():
+        headers += f"{name}: {value}\r\n"
     if body:
         headers += f"Content-Length: {len(body)}\r\n"
     headers += "\r\n"
@@ -71,6 +80,11 @@ def _request(handler_cls, method: str, path: str, body: bytes | None = None) -> 
     status_code = int(lines[0].split()[1])
 
     blank_idx = next(i for i, line in enumerate(lines) if line == "")
+    response_headers = {}
+    for line in lines[1:blank_idx]:
+        if ":" in line:
+            name, value = line.split(":", 1)
+            response_headers[name.strip()] = value.strip()
     body_str = "\r\n".join(lines[blank_idx + 1 :])
 
     try:
@@ -78,6 +92,8 @@ def _request(handler_cls, method: str, path: str, body: bytes | None = None) -> 
     except json.JSONDecodeError:
         data = body_str
 
+    if return_headers:
+        return status_code, data, response_headers
     return status_code, data
 
 
@@ -87,6 +103,8 @@ def test_dashboard_index(tmp_db_path: Path):
     status, data = _request(handler_cls, "GET", "/")
     assert status == 200
     assert "PaperBot Dashboard" in str(data)
+    assert "function escapeHtml" in str(data)
+    assert "Recommended" in str(data)
 
 
 def test_api_stats(tmp_db_path: Path):
@@ -134,6 +152,55 @@ def test_api_mark_paper(tmp_db_path: Path, sample_paper):
     assert isinstance(stats, dict)
     assert stats.get("read") == 1
     assert stats.get("pending") == 0
+
+
+def test_api_mark_rejects_cross_origin(tmp_db_path: Path, sample_paper):
+    """Cross-origin POST is forbidden and cannot update state."""
+    upsert_papers(tmp_db_path, [sample_paper])
+    handler_cls = _make_handler(tmp_db_path)
+    body = json.dumps({"id": sample_paper.id, "status": "read"}).encode("utf-8")
+    status, data = _request(
+        handler_cls,
+        "POST",
+        "/api/mark",
+        body,
+        extra_headers={"Origin": "http://evil.example"},
+    )
+    assert status == 403
+    assert data.get("error") == "Forbidden"
+
+    _, stats = _request(handler_cls, "GET", "/api/stats")
+    assert isinstance(stats, dict)
+    assert stats.get("pending") == 1
+    assert stats.get("read") == 0
+
+
+def test_api_mark_allows_same_origin(tmp_db_path: Path, sample_paper):
+    """Same-origin POST remains valid."""
+    upsert_papers(tmp_db_path, [sample_paper])
+    handler_cls = _make_handler(tmp_db_path)
+    body = json.dumps({"id": sample_paper.id, "status": "read"}).encode("utf-8")
+    status, data = _request(
+        handler_cls,
+        "POST",
+        "/api/mark",
+        body,
+        extra_headers={"Origin": "http://localhost"},
+    )
+    assert status == 200
+    assert data.get("success") is True
+
+
+def test_api_responses_do_not_emit_wildcard_cors(tmp_db_path: Path):
+    """JSON and OPTIONS responses do not expose wildcard CORS."""
+    handler_cls = _make_handler(tmp_db_path)
+    status, _, headers = _request(handler_cls, "GET", "/api/stats", return_headers=True)
+    assert status == 200
+    assert "Access-Control-Allow-Origin" not in headers
+
+    status, _, headers = _request(handler_cls, "OPTIONS", "/api/mark", return_headers=True)
+    assert status == 204
+    assert "Access-Control-Allow-Origin" not in headers
 
 
 def test_api_paper_detail(tmp_db_path: Path, sample_paper):
@@ -331,3 +398,30 @@ def test_api_recent_reads(tmp_db_path: Path, sample_papers):
     assert isinstance(data, list)
     assert len(data) == 1
     assert data[0]["title"] == sample_papers[0].title
+
+
+def test_api_recommend_marks_recommended(tmp_db_path: Path, sample_papers, monkeypatch):
+    """Dashboard recommendations become recommended, not read."""
+    from paperbot import dashboard
+    from paperbot.config import RecommendationConfig, Settings, TrackConfig
+
+    settings = Settings(
+        tracks={"SMT": TrackConfig(query="q", keywords=["k"])},
+        scoring={
+            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
+        },
+        recommendation=RecommendationConfig(daily_count=2, quality_slots=1),
+    )
+    monkeypatch.setattr(dashboard, "load_config", lambda _path: settings)
+    upsert_papers(tmp_db_path, sample_papers)
+
+    handler_cls = _make_handler(tmp_db_path)
+    status, data = _request(handler_cls, "POST", "/api/recommend")
+    assert status == 200
+    assert data.get("count") == 2
+
+    _, stats = _request(handler_cls, "GET", "/api/stats")
+    assert isinstance(stats, dict)
+    assert stats.get("recommended") == 2
+    assert stats.get("read") == 0

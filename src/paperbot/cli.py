@@ -26,7 +26,7 @@ from paperbot.db import (
 )
 from paperbot.fetch import fetch_papers
 from paperbot.mail import send_fetch_report_email, send_recommendation_email
-from paperbot.models import Paper, PaperStatus
+from paperbot.models import PaperStatus
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper_cached
 from paperbot.utils import _abbr, format_date
@@ -160,7 +160,7 @@ def recommend(
         save_recommendation(db_path, today, picks)
         for r in results:
             if r.paper_id:
-                set_paper_status(db_path, r.paper_id, "read")
+                set_paper_status(db_path, r.paper_id, PaperStatus.RECOMMENDED)
         console.print(f"[green]Saved {len(results)} recommendations.[/green]")
 
         if email:
@@ -315,7 +315,7 @@ def init(
 @app.command()
 def mark(
     paper_query: str = typer.Argument(help="Paper OpenAlex ID or title substring"),
-    status: str = typer.Option(..., "--status", help="Status: read|starred|skip"),
+    status: str = typer.Option(..., "--status", help="Status: pending|recommended|read|starred|skip"),
 ) -> None:
     """Mark a paper with a status."""
     if status not in PaperStatus.ALL:
@@ -366,14 +366,26 @@ def stats() -> None:
         tracks = ", ".join(f"{t}={c}" for t, c in sorted(data["by_track"].items()))
         console.print(f"Tracks: {tracks}")
 
-    states = " | ".join(f"{k.capitalize()}: {data.get(k, 0)}" for k in ["pending", "read", "starred", "skipped"])
+    states = " | ".join(
+        f"{label}: {data.get(key, 0)}"
+        for key, label in [
+            ("pending", "Pending"),
+            ("recommended", "Recommended"),
+            ("read", "Read"),
+            ("starred", "Starred"),
+            ("skipped", "Skipped"),
+        ]
+    )
     console.print(f"States: {states}")
 
 
 @app.command()
 def history(
     limit: int = typer.Option(10, help="Number of recent papers to show"),
-    status: str = typer.Option("read", help="Filter by status: read / starred / skip / pending"),
+    status: str = typer.Option(
+        "read",
+        help="Filter by status: recommended / read / starred / skip / pending",
+    ),
 ) -> None:
     """Show recent papers by status."""
     db_path = _db_path()
@@ -432,6 +444,7 @@ def serve(
             console.print("[dim]Restarting...[/dim]")
 
     init_db(db_path)
+    init_audit(db_path)
 
     log_path = Path(log_file).expanduser() if log_file else cfg.data_dir / "dashboard.log"
 

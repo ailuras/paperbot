@@ -369,8 +369,6 @@ def list_papers(
     if status:
         if status == "pending":
             where_clauses.append("ps.status = 'pending'")
-        elif status == "read":
-            where_clauses.append("ps.status IN ('read', 'recommended')")
         else:
             where_clauses.append("ps.status = ?")
             params.append(status)
@@ -478,12 +476,13 @@ def get_stats(db_path: Path) -> dict[str, Any]:
         ).fetchone()
         stats["recommendations_last_7_days"] = row[0] if row else 0
 
-        # Pending / read / starred counts (recommended merged into read)
+        # Pending / recommended / read / starred counts are tracked separately.
         cursor = conn.execute(
             """
             SELECT
                 COUNT(CASE WHEN ps.status = 'pending' THEN 1 END) as pending,
-                COUNT(CASE WHEN ps.status IN ('read', 'recommended') THEN 1 END) as read,
+                COUNT(CASE WHEN ps.status = 'recommended' THEN 1 END) as recommended,
+                COUNT(CASE WHEN ps.status = 'read' THEN 1 END) as read,
                 COUNT(CASE WHEN ps.status = 'starred' THEN 1 END) as starred,
                 COUNT(CASE WHEN ps.status = 'skip' THEN 1 END) as skipped
             FROM papers p
@@ -493,9 +492,10 @@ def get_stats(db_path: Path) -> dict[str, Any]:
         row = cursor.fetchone()
         if row:
             stats["pending"] = row[0]
-            stats["read"] = row[1]
-            stats["starred"] = row[2]
-            stats["skipped"] = row[3]
+            stats["recommended"] = row[1]
+            stats["read"] = row[2]
+            stats["starred"] = row[3]
+            stats["skipped"] = row[4]
 
     return stats
 

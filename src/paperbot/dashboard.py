@@ -6,7 +6,6 @@ import json
 import logging
 import os
 import urllib.parse
-from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -29,6 +28,7 @@ from paperbot.db import (
     upsert_papers,
 )
 from paperbot.fetch import fetch_papers
+from paperbot.models import PaperStatus
 from paperbot.pdf_resolver import resolve_paper_pdf_cached
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper_cached
@@ -53,7 +53,6 @@ def _json_response(handler: BaseHTTPRequestHandler, data: Any, status: int = 200
     body = json.dumps(data, ensure_ascii=False).encode("utf-8")
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json; charset=utf-8")
-    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
     handler.wfile.write(body)
@@ -76,6 +75,19 @@ def _read_body(handler: BaseHTTPRequestHandler) -> dict[str, Any]:
     return json.loads(body)
 
 
+def _is_same_origin_post(handler: BaseHTTPRequestHandler) -> bool:
+    origin = handler.headers.get("Origin")
+    if not origin:
+        return True
+
+    host = handler.headers.get("Host", "")
+    if not host:
+        return False
+
+    parsed = urllib.parse.urlparse(origin)
+    return parsed.scheme == "http" and parsed.netloc == host
+
+
 def make_handler(db_path: Path):
     class DashboardHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *args: Any) -> None:
@@ -84,9 +96,6 @@ def make_handler(db_path: Path):
 
         def do_OPTIONS(self) -> None:
             self.send_response(204)
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
             self.end_headers()
 
         def _audit(self, action: str, status: str = AuditStatus.SUCCESS, details: dict[str, Any] | None = None, error_message: str = "") -> None:
@@ -110,6 +119,9 @@ def make_handler(db_path: Path):
                 if method == "GET":
                     self._do_get(path, parsed)
                 elif method == "POST":
+                    if not _is_same_origin_post(self):
+                        _json_response(self, {"error": "Forbidden"}, 403)
+                        return
                     self._do_post(path)
             except Exception as e:
                 logging.getLogger(__name__).exception("Dashboard %s %s failed", method, path)
@@ -234,6 +246,9 @@ def make_handler(db_path: Path):
                 if not paper_id or not status:
                     _json_response(self, {"error": "Missing id or status"}, 400)
                     return
+                if status not in PaperStatus.ALL:
+                    _json_response(self, {"error": "Invalid status"}, 400)
+                    return
                 set_paper_status(db_path, paper_id, status)
                 self._audit("mark", details={"paper_id": paper_id, "status": status})
                 _json_response(self, {"success": True, "id": paper_id, "status": status})
@@ -271,7 +286,7 @@ def make_handler(db_path: Path):
                 save_recommendation(db_path, today, picks)
                 for r in results:
                     if r.paper_id:
-                        set_paper_status(db_path, r.paper_id, "read")
+                        set_paper_status(db_path, r.paper_id, PaperStatus.RECOMMENDED)
 
                 self._audit("recommend", details={"count": len(results), "date": today})
                 _json_response(self, {

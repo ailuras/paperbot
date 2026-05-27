@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
-from paperbot.config import Settings, TrackConfig
 from paperbot.db import init_db
 from paperbot.models import Paper
 

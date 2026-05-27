@@ -1167,6 +1167,7 @@
       </div>
       <div class="tabs">
         <button class="tab-btn active" data-tab="pending" onclick="switchTab('pending')">Pending</button>
+        <button class="tab-btn" data-tab="recommended" onclick="switchTab('recommended')">Recommended</button>
         <button class="tab-btn" data-tab="read" onclick="switchTab('read')">Read</button>
         <button class="tab-btn" data-tab="starred" onclick="switchTab('starred')">Starred</button>
         <button class="tab-btn" data-tab="skip" onclick="switchTab('skip')">Skipped</button>
@@ -1275,15 +1276,59 @@
       return r.json();
     }
 
-    async function postApi(path, body) {
-      const r = await fetch(API + path, {
-        method: 'POST',
+	    async function postApi(path, body) {
+	      const r = await fetch(API + path, {
+	        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       if (!r.ok) throw new Error(await r.text());
-      return r.json();
-    }
+	      return r.json();
+	    }
+
+	    function escapeHtml(value) {
+	      return String(value ?? '').replace(/[&<>"']/g, ch => ({
+	        '&': '&amp;',
+	        '<': '&lt;',
+	        '>': '&gt;',
+	        '"': '&quot;',
+	        "'": '&#39;',
+	      }[ch]));
+	    }
+
+	    function escapeAttr(value) {
+	      return escapeHtml(value);
+	    }
+
+	    function jsArg(value) {
+	      return escapeAttr(JSON.stringify(String(value ?? '')));
+	    }
+
+	    function safeUrl(value) {
+	      const text = String(value ?? '').trim();
+	      if (!text) return '';
+	      try {
+	        const url = new URL(text);
+	        return (url.protocol === 'http:' || url.protocol === 'https:') ? url.href : '';
+	      } catch (e) {
+	        return '';
+	      }
+	    }
+
+	    function firstSafeUrl(...values) {
+	      for (const value of values) {
+	        const url = safeUrl(value);
+	        if (url) return url;
+	      }
+	      return '';
+	    }
+
+	    function safeCssColor(value) {
+	      const text = String(value ?? '').trim();
+	      if (/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(text)) return text;
+	      if (/^(rgb|hsl)a?\([0-9.% ,+-]+\)$/.test(text)) return text;
+	      return '';
+	    }
 
     function toast(msg, type='success') {
       const el = document.createElement('div');
@@ -1350,11 +1395,12 @@
     async function loadStats() {
       const s = await api('/api/stats');
       const grid = document.getElementById('stats-grid');
-      const items = [
-        { n: s.total_papers || 0, l: 'Total' },
-        { n: s.pending || 0, l: 'Pending' },
-        { n: s.read || 0, l: 'Read' },
-        { n: s.starred || 0, l: 'Starred' },
+	      const items = [
+	        { n: s.total_papers || 0, l: 'Total' },
+	        { n: s.pending || 0, l: 'Pending' },
+	        { n: s.recommended || 0, l: 'Recommended' },
+	        { n: s.read || 0, l: 'Read' },
+	        { n: s.starred || 0, l: 'Starred' },
         { n: s.skipped || 0, l: 'Skipped' },
       ];
 
@@ -1365,14 +1411,14 @@
 
       // Render track pills next to buttons
       const pillsEl = document.getElementById('track-pills');
-      if (pillsEl && s.by_track) {
-        const tracks = Object.entries(s.by_track)
-          .filter(([t]) => !t.includes(','))
-          .sort((a, b) => b[1] - a[1]);
-        pillsEl.innerHTML = tracks.map(([t, c]) =>
-          `<span class="track-pill"><span class="track-tag ${t.toLowerCase()}">${t}</span> <span class="count">${c}</span></span>`
-        ).join('');
-      }
+	      if (pillsEl && s.by_track) {
+	        const tracks = Object.entries(s.by_track)
+	          .filter(([t]) => !t.includes(','))
+	          .sort((a, b) => b[1] - a[1]);
+	        pillsEl.innerHTML = tracks.map(([t, c]) =>
+	          `<span class="track-pill"><span class="track-tag ${escapeAttr(t.toLowerCase())}">${escapeHtml(t)}</span> <span class="count">${escapeHtml(c)}</span></span>`
+	        ).join('');
+	      }
     }
 
     async function loadRecentReads() {
@@ -1385,53 +1431,54 @@
         if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
         const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
         const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
-        const dateStr = p.publication_date || p.publication_year || '?';
-        const url = p.landing_page_url || p.doi || p.id || '#';
-        const abstract = p.abstract || '';
-        const absDisplay = abstract.length > 2000 ? abstract.slice(0, 2000) + '...' : abstract;
-        const markTime = p.changed_at ? `Marked: ${p.changed_at}` : '';
+	        const dateStr = p.publication_date || p.publication_year || '?';
+	        const abstract = p.abstract || '';
+	        const absDisplay = abstract.length > 2000 ? abstract.slice(0, 2000) + '...' : abstract;
+	        const markTime = p.changed_at ? `Marked: ${p.changed_at}` : '';
+	        const paperId = jsArg(p.id);
 
-        return `<div class="recent-read-card">
-          <div class="recent-read-title"><span class="recent-read-rank">#${i+1}</span> <a onclick="showPaperDetail('${p.id}')">${p.title||'Untitled'}</a></div>
-          <div class="paper-meta">${authorStr}${extraAuthors}</div>
-          <div class="paper-meta">${venueTag(p.venue_abbr, p.tier)} ${trackTag(p.track)} ${dateStr} <span class="sep">·</span> ${p.venue||'Unknown'} <span class="sep">·</span> Cited ${p.cited_by_count||0} <span class="sep">·</span> Score ${(p.score||0).toFixed(1)}</div>
-          ${markTime ? `<div class="paper-meta" style="opacity:0.6;">${markTime}</div>` : ''}
-          ${absDisplay ? `<div class="recent-read-abstract">${absDisplay}</div>` : ''}
-        </div>`;
-      }).join('');
-    }
+	        return `<div class="recent-read-card">
+	          <div class="recent-read-title"><span class="recent-read-rank">#${i+1}</span> <a onclick="showPaperDetail(${paperId})">${escapeHtml(p.title||'Untitled')}</a></div>
+	          <div class="paper-meta">${escapeHtml(authorStr)}${escapeHtml(extraAuthors)}</div>
+	          <div class="paper-meta">${venueTag(p.venue_abbr, p.tier)} ${trackTag(p.track)} ${escapeHtml(dateStr)} <span class="sep">·</span> ${escapeHtml(p.venue||'Unknown')} <span class="sep">·</span> Cited ${escapeHtml(p.cited_by_count||0)} <span class="sep">·</span> Score ${escapeHtml((p.score||0).toFixed(1))}</div>
+	          ${markTime ? `<div class="paper-meta" style="opacity:0.6;">${escapeHtml(markTime)}</div>` : ''}
+	          ${absDisplay ? `<div class="recent-read-abstract">${escapeHtml(absDisplay)}</div>` : ''}
+	        </div>`;
+	      }).join('');
+	    }
 
-    function statusBadge(st) {
-      const display = st === 'recommended' ? 'read' : st;
-      const map = {
-        pending: { icon: '⏳', text: 'Pending', cls: 'badge-pending' },
-        read: { icon: '✓', text: 'Read', cls: 'badge-read' },
-        starred: { icon: '★', text: 'Starred', cls: 'badge-starred' },
-        skip: { icon: '✕', text: 'Skip', cls: 'badge-skip' }
-      };
-      const info = map[display] || { icon: '', text: display, cls: 'badge-pending' };
-      return `<span class="badge ${info.cls}">${info.icon} ${info.text}</span>`;
-    }
+	    function statusBadge(st) {
+	      const display = st || 'pending';
+	      const map = {
+	        pending: { icon: '⏳', text: 'Pending', cls: 'badge-pending' },
+	        recommended: { icon: '◆', text: 'Recommended', cls: 'badge-recommended' },
+	        read: { icon: '✓', text: 'Read', cls: 'badge-read' },
+	        starred: { icon: '★', text: 'Starred', cls: 'badge-starred' },
+	        skip: { icon: '✕', text: 'Skip', cls: 'badge-skip' }
+	      };
+	      const info = map[display] || { icon: '', text: display, cls: 'badge-pending' };
+	      return `<span class="badge ${escapeAttr(info.cls)}">${escapeHtml(info.icon)} ${escapeHtml(info.text)}</span>`;
+	    }
 
-    function trackTag(track) {
-      const name = track || '?';
-      const lower = name.toLowerCase();
-      // Use dynamic class based on track name
-      const cls = 'track-' + lower.replace(/[^a-z0-9]/g, '-');
-      return `<span class="track-tag ${cls}">${name}</span>`;
-    }
+	    function trackTag(track) {
+	      const name = track || '?';
+	      const lower = name.toLowerCase();
+	      // Use dynamic class based on track name
+	      const cls = 'track-' + lower.replace(/[^a-z0-9]/g, '-');
+	      return `<span class="track-tag ${escapeAttr(cls)}">${escapeHtml(name)}</span>`;
+	    }
 
-    function venueTag(venue_abbr, tier) {
-      const abbr = venue_abbr || 'Others';
-      if (abbr === 'Others') {
-        return `<span class="venue-tag others">${abbr}</span>`;
-      }
-      if (abbr === 'arXiv') {
-        return `<span class="venue-tag arxiv">${abbr}</span>`;
-      }
-      const t = tier || '0';
-      return `<span class="venue-tag t${t}">${abbr}</span>`;
-    }
+	    function venueTag(venue_abbr, tier) {
+	      const abbr = venue_abbr || 'Others';
+	      if (abbr === 'Others') {
+	        return `<span class="venue-tag others">${escapeHtml(abbr)}</span>`;
+	      }
+	      if (abbr === 'arXiv') {
+	        return `<span class="venue-tag arxiv">${escapeHtml(abbr)}</span>`;
+	      }
+	      const t = tier || '0';
+	      return `<span class="venue-tag t${escapeAttr(t)}">${escapeHtml(abbr)}</span>`;
+	    }
 
     async function markPaper(id, status) {
       try {
@@ -1454,33 +1501,34 @@
 
         let authors = p.authors;
         if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
-        const authorStr = (Array.isArray(authors) ? authors.join(', ') : (authors||'Unknown'));
-        const dateStr = p.publication_date || p.publication_year || '?';
-        const metaHtml = `${venueTag(p.venue_abbr, p.tier)} ${trackTag(p.track)} ${dateStr} · ${p.venue||'Unknown'} · Cited ${p.cited_by_count||0} · Score ${(p.score||0).toFixed(1)}`;
-        document.getElementById('modal-meta').innerHTML = metaHtml;
-        document.getElementById('modal-authors').textContent = authorStr;
-        document.getElementById('modal-abstract').textContent = p.abstract || 'No abstract available.';
+	        const authorStr = (Array.isArray(authors) ? authors.join(', ') : (authors||'Unknown'));
+	        const dateStr = p.publication_date || p.publication_year || '?';
+	        const metaHtml = `${venueTag(p.venue_abbr, p.tier)} ${trackTag(p.track)} ${escapeHtml(dateStr)} · ${escapeHtml(p.venue||'Unknown')} · Cited ${escapeHtml(p.cited_by_count||0)} · Score ${escapeHtml((p.score||0).toFixed(1))}`;
+	        document.getElementById('modal-meta').innerHTML = metaHtml;
+	        document.getElementById('modal-authors').textContent = authorStr;
+	        document.getElementById('modal-abstract').textContent = p.abstract || 'No abstract available.';
 
-        const url = p.landing_page_url || p.doi || p.id || '';
-        document.getElementById('modal-links').innerHTML = url
-          ? `<a href="${url}" target="_blank">${url}</a>`
-          : '<em style="color:var(--text-muted)">No link available</em>';
+	        const url = firstSafeUrl(p.landing_page_url, p.doi, p.id);
+	        document.getElementById('modal-links').innerHTML = url
+	          ? `<a href="${escapeAttr(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`
+	          : '<em style="color:var(--text-muted)">No link available</em>';
 
-        const st = p.status || 'pending';
-        const actionBtns = [
-          st === 'read'
-            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="btn btn-ghost">↩ Unread</button>`
-            : `<button onclick="markPaperFromModal('${p.id}','read')" class="btn btn-primary">✓ Read</button>`,
-          st === 'starred'
-            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="btn btn-ghost">↩ Unstar</button>`
-            : `<button onclick="markPaperFromModal('${p.id}','starred')" class="btn btn-secondary">★ Star</button>`,
-          st === 'skip'
-            ? `<button onclick="markPaperFromModal('${p.id}','pending')" class="btn btn-ghost">↩ Unskip</button>`
-            : `<button onclick="markPaperFromModal('${p.id}','skip')" class="btn btn-ghost">✕ Skip</button>`,
-          `<button onclick="translatePaper('${p.id}')" class="btn btn-secondary">🌐 Translate</button>`,
-          `<button onclick="resolvePdf('${p.id}')" class="btn btn-secondary">📄 PDF</button>`,
-          `<button onclick="copyBibTeX('${p.id}')" class="btn btn-secondary">📋 BibTeX</button>`,
-        ];
+	        const st = p.status || 'pending';
+	        const paperId = jsArg(p.id);
+	        const actionBtns = [
+	          st === 'read'
+	            ? `<button onclick="markPaperFromModal(${paperId},'pending')" class="btn btn-ghost">↩ Unread</button>`
+	            : `<button onclick="markPaperFromModal(${paperId},'read')" class="btn btn-primary">✓ Read</button>`,
+	          st === 'starred'
+	            ? `<button onclick="markPaperFromModal(${paperId},'pending')" class="btn btn-ghost">↩ Unstar</button>`
+	            : `<button onclick="markPaperFromModal(${paperId},'starred')" class="btn btn-secondary">★ Star</button>`,
+	          st === 'skip'
+	            ? `<button onclick="markPaperFromModal(${paperId},'pending')" class="btn btn-ghost">↩ Unskip</button>`
+	            : `<button onclick="markPaperFromModal(${paperId},'skip')" class="btn btn-ghost">✕ Skip</button>`,
+	          `<button onclick="translatePaper(${paperId})" class="btn btn-secondary">🌐 Translate</button>`,
+	          `<button onclick="resolvePdf(${paperId})" class="btn btn-secondary">📄 PDF</button>`,
+	          `<button onclick="copyBibTeX(${paperId})" class="btn btn-secondary">📋 BibTeX</button>`,
+	        ];
         document.getElementById('modal-actions').innerHTML = actionBtns.join('');
 
         // Load note
@@ -1554,12 +1602,12 @@
           // Show translation in modal
           const titleEl = document.getElementById('modal-title');
           const abstractEl = document.getElementById('modal-abstract');
-          if (titleEl) {
-            titleEl.innerHTML = `<div style="margin-bottom:0.5rem;">${titleEl.textContent}</div><div style="color:var(--accent);font-size:1.05rem;font-weight:600;">${result.title_zh}</div>`;
-          }
-          if (abstractEl && result.abstract_zh) {
-            abstractEl.innerHTML = `<div style="margin-bottom:0.5rem;color:var(--text-secondary);">${abstractEl.textContent}</div><div style="color:var(--text-primary);line-height:1.65;">${result.abstract_zh}</div>`;
-          }
+	          if (titleEl) {
+	            titleEl.innerHTML = `<div style="margin-bottom:0.5rem;">${escapeHtml(titleEl.textContent)}</div><div style="color:var(--accent);font-size:1.05rem;font-weight:600;">${escapeHtml(result.title_zh)}</div>`;
+	          }
+	          if (abstractEl && result.abstract_zh) {
+	            abstractEl.innerHTML = `<div style="margin-bottom:0.5rem;color:var(--text-secondary);">${escapeHtml(abstractEl.textContent)}</div><div style="color:var(--text-primary);line-height:1.65;">${escapeHtml(result.abstract_zh)}</div>`;
+	          }
           toast(result.source === 'cache' ? 'Translation loaded from cache' : 'Translation complete');
         } else {
           toast('Translation failed', 'error');
@@ -1578,8 +1626,9 @@
         });
         if (!data.ok) throw new Error(await data.text());
         const result = await data.json();
-        if (result.pdf_url) {
-          window.open(result.pdf_url, '_blank');
+	        const pdfUrl = safeUrl(result.pdf_url);
+	        if (pdfUrl) {
+	          window.open(pdfUrl, '_blank', 'noopener');
           toast(`PDF opened (${result.pdf_source})`);
         } else {
           toast('No open-access PDF found', 'error');
@@ -1698,31 +1747,36 @@
       el.innerHTML = data.papers.map(p => {
         let authors = p.authors;
         if (typeof authors === 'string') { try { authors = JSON.parse(authors); } catch(e){} }
-        const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
-        const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
-        const dateStr = p.publication_date || p.publication_year || '?';
-        const meta = [`${dateStr}`, `${p.venue||'Unknown'}`, `Cited ${p.cited_by_count||0}`, `Score ${(p.score||0).toFixed(1)}`].join(' <span class="sep">·</span> ');
-        const url = p.landing_page_url || p.doi || p.id || '#';
+	        const authorStr = (Array.isArray(authors) ? authors.slice(0,3).join(', ') : (authors||''));
+	        const extraAuthors = Array.isArray(authors) && authors.length > 3 ? ', et al.' : '';
+	        const dateStr = p.publication_date || p.publication_year || '?';
+	        const meta = [
+	          escapeHtml(dateStr),
+	          escapeHtml(p.venue||'Unknown'),
+	          `Cited ${escapeHtml(p.cited_by_count||0)}`,
+	          `Score ${escapeHtml((p.score||0).toFixed(1))}`,
+	        ].join(' <span class="sep">·</span> ');
+	        const paperId = jsArg(p.id);
 
-        const st = p.status || 'pending';
-        const actionBtns = [
-          st === 'read'
-            ? `<button onclick="markPaper('${p.id}','pending')" class="btn btn-ghost">↩ Unread</button>`
-            : `<button onclick="markPaper('${p.id}','read')" class="btn btn-primary btn-sm">✓ Read</button>`,
-          st === 'starred'
-            ? `<button onclick="markPaper('${p.id}','pending')" class="btn btn-ghost">↩ Unstar</button>`
-            : `<button onclick="markPaper('${p.id}','starred')" class="btn btn-secondary btn-sm">★ Star</button>`,
-          st === 'skip'
-            ? `<button onclick="markPaper('${p.id}','pending')" class="btn btn-ghost">↩ Unskip</button>`
-            : `<button onclick="markPaper('${p.id}','skip')" class="btn btn-ghost btn-sm">✕ Skip</button>`,
-        ];
+	        const st = p.status || 'pending';
+	        const actionBtns = [
+	          st === 'read'
+	            ? `<button onclick="markPaper(${paperId},'pending')" class="btn btn-ghost">↩ Unread</button>`
+	            : `<button onclick="markPaper(${paperId},'read')" class="btn btn-primary btn-sm">✓ Read</button>`,
+	          st === 'starred'
+	            ? `<button onclick="markPaper(${paperId},'pending')" class="btn btn-ghost">↩ Unstar</button>`
+	            : `<button onclick="markPaper(${paperId},'starred')" class="btn btn-secondary btn-sm">★ Star</button>`,
+	          st === 'skip'
+	            ? `<button onclick="markPaper(${paperId},'pending')" class="btn btn-ghost">↩ Unskip</button>`
+	            : `<button onclick="markPaper(${paperId},'skip')" class="btn btn-ghost btn-sm">✕ Skip</button>`,
+	        ];
 
-        return `<div class="paper-row">
-          <div class="paper-content">
-            <div class="paper-title">${statusBadge(p.status||'pending')} <a onclick="showPaperDetail('${p.id}')">${p.title||'Untitled'}</a></div>
-            <div class="paper-meta">${authorStr}${extraAuthors}</div>
-            <div class="paper-meta">${venueTag(p.venue_abbr, p.tier)} ${trackTag(p.track)} ${meta}</div>
-          </div>
+	        return `<div class="paper-row">
+	          <div class="paper-content">
+	            <div class="paper-title">${statusBadge(p.status||'pending')} <a onclick="showPaperDetail(${paperId})">${escapeHtml(p.title||'Untitled')}</a></div>
+	            <div class="paper-meta">${escapeHtml(authorStr)}${escapeHtml(extraAuthors)}</div>
+	            <div class="paper-meta">${venueTag(p.venue_abbr, p.tier)} ${trackTag(p.track)} ${meta}</div>
+	          </div>
           <div class="paper-actions">${actionBtns.join('')}</div>
         </div>`;
       }).join('');
@@ -1806,23 +1860,23 @@
           const isToday = date === new Date().toISOString().slice(0, 10);
           const dateLabel = isToday ? `${date} (Today)` : date;
 
-          const itemsHtml = items.map((item, i) => {
-            return `<div class="history-item">
-              <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0;">
-                <span class="history-item-rank">#${i + 1}</span>
-                <span class="history-item-title" onclick="showPaperDetail('${item.paper_id}')">${item.title || 'Untitled'}</span>
-              </div>
-              <div class="history-item-meta">
-                ${trackTag(item.track)}
-                <span class="history-item-score">${(item.score||0).toFixed(1)}</span>
-              </div>
-            </div>`;
-          }).join('');
+	          const itemsHtml = items.map((item, i) => {
+	            return `<div class="history-item">
+	              <div style="display:flex;align-items:center;gap:0.5rem;flex:1;min-width:0;">
+	                <span class="history-item-rank">#${i + 1}</span>
+	                <span class="history-item-title" onclick="showPaperDetail(${jsArg(item.paper_id)})">${escapeHtml(item.title || 'Untitled')}</span>
+	              </div>
+	              <div class="history-item-meta">
+	                ${trackTag(item.track)}
+	                <span class="history-item-score">${escapeHtml((item.score||0).toFixed(1))}</span>
+	              </div>
+	            </div>`;
+	          }).join('');
 
-          return `<details class="history-group" ${isToday ? 'open' : ''}>
-            <summary class="history-summary">${dateLabel}</summary>
-            <div class="history-items">${itemsHtml}</div>
-          </details>`;
+	          return `<details class="history-group" ${isToday ? 'open' : ''}>
+	            <summary class="history-summary">${escapeHtml(dateLabel)}</summary>
+	            <div class="history-items">${itemsHtml}</div>
+	          </details>`;
         }).join('');
       } catch (e) {
         document.getElementById('recommendation-history').innerHTML = '<div class="empty-msg">Failed to load history.</div>';
@@ -1843,19 +1897,21 @@
           const cls = `.track-tag.track-${lower}`;
           // Use configured color or generate from HSL palette
           let bg, fg;
-          if (info.color) {
-            bg = info.color;
-            fg = '#fff';
-          } else {
-            const hue = (idx * 137) % 360; // golden angle for distinct colors
-            bg = `hsl(${hue}, 55%, 35%)`;
-            fg = `hsl(${hue}, 70%, 90%)`;
-          }
-          css += `${cls} { background: ${bg}; color: ${fg}; }\n`;
-          if (!info.color) {
-            const lightBg = `hsl(${hue}, 50%, 92%)`;
-            const lightFg = `hsl(${hue}, 70%, 25%)`;
-            css += `[data-theme="light"] ${cls} { background: ${lightBg}; color: ${lightFg}; }\n`;
+	          const configColor = safeCssColor(info.color);
+	          if (configColor) {
+	            bg = configColor;
+	            fg = '#fff';
+	          } else {
+	            const hue = (idx * 137) % 360; // golden angle for distinct colors
+	            bg = `hsl(${hue}, 55%, 35%)`;
+	            fg = `hsl(${hue}, 70%, 90%)`;
+	          }
+	          css += `${cls} { background: ${bg}; color: ${fg}; }\n`;
+	          if (!configColor) {
+	            const hue = (idx * 137) % 360;
+	            const lightBg = `hsl(${hue}, 50%, 92%)`;
+	            const lightFg = `hsl(${hue}, 70%, 25%)`;
+	            css += `[data-theme="light"] ${cls} { background: ${lightBg}; color: ${lightFg}; }\n`;
           }
         });
         styleEl.textContent = css;
@@ -1863,11 +1919,11 @@
 
         // Populate track filter dropdown
         const filterSel = document.getElementById('track-filter');
-        if (filterSel) {
-          // Keep "All Tracks" option, add dynamic ones
-          filterSel.innerHTML = '<option value="">All Tracks</option>' +
-            Object.keys(TRACK_CONFIG).map(t => `<option value="${t}">${t}</option>`).join('');
-        }
+	        if (filterSel) {
+	          // Keep "All Tracks" option, add dynamic ones
+	          filterSel.innerHTML = '<option value="">All Tracks</option>' +
+	            Object.keys(TRACK_CONFIG).map(t => `<option value="${escapeAttr(t)}">${escapeHtml(t)}</option>`).join('');
+	        }
       } catch (e) {
         console.error('Failed to load config:', e);
       }

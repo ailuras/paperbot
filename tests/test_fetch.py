@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
-from paperbot.config import ScoringTier, Settings
+from paperbot.config import Settings
 from paperbot.fetch import (
     VenueScorer,
     _dedupe_and_merge_tracks,
