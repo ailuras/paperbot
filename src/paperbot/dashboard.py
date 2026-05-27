@@ -346,6 +346,8 @@ def _pid_file(data_dir: Path) -> Path:
 
 def run_server(db_path: Path, host: str = "127.0.0.1", port: int = 8000) -> None:
     """Start the dashboard HTTP server."""
+    import signal
+
     handler = make_handler(db_path)
     server = HTTPServer((host, port), handler)
 
@@ -353,11 +355,18 @@ def run_server(db_path: Path, host: str = "127.0.0.1", port: int = 8000) -> None
     pid_path = _pid_file(db_path.parent)
     pid_path.write_text(str(os.getpid()))
 
+    def _handle_sigterm(signum, frame):
+        pid_path.unlink(missing_ok=True)
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)
+    signal.signal(signal.SIGINT, _handle_sigterm)
+
     print(f"Dashboard running at http://{host}:{port}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down.")
+        pass
     finally:
         server.shutdown()
         pid_path.unlink(missing_ok=True)

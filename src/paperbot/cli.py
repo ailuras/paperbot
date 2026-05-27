@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -446,7 +447,6 @@ def serve(
     restart: bool = typer.Option(False, help="Restart the dashboard server (stop if running, then start)"),
 ) -> None:
     """Start, stop, or restart the local web dashboard."""
-    import os
     import sys
 
     cfg = load_default_config()
@@ -493,6 +493,26 @@ def serve(
             os.dup2(f.fileno(), sys.stderr.fileno())
 
     run_dashboard(db_path=db_path, host=host, port=port)
+
+
+@app.command()
+def status() -> None:
+    """Show PaperBot dashboard status."""
+    cfg = load_default_config()
+    pid_path = cfg.data_dir / "dashboard.pid"
+    running = False
+    if pid_path.exists():
+        try:
+            pid = int(pid_path.read_text().strip())
+            os.kill(pid, 0)
+            running = True
+        except (ValueError, ProcessLookupError, PermissionError):
+            pass
+
+    if running:
+        console.print("[green]PaperBot: RUNNING[/green]")
+    else:
+        console.print("[yellow]PaperBot: STOPPED[/yellow]")
 
 
 @app.command()
