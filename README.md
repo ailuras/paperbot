@@ -106,6 +106,8 @@ uv run paperbot stats
 
 # View recent reads
 uv run paperbot history --limit 10
+uv run paperbot history --status recommended
+uv run paperbot history --status read
 
 # Launch Dashboard (foreground)
 uv run paperbot serve --port 8765

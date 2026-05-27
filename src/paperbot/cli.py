@@ -63,6 +63,19 @@ def _handle_email_result(sent: bool, audit_entry: AuditEntry, success_msg: str) 
         audit_entry.error_message = "email_failed"
 
 
+_HISTORY_LABELS = {
+    PaperStatus.RECOMMENDED: (
+        "Recent Recommendations",
+        "No recent recommendations.",
+        "Recommended",
+    ),
+    PaperStatus.READ: ("Recent Reads", "No recent reads.", "Read"),
+    PaperStatus.STARRED: ("Recent Starred Papers", "No recent starred papers.", "Marked"),
+    PaperStatus.SKIP: ("Recent Skipped Papers", "No recent skipped papers.", "Marked"),
+    PaperStatus.PENDING: ("Recent Pending Papers", "No recent pending papers.", "Marked"),
+}
+
+
 @app.command()
 def recommend(
     count: int = typer.Option(3, help="Number of papers to recommend"),
@@ -388,14 +401,20 @@ def history(
     ),
 ) -> None:
     """Show recent papers by status."""
+    if status not in PaperStatus.ALL:
+        allowed = ", ".join(sorted(PaperStatus.ALL))
+        console.print(f"[red]Invalid status '{status}'. Must be one of: {allowed}[/red]")
+        raise typer.Exit(1)
+
     db_path = _db_path()
     rows = get_recent_reads(db_path, limit=limit, status=status)
+    title, empty_message, time_label = _HISTORY_LABELS[status]
 
     if not rows:
-        console.print(f"[yellow]No recent {status} papers.[/yellow]")
+        console.print(f"[yellow]{empty_message}[/yellow]")
         raise typer.Exit(0)
 
-    console.print(f"Recent {status.title()}")
+    console.print(title)
 
     for p in rows:
         abbr = _abbr(p.venue or "OpenAlex")
@@ -410,7 +429,7 @@ def history(
         console.print("-----")
         console.print(f"Authors: {p.author_str}")
         if mark_time:
-            console.print(f"Marked: {mark_time}")
+            console.print(f"{time_label}: {mark_time}")
         console.print("-----")
         console.print(f"Abstract: {abstract}")
 
@@ -439,6 +458,8 @@ def serve(
             console.print("[green]Dashboard stopped.[/green]")
         elif stop:
             console.print("[yellow]Dashboard is not running.[/yellow]")
+            raise typer.Exit(0)
+        if stop and not restart:
             raise typer.Exit(0)
         if restart:
             console.print("[dim]Restarting...[/dim]")

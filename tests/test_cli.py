@@ -219,6 +219,8 @@ def test_history_command(cli_env: dict, sample_papers):
     result = runner.invoke(app, ["history"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
+    assert "Recent Reads" in out
+    assert "Read:" in out
     assert sample_papers[0].title in out
 
 
@@ -227,7 +229,37 @@ def test_history_empty(cli_env: dict):
     result = runner.invoke(app, ["history"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "No recent read" in out
+    assert "No recent reads" in out
+
+
+def test_history_recommended_status(cli_env: dict, sample_papers):
+    """history --status recommended lists recommendations separately from reads."""
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, sample_papers)
+
+    from paperbot.db import set_paper_status
+
+    set_paper_status(db_path, sample_papers[0].id, "recommended")
+    set_paper_status(db_path, sample_papers[1].id, "read")
+
+    result = runner.invoke(
+        app, ["history", "--status", "recommended"], env=cli_env
+    )
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Recent Recommendations" in out
+    assert "Recommended:" in out
+    assert sample_papers[0].title in out
+    assert sample_papers[1].title not in out
+
+
+def test_history_invalid_status(cli_env: dict):
+    """history rejects unknown statuses instead of returning arbitrary state rows."""
+    result = runner.invoke(app, ["history", "--status", "unknown"], env=cli_env)
+    assert result.exit_code == 1
+    out = _strip_ansi(result.output)
+    assert "Invalid status" in out
 
 
 def test_history_with_status(cli_env: dict, sample_papers):
@@ -245,7 +277,7 @@ def test_history_with_status(cli_env: dict, sample_papers):
     )
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "Recent Starred" in out
+    assert "Recent Starred Papers" in out
     assert sample_papers[0].title in out
 
 
@@ -254,7 +286,7 @@ def test_history_status_empty(cli_env: dict):
     result = runner.invoke(app, ["history", "--status", "skip"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "No recent skip" in out
+    assert "No recent skipped papers" in out
 
 
 def test_serve_stop_not_running(cli_env: dict):
@@ -263,6 +295,22 @@ def test_serve_stop_not_running(cli_env: dict):
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "not running" in out.lower()
+
+
+def test_serve_stop_running_exits_without_starting(cli_env: dict):
+    """serve --stop exits after stopping and does not start the dashboard."""
+    from unittest.mock import patch
+
+    with patch("paperbot.cli.stop_server", return_value=True):
+        with patch("paperbot.cli.run_dashboard") as mock_run:
+            result = runner.invoke(
+                app, ["serve", "--stop", "--port", "9999"], env=cli_env
+            )
+
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "Dashboard stopped" in out
+    mock_run.assert_not_called()
 
 
 def test_serve_restart_not_running(cli_env: dict):

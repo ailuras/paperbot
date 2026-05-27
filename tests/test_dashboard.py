@@ -105,6 +105,7 @@ def test_dashboard_index(tmp_db_path: Path):
     assert "PaperBot Dashboard" in str(data)
     assert "function escapeHtml" in str(data)
     assert "Recommended" in str(data)
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in str(data)
 
 
 def test_api_stats(tmp_db_path: Path):

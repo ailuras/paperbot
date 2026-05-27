@@ -199,7 +199,8 @@ def get_unread_papers(
 ) -> list[Paper]:
     """Query candidate papers for recommendation.
 
-    Excludes papers that have been read or skipped.
+    Only pending papers are eligible, so already recommended/read/skipped papers
+    are not selected again.
     """
     params: list[Any] = []
 
@@ -281,7 +282,7 @@ def get_recent_reads(
     limit: int = 3,
     status: str = "read",
 ) -> list[Paper]:
-    """Return most recently marked papers with full details."""
+    """Return most recently marked papers for a status with full details."""
     with closing(_connect(db_path)) as conn:
         cursor = conn.execute(
             """

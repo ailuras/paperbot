@@ -325,7 +325,7 @@
        ================================================================ */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 0.75rem;
     }
 
@@ -340,7 +340,8 @@
       background: var(--bg-secondary);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-md);
-      padding: 1.1rem 0.8rem;
+      min-width: 0;
+      padding: 1rem 0.65rem;
       text-align: center;
       transition: all var(--transition-base);
       position: relative;
@@ -375,12 +376,13 @@
       letter-spacing: -0.02em;
     }
     .stat-card .label {
-      font-size: 0.7rem;
+      font-size: 0.66rem;
       color: var(--text-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.06em;
       font-weight: 500;
       margin-top: 0.3rem;
+      white-space: nowrap;
     }
 
     .track-breakdown {
