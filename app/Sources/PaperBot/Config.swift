@@ -55,8 +55,20 @@ struct FiltersConfig: Codable {
     var venue_blacklist: [String]?
 }
 
+struct OpenAlexConfig: Codable {
+    var base_url: String
+    var mailto: String
+    var api_key_env: String
+    var timeout_seconds: Int
+    var per_page: Int
+    var default_days: Int
+    var default_max_results: Int
+    var topic_filter: String
+}
+
 struct AppConfig: Codable {
     var data_dir: String?
+    var openalex: OpenAlexConfig
     var tracks: [String: TrackConfig]
     var filters: FiltersConfig?
     var scoring: ScoringConfig
