@@ -34,7 +34,14 @@ from paperbot.update import refresh_existing_papers, reset_paper_states
 from paperbot.utils import _abbr, format_date
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
+papers_app = typer.Typer(help="Manage paper records.")
+dashboard_app = typer.Typer(help="Manage the local dashboard.")
+logs_app = typer.Typer(help="View operation logs.", invoke_without_command=True)
 console = Console()
+
+app.add_typer(papers_app, name="papers")
+app.add_typer(dashboard_app, name="dashboard")
+app.add_typer(logs_app, name="logs")
 
 
 def _db_path() -> Path:
@@ -76,6 +83,21 @@ _HISTORY_LABELS = {
     PaperStatus.SKIP: ("Recent Skipped Papers", "No recent skipped papers.", "Marked"),
     PaperStatus.PENDING: ("Recent Pending Papers", "No recent pending papers.", "Marked"),
 }
+
+
+def _print_fetch_report(stats: dict[str, object]) -> None:
+    hl = "━" * 16
+    console.print()
+    console.print(hl)
+    console.print(f"[bold]Fetch Report · {format_date()}[/bold]")
+    console.print(hl)
+    console.print(f"Range: {stats['range']} ({stats['days']} days)")
+    console.print()
+    console.print("[bold]By Track:[/bold]")
+    for ts in stats["track_stats"]:
+        console.print(f"  {ts['track']:<4}  raw {ts['raw']:>4}  →  kept {ts['filtered']:>4}")
+    console.print()
+    console.print(f"Total raw: {stats['total_raw']} | Filtered: {stats['total_filtered']}")
 
 
 @app.command()
@@ -215,91 +237,31 @@ def recommend(
 
 
 @app.command()
-def fetch(
-    days: int = typer.Option(45, help="How many days back to fetch"),
-    dry_run: bool = typer.Option(False, help="Preview without saving"),
-    email: bool = typer.Option(False, "--email", help="Send report via email (used by crontab)"),
-) -> None:
-    """Fetch papers from OpenAlex."""
-    start_time = time.time()
-    cfg = load_default_config()
-    db_path = _db_path()
-    data_dir = cfg.data_dir
-    audit_entry = AuditEntry(action="fetch")
-
-    console.print("[blue]Fetching from OpenAlex...[/blue]")
-    papers, stats = fetch_papers(cfg, days=days)
-
-    hl = "━" * 16
-    console.print()
-    console.print(hl)
-    console.print(f"[bold]Fetch Report · {format_date()}[/bold]")
-    console.print(hl)
-    console.print(f"Range: {stats['range']} ({stats['days']} days)")
-    console.print()
-    console.print("[bold]By Track:[/bold]")
-    for ts in stats["track_stats"]:
-        console.print(f"  {ts['track']:<4}  raw {ts['raw']:>4}  →  kept {ts['filtered']:>4}")
-    console.print()
-    console.print(f"Total raw: {stats['total_raw']} | Filtered: {stats['total_filtered']}")
-
-    if dry_run:
-        console.print()
-        console.print("[yellow]Dry run — not saved.[/yellow]")
-        audit_entry.status = AuditStatus.SKIPPED
-        audit_entry.details = {"reason": "dry_run", **stats}
-        _log_audit(db_path, data_dir, audit_entry, start_time)
-        raise typer.Exit(0)
-
-    if not papers:
-        console.print("[yellow]No papers to save.[/yellow]")
-        audit_entry.status = AuditStatus.SKIPPED
-        audit_entry.details = {"reason": "no_papers", **stats}
-        _log_audit(db_path, data_dir, audit_entry, start_time)
-        raise typer.Exit(0)
-
-    inserted, updated = upsert_papers(db_path, papers)
-    console.print()
-    console.print(f"[green]Inserted: {inserted} | Updated: {updated}[/green]")
-
-    audit_entry.details = {
-        "inserted": inserted,
-        "updated": updated,
-        **stats,
-    }
-
-    if email:
-        sent = send_fetch_report_email(
-            stats=stats,
-            papers_count=inserted + updated,
-            settings=cfg,
-            date_str=format_date(),
-        )
-        audit_entry.details["email"] = email
-        audit_entry.details["email_sent"] = sent
-        _handle_email_result(sent, audit_entry, "Email report sent.")
-    else:
-        audit_entry.details["email"] = False
-
-    _log_audit(db_path, data_dir, audit_entry, start_time)
-
-
-@app.command()
 def update(
-    fetch_all: bool = typer.Option(
+    fetch_source: bool = typer.Option(
         False,
-        "--all",
+        "--fetch",
         help="Fetch from OpenAlex before refreshing local metadata",
     ),
-    reset: bool = typer.Option(
+    reset_status: bool = typer.Option(
         False,
-        "--reset",
+        "--reset-status",
         help="Reset all paper states to pending after updating",
     ),
     days: int = typer.Option(
         45,
         "--days",
-        help="How many days back to fetch when --all is used",
+        help="How many days back to fetch when --fetch is used",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Preview without saving",
+    ),
+    email: bool = typer.Option(
+        False,
+        "--email",
+        help="Send fetch report via email when --fetch is used",
     ),
 ) -> None:
     """Update stored papers without generating recommendations."""
@@ -308,13 +270,24 @@ def update(
     db_path = _db_path()
     data_dir = cfg.data_dir
     audit_entry = AuditEntry(action="update")
-    details: dict[str, object] = {"fetch_all": fetch_all, "reset": reset}
+    details: dict[str, object] = {
+        "fetch": fetch_source,
+        "reset_status": reset_status,
+        "dry_run": dry_run,
+    }
 
-    if fetch_all:
+    if fetch_source:
         console.print("[blue]Fetching from OpenAlex...[/blue]")
         papers, stats = fetch_papers(cfg, days=days)
-        inserted, updated = upsert_papers(db_path, papers) if papers else (0, 0)
-        console.print(f"[green]Source refresh: inserted {inserted} | updated {updated}[/green]")
+        _print_fetch_report(stats)
+        if dry_run:
+            inserted, updated = (0, 0)
+            console.print()
+            console.print("[yellow]Dry run — fetched source data but did not save it.[/yellow]")
+        else:
+            inserted, updated = upsert_papers(db_path, papers) if papers else (0, 0)
+            console.print()
+            console.print(f"[green]Source refresh: inserted {inserted} | updated {updated}[/green]")
         details.update(
             {
                 "inserted": inserted,
@@ -323,10 +296,28 @@ def update(
             }
         )
 
-    refresh = refresh_existing_papers(db_path, cfg)
+        if email and not dry_run:
+            sent = send_fetch_report_email(
+                stats=stats,
+                papers_count=inserted + updated,
+                settings=cfg,
+                date_str=format_date(),
+            )
+            details["email"] = email
+            details["email_sent"] = sent
+            _handle_email_result(sent, audit_entry, "Email report sent.")
+        elif email:
+            console.print("[yellow]Email not sent during dry run.[/yellow]")
+            details["email"] = False
+    elif email:
+        console.print("[yellow]Email report is only sent when --fetch is used.[/yellow]")
+        details["email"] = False
+
+    refresh = refresh_existing_papers(db_path, cfg, dry_run=dry_run)
+    action_label = "would update" if dry_run else "updated"
     console.print(
         "[green]Local refresh: "
-        f"checked {refresh['total']} | updated {refresh['updated']}[/green]"
+        f"checked {refresh['total']} | {action_label} {refresh['updated']}[/green]"
     )
     details.update(
         {
@@ -335,59 +326,23 @@ def update(
         }
     )
 
-    if reset:
-        reset_count = reset_paper_states(db_path)
-        console.print(f"[yellow]Reset states: {reset_count} papers marked pending.[/yellow]")
+    if reset_status:
+        reset_count = reset_paper_states(db_path, dry_run=dry_run)
+        if dry_run:
+            console.print(f"[yellow]Reset preview: {reset_count} papers would be marked pending.[/yellow]")
+        else:
+            console.print(f"[yellow]Reset states: {reset_count} papers marked pending.[/yellow]")
         details["reset_count"] = reset_count
+
+    if dry_run:
+        console.print("[yellow]Dry run — local changes not saved.[/yellow]")
+        audit_entry.status = AuditStatus.SKIPPED
 
     audit_entry.details = details
     _log_audit(db_path, data_dir, audit_entry, start_time)
 
 
-@app.command()
-def init(
-    days: int = typer.Option(365, help="How many days back to fetch"),
-    dry_run: bool = typer.Option(False, help="Preview without saving"),
-) -> None:
-    """Initialize the database by fetching papers from the last year."""
-    cfg = load_default_config()
-    db_path = _db_path()
-
-    console.print("[blue]Initializing database — fetching from OpenAlex...[/blue]")
-    papers, stats = fetch_papers(cfg, days=days)
-
-    hl = "━" * 16
-    console.print()
-    console.print(hl)
-    console.print(f"[bold]Fetch Report · {format_date()}[/bold]")
-    console.print(hl)
-    console.print(f"Range: {stats['range']} ({stats['days']} days)")
-    console.print()
-    console.print("[bold]By Track:[/bold]")
-    for ts in stats["track_stats"]:
-        console.print(f"  {ts['track']:<4}  raw {ts['raw']:>4}  →  kept {ts['filtered']:>4}")
-    console.print()
-    console.print(f"Total raw: {stats['total_raw']} | Filtered: {stats['total_filtered']}")
-
-    if dry_run:
-        console.print()
-        console.print("[yellow]Dry run — not saved.[/yellow]")
-        raise typer.Exit(0)
-
-    if not papers:
-        console.print("[yellow]No papers to save.[/yellow]")
-        raise typer.Exit(0)
-
-    inserted, updated = upsert_papers(db_path, papers)
-    console.print()
-    console.print(f"[green]Inserted: {inserted} | Updated: {updated}[/green]")
-
-    total = get_stats(db_path).get("total_papers", 0)
-    console.print()
-    console.print(f"[bold green]Init complete: {total} papers in database.[/bold green]")
-
-
-@app.command()
+@papers_app.command("mark")
 def mark(
     paper_query: str = typer.Argument(help="Paper OpenAlex ID or title substring"),
     status: str = typer.Option(..., "--status", help="Status: pending|recommended|read|starred|skip"),
@@ -427,7 +382,7 @@ def mark(
     console.print(f"[green]Marked '{paper.title or paper_id}' as {status}.[/green]")
 
 
-@app.command()
+@papers_app.command("stats")
 def stats() -> None:
     """Show statistics about the paper database."""
     db_path = _db_path()
@@ -454,7 +409,7 @@ def stats() -> None:
     console.print(f"States: {states}")
 
 
-@app.command()
+@papers_app.command("history")
 def history(
     limit: int = typer.Option(10, help="Number of recent papers to show"),
     status: str = typer.Option(
@@ -498,32 +453,16 @@ def history(
     console.print("=====")
 
 
-@app.command()
-def serve(
-    host: str = typer.Option("127.0.0.1", help="Bind address"),
-    port: int = typer.Option(8765, help="Port"),
-    daemon: bool = typer.Option(False, help="Run in background (detach from terminal)"),
-    log_file: str = typer.Option("", help="Log file path (default: ~/.paperbot/dashboard.log)"),
-    stop: bool = typer.Option(False, help="Stop the running dashboard server"),
-    restart: bool = typer.Option(False, help="Restart the dashboard server (stop if running, then start)"),
+def _start_dashboard(
+    host: str,
+    port: int,
+    daemon: bool,
+    log_file: str,
 ) -> None:
-    """Start, stop, or restart the local web dashboard."""
     import sys
 
     cfg = load_default_config()
     db_path = cfg.data_dir / "paperbot.db"
-
-    if stop or restart:
-        stopped = stop_server(cfg.data_dir, port=port)
-        if stopped:
-            console.print("[green]Dashboard stopped.[/green]")
-        elif stop:
-            console.print("[yellow]Dashboard is not running.[/yellow]")
-            raise typer.Exit(0)
-        if stop and not restart:
-            raise typer.Exit(0)
-        if restart:
-            console.print("[dim]Restarting...[/dim]")
 
     init_db(db_path)
     init_audit(db_path)
@@ -556,7 +495,45 @@ def serve(
     run_dashboard(db_path=db_path, host=host, port=port)
 
 
-@app.command()
+@dashboard_app.command("start")
+def dashboard_start(
+    host: str = typer.Option("127.0.0.1", help="Bind address"),
+    port: int = typer.Option(8765, help="Port"),
+    daemon: bool = typer.Option(False, help="Run in background (detach from terminal)"),
+    log_file: str = typer.Option("", help="Log file path (default: data dir dashboard.log)"),
+) -> None:
+    """Start the local web dashboard."""
+    _start_dashboard(host=host, port=port, daemon=daemon, log_file=log_file)
+
+
+@dashboard_app.command("stop")
+def dashboard_stop(
+    port: int = typer.Option(8765, help="Port"),
+) -> None:
+    """Stop the local web dashboard."""
+    cfg = load_default_config()
+    if stop_server(cfg.data_dir, port=port):
+        console.print("[green]Dashboard stopped.[/green]")
+    else:
+        console.print("[yellow]Dashboard is not running.[/yellow]")
+
+
+@dashboard_app.command("restart")
+def dashboard_restart(
+    host: str = typer.Option("127.0.0.1", help="Bind address"),
+    port: int = typer.Option(8765, help="Port"),
+    daemon: bool = typer.Option(False, help="Run in background (detach from terminal)"),
+    log_file: str = typer.Option("", help="Log file path (default: data dir dashboard.log)"),
+) -> None:
+    """Restart the local web dashboard."""
+    cfg = load_default_config()
+    if stop_server(cfg.data_dir, port=port):
+        console.print("[green]Dashboard stopped.[/green]")
+    console.print("[dim]Restarting...[/dim]")
+    _start_dashboard(host=host, port=port, daemon=daemon, log_file=log_file)
+
+
+@dashboard_app.command("status")
 def status() -> None:
     """Show PaperBot dashboard status."""
     cfg = load_default_config()
@@ -576,27 +553,11 @@ def status() -> None:
         console.print("[yellow]PaperBot: STOPPED[/yellow]")
 
 
-@app.command()
-def audit(
-    action: str = typer.Option("", help="Filter by action type (recommend/fetch/mark)"),
-    limit: int = typer.Option(20, help="Number of entries to show"),
-    stats_only: bool = typer.Option(False, "--stats", help="Show summary statistics only"),
-    days: int = typer.Option(7, help="Number of days to look back for stats"),
+def _show_log_entries(
+    db_path: Path,
+    action: str,
+    limit: int,
 ) -> None:
-    """View audit log of system operations."""
-    db_path = _db_path()
-
-    if stats_only:
-        data = get_audit_stats(db_path, days=days)
-        console.print(f"[bold]Audit Stats (last {days} days)[/bold]")
-        console.print(f"Total entries: {data['total']}")
-        if data.get("by_action"):
-            console.print("\n[bold]By Action:[/bold]")
-            for action_name, statuses in sorted(data["by_action"].items()):
-                status_str = " | ".join(f"{s}={c}" for s, c in sorted(statuses.items()))
-                console.print(f"  {action_name}: {status_str}")
-        return
-
     logs = get_audit_logs(db_path, action=action or None, limit=limit)
     if not logs:
         console.print("[yellow]No audit entries found.[/yellow]")
@@ -622,6 +583,37 @@ def audit(
             detail_str = " | ".join(f"{k}={v}" for k, v in details.items() if v is not None)
             if detail_str:
                 console.print(f"  [dim]{detail_str}[/dim]")
+
+
+def _show_log_stats(db_path: Path, days: int) -> None:
+    data = get_audit_stats(db_path, days=days)
+    console.print(f"[bold]Audit Stats (last {days} days)[/bold]")
+    console.print(f"Total entries: {data['total']}")
+    if data.get("by_action"):
+        console.print("\n[bold]By Action:[/bold]")
+        for action_name, statuses in sorted(data["by_action"].items()):
+            status_str = " | ".join(f"{s}={c}" for s, c in sorted(statuses.items()))
+            console.print(f"  {action_name}: {status_str}")
+
+
+@logs_app.callback(invoke_without_command=True)
+def logs(
+    ctx: typer.Context,
+    action: str = typer.Option("", help="Filter by action type (recommend/update/fetch/mark/translate/resolve_pdf/note)"),
+    limit: int = typer.Option(20, help="Number of entries to show"),
+) -> None:
+    """View operation log entries."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _show_log_entries(_db_path(), action=action, limit=limit)
+
+
+@logs_app.command("stats")
+def logs_stats(
+    days: int = typer.Option(7, help="Number of days to look back"),
+) -> None:
+    """Show operation log statistics."""
+    _show_log_stats(_db_path(), days=days)
 
 
 if __name__ == "__main__":

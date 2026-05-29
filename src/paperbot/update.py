@@ -26,7 +26,7 @@ def _coerce_score(value: Any) -> float:
         return 0.0
 
 
-def refresh_existing_papers(db_path: Path, settings: Settings) -> dict[str, int]:
+def refresh_existing_papers(db_path: Path, settings: Settings, dry_run: bool = False) -> dict[str, int]:
     """Recompute local derived fields for all stored papers.
 
     This updates only fields derived from existing local metadata and current
@@ -63,28 +63,33 @@ def refresh_existing_papers(db_path: Path, settings: Settings) -> dict[str, int]
             ):
                 continue
 
-            conn.execute(
-                """
-                UPDATE papers SET
-                    venue_abbr = ?,
-                    score = ?,
-                    tier = ?,
-                    updated_at = datetime('now')
-                WHERE id = ?
-                """,
-                (new_abbr, new_score, str(new_tier), row["id"]),
-            )
+            if not dry_run:
+                conn.execute(
+                    """
+                    UPDATE papers SET
+                        venue_abbr = ?,
+                        score = ?,
+                        tier = ?,
+                        updated_at = datetime('now')
+                    WHERE id = ?
+                    """,
+                    (new_abbr, new_score, str(new_tier), row["id"]),
+                )
             updated += 1
 
-        conn.commit()
+        if not dry_run:
+            conn.commit()
 
     return {"total": total, "updated": updated}
 
 
-def reset_paper_states(db_path: Path) -> int:
+def reset_paper_states(db_path: Path, dry_run: bool = False) -> int:
     """Reset every stored paper to pending, creating missing state rows."""
     with closing(_connect(db_path)) as conn:
         paper_ids = [row["id"] for row in conn.execute("SELECT id FROM papers")]
+        if dry_run:
+            return len(paper_ids)
+
         for paper_id in paper_ids:
             conn.execute(
                 """

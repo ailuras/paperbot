@@ -37,23 +37,23 @@ def test_cli_help():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "fetch" in out
     assert "recommend" in out
-    assert "mark" in out
-    assert "stats" in out
-    assert "history" in out
-    assert "serve" in out
-    assert "init" in out
     assert "update" in out
+    assert "papers" in out
+    assert "dashboard" in out
+    assert "logs" in out
+    for legacy_command in ["fetch", "init", "mark", "stats", "history", "serve", "status", "audit"]:
+        assert re.search(rf"\b{legacy_command}\b", out) is None
 
 
-def test_fetch_help():
-    """fetch command has expected options."""
-    result = runner.invoke(app, ["fetch", "--help"])
-    assert result.exit_code == 0
-    out = _strip_ansi(result.output)
-    assert "--days" in out
-    assert "--dry-run" in out
+@pytest.mark.parametrize(
+    "command",
+    ["fetch", "init", "mark", "stats", "history", "serve", "status", "audit"],
+)
+def test_legacy_top_level_commands_removed(command: str):
+    """Old top-level commands are not kept as compatibility aliases."""
+    result = runner.invoke(app, [command, "--help"])
+    assert result.exit_code != 0
 
 
 def test_recommend_help():
@@ -65,40 +65,92 @@ def test_recommend_help():
     assert "--dry-run" in out
 
 
-def test_init_help():
-    """init command has expected options."""
-    result = runner.invoke(app, ["init", "--help"])
+def test_update_help():
+    """update command exposes the new source/status options."""
+    result = runner.invoke(app, ["update", "--help"])
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
+    assert "--fetch" in out
     assert "--days" in out
-    assert "365" in out
+    assert "--reset-status" in out
+    assert "--dry-run" in out
+    assert "--email" in out
+    assert "--all" not in out
 
 
-def test_mark_help():
-    """mark command requires status option."""
-    result = runner.invoke(app, ["mark", "--help"])
+@pytest.mark.parametrize("old_option", ["--all", "--reset"])
+def test_update_legacy_options_removed(old_option: str):
+    """Old update flags are not kept."""
+    result = runner.invoke(app, ["update", old_option])
+    assert result.exit_code != 0
+
+
+def test_papers_help():
+    """papers groups paper-state operations."""
+    result = runner.invoke(app, ["papers", "--help"])
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "mark" in out
+    assert "history" in out
+    assert "stats" in out
+
+
+def test_papers_mark_help():
+    """papers mark requires status option."""
+    result = runner.invoke(app, ["papers", "mark", "--help"])
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "--status" in out
 
 
-def test_stats_help():
-    """stats command has no required args."""
-    result = runner.invoke(app, ["stats", "--help"])
+def test_papers_stats_help():
+    """papers stats has no required args."""
+    result = runner.invoke(app, ["papers", "stats", "--help"])
     assert result.exit_code == 0
 
 
-def test_history_help():
-    """history command has limit option."""
-    result = runner.invoke(app, ["history", "--help"])
+def test_papers_history_help():
+    """papers history has limit and status options."""
+    result = runner.invoke(app, ["papers", "history", "--help"])
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "--limit" in out
+    assert "--status" in out
 
 
-def test_serve_help():
-    """serve command has host/port/daemon options."""
-    result = runner.invoke(app, ["serve", "--help"])
+def test_dashboard_help():
+    """dashboard groups local service operations."""
+    result = runner.invoke(app, ["dashboard", "--help"])
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "start" in out
+    assert "stop" in out
+    assert "restart" in out
+    assert "status" in out
+
+
+def test_dashboard_start_help():
+    """dashboard start has host/port/daemon options."""
+    result = runner.invoke(app, ["dashboard", "start", "--help"])
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "--host" in out
+    assert "--port" in out
+    assert "--daemon" in out
+    assert "--log-file" in out
+
+
+def test_dashboard_stop_help():
+    """dashboard stop accepts a port."""
+    result = runner.invoke(app, ["dashboard", "stop", "--help"])
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "--port" in out
+
+
+def test_dashboard_restart_help():
+    """dashboard restart has host/port/daemon options."""
+    result = runner.invoke(app, ["dashboard", "restart", "--help"])
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "--host" in out
@@ -106,9 +158,33 @@ def test_serve_help():
     assert "--daemon" in out
 
 
+def test_dashboard_status_help():
+    """dashboard status is available as a subcommand."""
+    result = runner.invoke(app, ["dashboard", "status", "--help"])
+    assert result.exit_code == 0
+
+
+def test_logs_help():
+    """logs lists audit entries by default."""
+    result = runner.invoke(app, ["logs", "--help"])
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "--action" in out
+    assert "--limit" in out
+    assert "stats" in out
+
+
+def test_logs_stats_help():
+    """logs stats has a days option."""
+    result = runner.invoke(app, ["logs", "stats", "--help"])
+    assert result.exit_code == 0
+    out = _strip_ansi(result.output)
+    assert "--days" in out
+
+
 def test_stats_command(cli_env: dict):
     """stats command prints paper statistics."""
-    result = runner.invoke(app, ["stats"], env=cli_env)
+    result = runner.invoke(app, ["papers", "stats"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "Total Papers" in out
@@ -123,7 +199,7 @@ def test_mark_command(cli_env: dict, sample_paper: dict):
     upsert_papers(db_path, [sample_paper])
 
     result = runner.invoke(
-        app, ["mark", sample_paper.id, "--status", "read"], env=cli_env
+        app, ["papers", "mark", sample_paper.id, "--status", "read"], env=cli_env
     )
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
@@ -131,8 +207,8 @@ def test_mark_command(cli_env: dict, sample_paper: dict):
 
 
 def test_audit_command(cli_env: dict):
-    """audit command shows recent operations."""
-    result = runner.invoke(app, ["audit"], env=cli_env)
+    """logs command shows recent operations."""
+    result = runner.invoke(app, ["logs"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "No audit entries found" in out
@@ -185,12 +261,20 @@ def test_recommend_marks_recommended(cli_env: dict, sample_papers, monkeypatch):
     assert stats["read"] == 0
 
 
-def test_fetch_dry_run(cli_env: dict, monkeypatch):
-    """fetch --dry-run prints report without saving."""
+def test_update_fetch_dry_run(cli_env: dict, monkeypatch):
+    """update --fetch --dry-run prints report without saving."""
     from paperbot import cli
+    from paperbot.db import get_paper_by_id_or_title
+    from paperbot.models import Paper
+
+    fetched = Paper(
+        id="W-update-dry-run",
+        title="Fetched Dry Run Paper",
+        venue="CAV 2024 Computer Aided Verification",
+    )
 
     def _fake_fetch(cfg, days=None):
-        return [], {
+        return [fetched], {
             "range": "2024-01-01 ~ 2024-01-15",
             "days": 15,
             "track_stats": [{"track": "SMT", "raw": 5, "filtered": 3}],
@@ -200,11 +284,13 @@ def test_fetch_dry_run(cli_env: dict, monkeypatch):
 
     monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
 
-    result = runner.invoke(app, ["fetch", "--dry-run"], env=cli_env)
+    result = runner.invoke(app, ["update", "--fetch", "--dry-run"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "Dry run" in out
     assert "SMT" in out
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    assert get_paper_by_id_or_title(db_path, fetched.id) == []
 
 
 def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dict):
@@ -239,7 +325,7 @@ def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dic
 
 
 def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper):
-    """update --reset clears paper state after refreshing local fields."""
+    """update --reset-status clears paper state after refreshing local fields."""
     from paperbot.db import get_stats, set_paper_status
 
     db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
@@ -247,7 +333,7 @@ def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper):
     upsert_papers(db_path, [sample_paper])
     set_paper_status(db_path, sample_paper.id, "read")
 
-    result = runner.invoke(app, ["update", "--reset"], env=cli_env)
+    result = runner.invoke(app, ["update", "--reset-status"], env=cli_env)
 
     assert result.exit_code == 0
     stats = get_stats(db_path)
@@ -255,8 +341,8 @@ def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper):
     assert stats["read"] == 0
 
 
-def test_update_all_fetches_before_local_refresh(cli_env: dict, monkeypatch):
-    """update --all refetches source data before recomputing local fields."""
+def test_update_fetches_before_local_refresh(cli_env: dict, monkeypatch):
+    """update --fetch refetches source data before recomputing local fields."""
     from paperbot import cli
     from paperbot.db import get_paper_by_id_or_title
     from paperbot.models import Paper
@@ -282,7 +368,7 @@ def test_update_all_fetches_before_local_refresh(cli_env: dict, monkeypatch):
 
     monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
 
-    result = runner.invoke(app, ["update", "--all", "--days", "15"], env=cli_env)
+    result = runner.invoke(app, ["update", "--fetch", "--days", "15"], env=cli_env)
 
     assert result.exit_code == 0
     db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
@@ -302,7 +388,7 @@ def test_history_command(cli_env: dict, sample_papers):
 
     set_paper_status(db_path, sample_papers[0].id, "read")
 
-    result = runner.invoke(app, ["history"], env=cli_env)
+    result = runner.invoke(app, ["papers", "history"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "Recent Reads" in out
@@ -312,7 +398,7 @@ def test_history_command(cli_env: dict, sample_papers):
 
 def test_history_empty(cli_env: dict):
     """history command handles empty state."""
-    result = runner.invoke(app, ["history"], env=cli_env)
+    result = runner.invoke(app, ["papers", "history"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "No recent reads" in out
@@ -330,7 +416,7 @@ def test_history_recommended_status(cli_env: dict, sample_papers):
     set_paper_status(db_path, sample_papers[1].id, "read")
 
     result = runner.invoke(
-        app, ["history", "--status", "recommended"], env=cli_env
+        app, ["papers", "history", "--status", "recommended"], env=cli_env
     )
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
@@ -342,7 +428,7 @@ def test_history_recommended_status(cli_env: dict, sample_papers):
 
 def test_history_invalid_status(cli_env: dict):
     """history rejects unknown statuses instead of returning arbitrary state rows."""
-    result = runner.invoke(app, ["history", "--status", "unknown"], env=cli_env)
+    result = runner.invoke(app, ["papers", "history", "--status", "unknown"], env=cli_env)
     assert result.exit_code == 1
     out = _strip_ansi(result.output)
     assert "Invalid status" in out
@@ -359,7 +445,7 @@ def test_history_with_status(cli_env: dict, sample_papers):
     set_paper_status(db_path, sample_papers[0].id, "starred")
 
     result = runner.invoke(
-        app, ["history", "--status", "starred"], env=cli_env
+        app, ["papers", "history", "--status", "starred"], env=cli_env
     )
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
@@ -369,28 +455,28 @@ def test_history_with_status(cli_env: dict, sample_papers):
 
 def test_history_status_empty(cli_env: dict):
     """history --status handles empty state gracefully."""
-    result = runner.invoke(app, ["history", "--status", "skip"], env=cli_env)
+    result = runner.invoke(app, ["papers", "history", "--status", "skip"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "No recent skipped papers" in out
 
 
-def test_serve_stop_not_running(cli_env: dict):
-    """serve --stop reports not running when no server is active."""
-    result = runner.invoke(app, ["serve", "--stop"], env=cli_env)
+def test_dashboard_stop_not_running(cli_env: dict):
+    """dashboard stop reports not running when no server is active."""
+    result = runner.invoke(app, ["dashboard", "stop"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "not running" in out.lower()
 
 
-def test_serve_stop_running_exits_without_starting(cli_env: dict):
-    """serve --stop exits after stopping and does not start the dashboard."""
+def test_dashboard_stop_running_exits_without_starting(cli_env: dict):
+    """dashboard stop exits after stopping and does not start the dashboard."""
     from unittest.mock import patch
 
     with patch("paperbot.cli.stop_server", return_value=True):
         with patch("paperbot.cli.run_dashboard") as mock_run:
             result = runner.invoke(
-                app, ["serve", "--stop", "--port", "9999"], env=cli_env
+                app, ["dashboard", "stop", "--port", "9999"], env=cli_env
             )
 
     assert result.exit_code == 0
@@ -399,14 +485,14 @@ def test_serve_stop_running_exits_without_starting(cli_env: dict):
     mock_run.assert_not_called()
 
 
-def test_serve_restart_not_running(cli_env: dict):
-    """serve --restart starts server when none is running."""
+def test_dashboard_restart_not_running(cli_env: dict):
+    """dashboard restart starts server when none is running."""
     from unittest.mock import patch
 
     with patch("paperbot.cli.stop_server", return_value=False):
         with patch("paperbot.cli.run_dashboard") as mock_run:
             result = runner.invoke(
-                app, ["serve", "--restart", "--port", "9999"], env=cli_env
+                app, ["dashboard", "restart", "--port", "9999"], env=cli_env
             )
 
     assert result.exit_code == 0
