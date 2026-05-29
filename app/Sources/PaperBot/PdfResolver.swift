@@ -129,7 +129,7 @@ class PdfResolver {
             // If no DOI, fallback to arXiv title lookup
             if let arxivPdf = await fetchArxiv(title: paper.title) {
                 paper.pdfUrl = arxivPdf
-                PaperStore.shared.savePapers()
+                PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: arxivPdf, pdfSource: "arxiv")
                 return arxivPdf
             }
             return nil
@@ -138,21 +138,21 @@ class PdfResolver {
         // Layer 2: Unpaywall
         if let unpaywallPdf = await fetchUnpaywall(doi: doi) {
             paper.pdfUrl = unpaywallPdf
-            PaperStore.shared.savePapers()
+            PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: unpaywallPdf, pdfSource: "unpaywall")
             return unpaywallPdf
         }
         
         // Layer 3: arXiv
         if let arxivPdf = await fetchArxiv(title: paper.title) {
             paper.pdfUrl = arxivPdf
-            PaperStore.shared.savePapers()
+            PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: arxivPdf, pdfSource: "arxiv")
             return arxivPdf
         }
         
         // Layer 4: Semantic Scholar
         if let s2Pdf = await fetchSemanticScholar(doi: doi) {
             paper.pdfUrl = s2Pdf
-            PaperStore.shared.savePapers()
+            PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: s2Pdf, pdfSource: "semanticscholar")
             return s2Pdf
         }
         

@@ -88,7 +88,7 @@ class DeepSeekTranslator {
         paper.titleZh = titleZh
         paper.abstractZh = abstractZh
         
-        // Save automatically
-        PaperStore.shared.savePapers()
+        // Save automatically to SQLite
+        PaperStore.shared.setPaperTranslation(id: paper.id, titleZh: titleZh, abstractZh: abstractZh)
     }
 }
