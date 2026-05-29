@@ -44,6 +44,7 @@ def test_cli_help():
     assert "history" in out
     assert "serve" in out
     assert "init" in out
+    assert "update" in out
 
 
 def test_fetch_help():
@@ -204,6 +205,91 @@ def test_fetch_dry_run(cli_env: dict, monkeypatch):
     out = _strip_ansi(result.output)
     assert "Dry run" in out
     assert "SMT" in out
+
+
+def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dict):
+    """update refreshes derived local fields while preserving paper state."""
+    from paperbot.db import get_paper_by_id_or_title, get_stats, set_paper_status
+    from paperbot.models import Paper
+
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    paper = Paper(
+        id="W-update-1",
+        title="Update Me",
+        venue="CAV 2024 Computer Aided Verification",
+        cited_by_count=0,
+        score=0.0,
+        tier=0,
+        venue_abbr="Others",
+    )
+    upsert_papers(db_path, [paper])
+    set_paper_status(db_path, paper.id, "read")
+
+    result = runner.invoke(app, ["update"], env=cli_env)
+
+    assert result.exit_code == 0
+    updated = get_paper_by_id_or_title(db_path, paper.id)[0]
+    assert updated.tier == 1
+    assert updated.score == 5.0
+    assert updated.venue_abbr == "CAV"
+    stats = get_stats(db_path)
+    assert stats["read"] == 1
+    assert stats["pending"] == 0
+
+
+def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper):
+    """update --reset clears paper state after refreshing local fields."""
+    from paperbot.db import get_stats, set_paper_status
+
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    upsert_papers(db_path, [sample_paper])
+    set_paper_status(db_path, sample_paper.id, "read")
+
+    result = runner.invoke(app, ["update", "--reset"], env=cli_env)
+
+    assert result.exit_code == 0
+    stats = get_stats(db_path)
+    assert stats["pending"] == 1
+    assert stats["read"] == 0
+
+
+def test_update_all_fetches_before_local_refresh(cli_env: dict, monkeypatch):
+    """update --all refetches source data before recomputing local fields."""
+    from paperbot import cli
+    from paperbot.db import get_paper_by_id_or_title
+    from paperbot.models import Paper
+
+    fetched = Paper(
+        id="W-update-all",
+        title="Fetched Paper",
+        venue="CAV 2024 Computer Aided Verification",
+        cited_by_count=0,
+        score=0.0,
+        tier=0,
+        venue_abbr="Others",
+    )
+
+    def _fake_fetch(cfg, days=None):
+        return [fetched], {
+            "range": "2024-01-01 ~ 2024-01-15",
+            "days": days or 15,
+            "track_stats": [{"track": "SMT", "raw": 1, "filtered": 1}],
+            "total_raw": 1,
+            "total_filtered": 1,
+        }
+
+    monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
+
+    result = runner.invoke(app, ["update", "--all", "--days", "15"], env=cli_env)
+
+    assert result.exit_code == 0
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    paper = get_paper_by_id_or_title(db_path, fetched.id)[0]
+    assert paper.title == "Fetched Paper"
+    assert paper.tier == 1
+    assert paper.venue_abbr == "CAV"
 
 
 def test_history_command(cli_env: dict, sample_papers):

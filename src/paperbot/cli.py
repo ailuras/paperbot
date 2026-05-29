@@ -30,6 +30,7 @@ from paperbot.mail import send_fetch_report_email, send_recommendation_email
 from paperbot.models import PaperStatus
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper_cached
+from paperbot.update import refresh_existing_papers, reset_paper_states
 from paperbot.utils import _abbr, format_date
 
 app = typer.Typer(help="PaperBot — daily paper recommendation for SMT/SAT/CP researchers")
@@ -280,6 +281,66 @@ def fetch(
     else:
         audit_entry.details["email"] = False
 
+    _log_audit(db_path, data_dir, audit_entry, start_time)
+
+
+@app.command()
+def update(
+    fetch_all: bool = typer.Option(
+        False,
+        "--all",
+        help="Fetch from OpenAlex before refreshing local metadata",
+    ),
+    reset: bool = typer.Option(
+        False,
+        "--reset",
+        help="Reset all paper states to pending after updating",
+    ),
+    days: int = typer.Option(
+        45,
+        "--days",
+        help="How many days back to fetch when --all is used",
+    ),
+) -> None:
+    """Update stored papers without generating recommendations."""
+    start_time = time.time()
+    cfg = load_default_config()
+    db_path = _db_path()
+    data_dir = cfg.data_dir
+    audit_entry = AuditEntry(action="update")
+    details: dict[str, object] = {"fetch_all": fetch_all, "reset": reset}
+
+    if fetch_all:
+        console.print("[blue]Fetching from OpenAlex...[/blue]")
+        papers, stats = fetch_papers(cfg, days=days)
+        inserted, updated = upsert_papers(db_path, papers) if papers else (0, 0)
+        console.print(f"[green]Source refresh: inserted {inserted} | updated {updated}[/green]")
+        details.update(
+            {
+                "inserted": inserted,
+                "source_updated": updated,
+                **stats,
+            }
+        )
+
+    refresh = refresh_existing_papers(db_path, cfg)
+    console.print(
+        "[green]Local refresh: "
+        f"checked {refresh['total']} | updated {refresh['updated']}[/green]"
+    )
+    details.update(
+        {
+            "local_total": refresh["total"],
+            "local_updated": refresh["updated"],
+        }
+    )
+
+    if reset:
+        reset_count = reset_paper_states(db_path)
+        console.print(f"[yellow]Reset states: {reset_count} papers marked pending.[/yellow]")
+        details["reset_count"] = reset_count
+
+    audit_entry.details = details
     _log_audit(db_path, data_dir, audit_entry, start_time)
 
 
