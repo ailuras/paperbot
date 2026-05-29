@@ -347,6 +347,7 @@ def _pid_file(data_dir: Path) -> Path:
 def run_server(db_path: Path, host: str = "127.0.0.1", port: int = 8000) -> None:
     """Start the dashboard HTTP server."""
     import signal
+    import sys
 
     handler = make_handler(db_path)
     server = HTTPServer((host, port), handler)

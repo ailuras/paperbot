@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from paperbot.translate import translate_paper, translate_text
+
+
+@pytest.fixture(autouse=True)
+def deepseek_api_key(monkeypatch):
+    """Give translation tests a fake API key; HTTP calls are mocked."""
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
 
 
 def test_translate_paper_success():
@@ -115,3 +123,22 @@ def test_translate_uses_correct_model():
     assert len(captured["payload"]["messages"]) == 2
     assert captured["payload"]["messages"][0]["role"] == "system"
     assert captured["payload"]["messages"][1]["role"] == "user"
+
+
+def test_translate_reads_api_key_at_call_time(monkeypatch):
+    """Changing DEEPSEEK_API_KEY after import affects the next API call."""
+    captured = {}
+
+    def capture_post(url, headers=None, json=None, timeout=None):
+        captured["headers"] = headers
+        mock = MagicMock()
+        mock.json.return_value = {"choices": [{"message": {"content": "x"}}]}
+        mock.raise_for_status = MagicMock()
+        return mock
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "runtime-key")
+
+    with patch("paperbot.translate.httpx.post", side_effect=capture_post):
+        translate_text("Hello")
+
+    assert captured["headers"]["Authorization"] == "Bearer runtime-key"

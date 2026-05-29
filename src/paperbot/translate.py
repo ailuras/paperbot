@@ -11,7 +11,7 @@ import httpx
 
 from paperbot.models import Paper
 
-DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
+DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_MODEL = "deepseek-v4-flash"
 
@@ -32,12 +32,13 @@ class TranslationResult:
 
 def _call_deepseek(text: str, system_prompt: str) -> str:
     """Call DeepSeek API for translation."""
-    if not DEEPSEEK_API_KEY:
-        raise RuntimeError("DEEPSEEK_API_KEY environment variable not set")
+    api_key = os.environ.get(DEEPSEEK_API_KEY_ENV, "")
+    if not api_key:
+        raise RuntimeError(f"{DEEPSEEK_API_KEY_ENV} environment variable not set")
 
     url = f"{DEEPSEEK_BASE_URL}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     payload: dict[str, Any] = {
