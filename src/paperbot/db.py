@@ -18,7 +18,6 @@ CREATE TABLE IF NOT EXISTS papers (
     doi TEXT,
     title TEXT NOT NULL,
     authors TEXT,
-    publication_year INTEGER,
     publication_date TEXT,
     venue TEXT,
     venue_abbr TEXT,
@@ -85,13 +84,6 @@ def init_db(db_path: Path) -> None:
     """Create tables if they don't exist."""
     with closing(_connect(db_path)) as conn:
         conn.executescript(_SCHEMA)
-        # Migrate: add venue_abbr if missing
-        cols = {
-            r[1]
-            for r in conn.execute("PRAGMA table_info(papers)")
-        }
-        if "venue_abbr" not in cols:
-            conn.execute("ALTER TABLE papers ADD COLUMN venue_abbr TEXT")
         conn.commit()
 
 
@@ -114,22 +106,33 @@ def upsert_papers(
             # Normalize authors to JSON string for storage
             authors_json = json.dumps(paper.authors, ensure_ascii=False) if paper.authors else None
 
-            row = (
+            # Prepare baseline metadata (no publication_year, and no calculated score/tier/abbr in update)
+            insert_row = (
                 paper_id,
                 paper.doi,
                 paper.title,
                 authors_json,
-                paper.publication_year,
                 paper.publication_date,
                 paper.venue,
-                paper.venue_abbr,
                 paper.cited_by_count,
                 paper.abstract,
                 paper.landing_page_url,
                 paper.pdf_url,
                 paper.track,
-                paper.score,
-                str(paper.tier) if paper.tier is not None else None,
+            )
+
+            update_row = (
+                paper.doi,
+                paper.title,
+                authors_json,
+                paper.publication_date,
+                paper.venue,
+                paper.cited_by_count,
+                paper.abstract,
+                paper.landing_page_url,
+                paper.pdf_url,
+                paper.track,
+                paper_id,
             )
 
             cursor.execute(
@@ -147,33 +150,29 @@ def upsert_papers(
                         doi = ?,
                         title = ?,
                         authors = ?,
-                        publication_year = ?,
                         publication_date = ?,
                         venue = ?,
-                        venue_abbr = ?,
                         cited_by_count = ?,
                         abstract = ?,
                         landing_page_url = ?,
                         pdf_url = ?,
                         track = ?,
-                        score = ?,
-                        tier = ?,
                         updated_at = datetime('now')
                     WHERE id = ?
                     """,
-                    row[1:] + (paper_id,),
+                    update_row,
                 )
                 updated += 1
             else:
                 cursor.execute(
                     """
                     INSERT INTO papers (
-                        id, doi, title, authors, publication_year, publication_date,
-                        venue, venue_abbr, cited_by_count, abstract, landing_page_url, pdf_url,
-                        track, score, tier
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        id, doi, title, authors, publication_date,
+                        venue, cited_by_count, abstract, landing_page_url, pdf_url, track,
+                        score, tier, venue_abbr
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, '0', 'Others')
                     """,
-                    row,
+                    insert_row,
                 )
                 # Auto-mark new papers as pending
                 cursor.execute(
@@ -205,8 +204,9 @@ def get_unread_papers(
     params: list[Any] = []
 
     sql = """
-    SELECT p.* FROM papers p
+    SELECT p.*, COALESCE(f.pdf_url, p.pdf_url) AS pdf_url FROM papers p
     LEFT JOIN paper_states ps ON p.id = ps.paper_id
+    LEFT JOIN paper_pdfs f ON p.id = f.paper_id
     WHERE ps.status = 'pending'
     """
 
@@ -286,9 +286,10 @@ def get_recent_reads(
     with closing(_connect(db_path)) as conn:
         cursor = conn.execute(
             """
-            SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
+            SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at, COALESCE(f.pdf_url, p.pdf_url) AS pdf_url
             FROM papers p
             JOIN paper_states ps ON p.id = ps.paper_id
+            LEFT JOIN paper_pdfs f ON p.id = f.paper_id
             WHERE ps.status = ?
             ORDER BY ps.changed_at DESC
             LIMIT ?
@@ -328,7 +329,14 @@ def get_paper_by_id_or_title(
     """Search papers by exact ID or fuzzy title match."""
     with closing(_connect(db_path)) as conn:
         # Try exact match first
-        cursor = conn.execute("SELECT * FROM papers WHERE id = ? LIMIT 1", (query,))
+        cursor = conn.execute(
+            """
+            SELECT p.*, COALESCE(f.pdf_url, p.pdf_url) AS pdf_url FROM papers p
+            LEFT JOIN paper_pdfs f ON p.id = f.paper_id
+            WHERE p.id = ? LIMIT 1
+            """,
+            (query,),
+        )
         row = cursor.fetchone()
         if row:
             return [Paper.from_dict(dict(row))]
@@ -336,9 +344,10 @@ def get_paper_by_id_or_title(
         # Fuzzy title search
         cursor = conn.execute(
             """
-            SELECT * FROM papers
-            WHERE title LIKE ?
-            ORDER BY score DESC
+            SELECT p.*, COALESCE(f.pdf_url, p.pdf_url) AS pdf_url FROM papers p
+            LEFT JOIN paper_pdfs f ON p.id = f.paper_id
+            WHERE p.title LIKE ?
+            ORDER BY p.score DESC
             LIMIT ?
             """,
             (f"%{query}%", limit),
@@ -405,9 +414,10 @@ def list_papers(
             secondary = "p.cited_by_count DESC" if sort_col == "score" else "p.score DESC"
 
         sql = f"""
-        SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at
+        SELECT p.*, COALESCE(ps.status, 'pending') as status, ps.changed_at, COALESCE(f.pdf_url, p.pdf_url) AS pdf_url
         FROM papers p
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
+        LEFT JOIN paper_pdfs f ON p.id = f.paper_id
         {where_sql}
         ORDER BY {sort_prefix}.{sort_col} {order}, {secondary}
         LIMIT ? OFFSET ?

@@ -66,13 +66,21 @@ class Paper:
         except (ValueError, TypeError):
             tier = 0
 
+        pub_year = data.get("publication_year")
+        pub_date = data.get("publication_date", "")
+        if pub_year is None and pub_date:
+            try:
+                pub_year = int(pub_date[:4])
+            except (ValueError, TypeError):
+                pass
+
         return cls(
             id=data.get("id", ""),
             doi=data.get("doi"),
             title=data.get("title", ""),
             authors=authors,
-            publication_year=data.get("publication_year"),
-            publication_date=data.get("publication_date", ""),
+            publication_year=pub_year,
+            publication_date=pub_date,
             venue=data.get("venue", ""),
             cited_by_count=data.get("cited_by_count", 0) or 0,
             abstract=data.get("abstract", ""),
