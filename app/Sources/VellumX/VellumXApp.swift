@@ -14,7 +14,7 @@ struct VellumXApp: App {
                 .frame(minWidth: 900, minHeight: 550)
         }
 
-        MenuBarExtra("VellumX", systemImage: "books.vertical") {
+        MenuBarExtra {
             if recommendedPapers.isEmpty {
                 Text("No recommendations for today.")
                     .font(.caption)
@@ -46,8 +46,22 @@ struct VellumXApp: App {
             Button("Quit VellumX") {
                 NSApplication.shared.terminate(nil)
             }
+        } label: {
+            Image(nsImage: Self.menuBarIcon)
         }
     }
+
+    /// Menu bar icon loaded from the bundled template PNG so it adapts to
+    /// light/dark menu bars. Falls back to an SF Symbol if the resource is missing.
+    static let menuBarIcon: NSImage = {
+        if let img = NSImage(named: "MenuBarIcon") {
+            img.isTemplate = true
+            img.size = NSSize(width: 18, height: 18)
+            return img
+        }
+        return NSImage(systemSymbolName: "books.vertical", accessibilityDescription: "VellumX")
+            ?? NSImage()
+    }()
     
     private func openPdf(for paper: Paper) {
         if let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty, let url = URL(string: pdfUrl) {

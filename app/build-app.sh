@@ -19,6 +19,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_PATH" "$APP/Contents/MacOS/$BIN_NAME"
 cp Info.plist "$APP/Contents/Info.plist"
 [ -f Resources/VellumX.icns ] && cp Resources/VellumX.icns "$APP/Contents/Resources/VellumX.icns"
+[ -f Resources/MenuBarIcon.png ] && cp Resources/MenuBarIcon.png "$APP/Contents/Resources/MenuBarIcon.png"
+[ -f Resources/MenuBarIcon@2x.png ] && cp "Resources/MenuBarIcon@2x.png" "$APP/Contents/Resources/MenuBarIcon@2x.png"
 
 echo "[3/4] codesign (ad-hoc, with entitlements)"
 codesign --force --sign - \

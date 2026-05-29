@@ -12,6 +12,8 @@
     <string>2.0</string>
     <key>CFBundleExecutable</key>
     <string>VellumX</string>
+    <key>CFBundleIconFile</key>
+    <string>VellumX</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
