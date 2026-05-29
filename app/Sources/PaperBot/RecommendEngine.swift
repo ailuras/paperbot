@@ -42,7 +42,6 @@ class RecommendEngine {
         
         if papers.isEmpty { return [] }
         
-        let fileManager = FileManager.default
         let calendar = Calendar.current
         guard let cutoffDate = calendar.date(byAdding: .day, value: -recentDays, to: Date()) else {
             return []
