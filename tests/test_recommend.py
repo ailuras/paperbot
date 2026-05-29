@@ -27,7 +27,7 @@ def test_recommend_quality_slots():
     cfg = Settings(
         tracks={"T": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         recommendation=RecommendationConfig(daily_count=3, quality_slots=1, high_score_threshold=5, recent_days=30),
@@ -50,7 +50,7 @@ def test_recommend_recent_fallback():
     cfg = Settings(
         tracks={"T": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         recommendation=RecommendationConfig(daily_count=2, quality_slots=1, high_score_threshold=10, recent_days=30),
@@ -73,7 +73,7 @@ def test_recommend_no_duplicates():
     cfg = Settings(
         tracks={"T": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         recommendation=RecommendationConfig(daily_count=3, quality_slots=1, high_score_threshold=1, recent_days=30),
@@ -93,7 +93,7 @@ def test_recommend_empty_pool():
     cfg = Settings(
         tracks={"T": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         recommendation=RecommendationConfig(daily_count=3, quality_slots=1, high_score_threshold=5, recent_days=30),
@@ -107,7 +107,7 @@ def test_recommend_custom_count():
     cfg = Settings(
         tracks={"T": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         recommendation=RecommendationConfig(daily_count=5, quality_slots=1, high_score_threshold=1, recent_days=30),

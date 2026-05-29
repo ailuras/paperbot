@@ -7,90 +7,6 @@ from datetime import datetime
 
 DATE_FORMAT = "%Y-%m-%d"
 
-# Venue name → acronym mapping for known conferences / journals.
-VENUE_ABBR_MAP: dict[str, list[str]] = {
-    "CAV": ["computer aided verification"],
-    "ICSE": ["international conference on software engineering"],
-    "FSE": ["foundations of software engineering", "esec/fse"],
-    "ASE": ["automated software engineering"],
-    "ISSTA": ["software testing and analysis"],
-    "PLDI": ["programming language design"],
-    "POPL": ["principles of programming languages"],
-    "OOPSLA": ["object-oriented programming"],
-    "NeurIPS": ["neural information processing", "neurips"],
-    "ICML": ["international conference on machine learning"],
-    "ICLR": ["learning representations"],
-    "AAAI": ["advancement of artificial intelligence"],
-    "IJCAI": ["joint conference on artificial intelligence"],
-    "TACAS": ["tools and algorithms"],
-    "CADE": ["automated deduction"],
-    "IJCAR": ["joint conference on automated reasoning"],
-    "LICS": ["logic in computer science"],
-    "SAT": [
-        "international conference on theory and applications of satisfiability testing",
-        "satisfiability testing",
-        "theory and applications of satisfiability",
-    ],
-    "CPAIOR": [
-        "integration of constraint programming, artificial intelligence, and operations research",
-        "integration of artificial intelligence and operations research techniques in constraint programming",
-        "constraint programming, artificial intelligence",
-    ],
-    "CP": [
-        "international conference on principles and practice of constraint programming",
-        "principles and practice of constraint programming",
-        "constraint programming",
-    ],
-    "FM": ["symposium on formal methods"],
-    "JAIR": ["journal of artificial intelligence research"],
-    "AIJ": ["artificial intelligence"],
-    "TOSEM": ["acm transactions on software engineering"],
-    "TSE": ["ieee transactions on software engineering"],
-    "TOPLAS": ["programming languages and systems"],
-    "USENIX": ["usenix security"],
-    "CCS": ["computer and communications security"],
-    "NDSS": ["network and distributed system security"],
-    "S&P": ["security and privacy", "ieee symposium on security"],
-    "OSDI": ["operating systems design"],
-    "SOSP": ["operating systems principles"],
-    "EuroSys": ["eurosys"],
-    "SIGCOMM": ["sigcomm"],
-    "SIGMOD": ["management of data"],
-    "VLDB": ["very large data bases", "vldb"],
-    "WWW": ["the web conference", "world wide web"],
-    "ACL": ["association for computational linguistics"],
-    "EMNLP": ["empirical methods in natural language"],
-    "CVPR": ["computer vision and pattern recognition"],
-    "ICCV": ["international conference on computer vision"],
-    "ECCV": ["european conference on computer vision"],
-    "SAS": ["static analysis symposium"],
-    "ICLP": ["logic programming"],
-    "FMCAD": ["formal methods in computer-aided design"],
-    "VMCAI": [
-        "verification, model checking, and abstract interpretation",
-        "verification, model checking",
-    ],
-    "LPAR": [
-        "logic for programming, artificial intelligence and reasoning",
-        "logic for programming",
-    ],
-    "JAR": ["journal of automated reasoning"],
-    "FMSD": ["formal methods in system design"],
-    "ICSME": ["software maintenance"],
-    "ISSRE": ["software reliability engineering"],
-    "SANER": ["software analysis, evolution"],
-    "COMPSAC": ["computer software and applications"],
-    "MSR": ["mining software repositories"],
-    "KR": ["knowledge representation and reasoning"],
-    "SEFM": ["software engineering and formal methods"],
-    "ICFEM": ["formal engineering methods"],
-    "ICECCS": ["engineering of complex computer systems"],
-    "QRS": ["software quality, reliability"],
-    "AST": ["automation of software test", "automated software testing"],
-    "ICTAI": ["tools with artificial intelligence"],
-}
-
-
 def format_date(dt: datetime | None = None) -> str:
     """Return a consistently formatted date string."""
     if dt is None:
@@ -111,7 +27,7 @@ def compute_venue_abbr(venue: str) -> str:
 
     Rules:
       - arXiv  →  "arXiv"
-      - Known conference / journal (matched by VENUE_ABBR_MAP) → acronym
+      - Known conference / journal (matched by config scoring venues) → acronym
       - Everything else  →  "Others"
     """
     if not venue:
@@ -123,10 +39,32 @@ def compute_venue_abbr(venue: str) -> str:
     if "arxiv" in venue_lower:
         return "arXiv"
 
-    # Known venues
-    for abbr, keywords in VENUE_ABBR_MAP.items():
-        for kw in keywords:
-            if kw in venue_lower:
+    # Try to load config dynamically to avoid circular dependencies
+    try:
+        from paperbot.config import load_default_config
+        settings = load_default_config()
+
+        # Gather all (acronym, keyword) pairs to sort by keyword length descending,
+        # ensuring that more specific/longer phrases are matched first.
+        candidates = []
+        for tier in settings.scoring.tiers.values():
+            for abbr, keywords in tier.venues.items():
+                for kw in keywords:
+                    candidates.append((abbr, kw))
+
+        candidates.sort(key=lambda x: len(x[1]), reverse=True)
+
+        for abbr, kw in candidates:
+            if kw.lower() in venue_lower:
                 return abbr
+
+        # If no phrase matched, fallback to checking the exact acronym as a word boundary
+        for tier in settings.scoring.tiers.values():
+            for abbr in tier.venues.keys():
+                pattern = r"\b" + re.escape(abbr.lower()) + r"\b"
+                if re.search(pattern, venue_lower):
+                    return abbr
+    except Exception:
+        pass
 
     return "Others"

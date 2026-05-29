@@ -409,7 +409,7 @@ def test_api_recommend_marks_recommended(tmp_db_path: Path, sample_papers, monke
     settings = Settings(
         tracks={"SMT": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         recommendation=RecommendationConfig(daily_count=2, quality_slots=1),

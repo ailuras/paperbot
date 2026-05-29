@@ -21,8 +21,8 @@ def sample_config_dict():
         },
         "scoring": {
             "tiers": {
-                "1": {"points": 5, "acronyms": ["CAV"], "phrases": []},
-                "2": {"points": 3, "acronyms": ["TACAS"], "phrases": []},
+                "1": {"points": 5, "venues": {"CAV": []}},
+                "2": {"points": 3, "venues": {"TACAS": []}},
             },
             "citation_breakpoints": [
                 {"up_to": 10, "points_per_citation": 0.5},

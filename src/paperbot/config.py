@@ -35,8 +35,7 @@ class FiltersConfig(BaseModel):
 
 class ScoringTier(BaseModel):
     points: int
-    acronyms: list[str] = Field(default_factory=list)
-    phrases: list[str] = Field(default_factory=list)
+    venues: dict[str, list[str]] = Field(default_factory=dict)
 
 
 class CitationBreakpoint(BaseModel):

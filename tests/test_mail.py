@@ -123,7 +123,7 @@ def test_smtp_env_overrides_config(monkeypatch):
     settings = Settings(
         tracks={"SMT": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
         mail=MailConfig(

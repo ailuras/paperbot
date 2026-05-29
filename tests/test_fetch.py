@@ -72,7 +72,7 @@ def test_venue_scorer_phrase_match(sample_config_dict: dict):
             **sample_config_dict,
             "scoring": {
                 "tiers": {
-                    "1": {"points": 5, "acronyms": [], "phrases": ["computer aided verification"]},
+                    "1": {"points": 5, "venues": {"CAV": ["computer aided verification"]}},
                 },
                 "citation_breakpoints": [
                     {"up_to": None, "points_per_citation": 0.1},
@@ -103,7 +103,7 @@ def test_venue_scorer_no_match():
     cfg = Settings(
         tracks={"T": TrackConfig(query="q", keywords=["k"])},
         scoring={
-            "tiers": {"1": {"points": 5, "acronyms": ["CAV"], "phrases": []}},
+            "tiers": {"1": {"points": 5, "venues": {"CAV": []}}},
             "citation_breakpoints": [{"up_to": None, "points_per_citation": 0.1}],
         },
     )

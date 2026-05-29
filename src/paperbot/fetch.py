@@ -51,19 +51,18 @@ class VenueScorer:
         sorted_tier_nums = sorted(int(k) for k in tiers)
         for tier_num in sorted_tier_nums:
             tier = tiers[str(tier_num)]
-            acronyms = tier.acronyms
-            if acronyms:
-                pattern = r"\b(" + "|".join(re.escape(a.lower()) for a in acronyms) + r")\b"
+            for abbr, phrases in tier.venues.items():
+                pattern = r"\b" + re.escape(abbr.lower()) + r"\b"
                 if re.search(pattern, venue_lower):
                     return tier_num
-            for phrase in tier.phrases:
-                phrase_lower = phrase.lower()
-                if phrase_lower in venue_lower:
-                    if self._has_more_specific_lower_tier_phrase(
-                        venue_lower, phrase_lower, tier_num, sorted_tier_nums
-                    ):
-                        continue
-                    return tier_num
+                for phrase in phrases:
+                    phrase_lower = phrase.lower()
+                    if phrase_lower in venue_lower:
+                        if self._has_more_specific_lower_tier_phrase(
+                            venue_lower, phrase_lower, tier_num, sorted_tier_nums
+                        ):
+                            continue
+                        return tier_num
         return 0
 
     def _has_more_specific_lower_tier_phrase(
@@ -74,10 +73,11 @@ class VenueScorer:
         sorted_tiers: list[int],
     ) -> bool:
         for lower_tier in (t for t in sorted_tiers if t > tier):
-            for lower_phrase in self.scoring.tiers[str(lower_tier)].phrases:
-                lp = lower_phrase.lower()
-                if phrase_lower in lp and lp in venue_lower and lp != phrase_lower:
-                    return True
+            for phrases in self.scoring.tiers[str(lower_tier)].venues.values():
+                for lower_phrase in phrases:
+                    lp = lower_phrase.lower()
+                    if phrase_lower in lp and lp in venue_lower and lp != phrase_lower:
+                        return True
         return False
 
     def citation_score(self, citations: int) -> float:
