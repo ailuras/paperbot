@@ -103,7 +103,6 @@ def _print_fetch_report(stats: dict[str, object]) -> None:
 @app.command()
 def recommend(
     count: int = typer.Option(3, help="Number of papers to recommend"),
-    json_output: bool = typer.Option(False, "--json", help="Output NDJSON"),
     dry_run: bool = typer.Option(False, help="Preview without saving"),
     email: bool = typer.Option(False, "--email", help="Send result via email (used by crontab)"),
     translate: bool = typer.Option(False, "--translate", help="Translate title and abstract (overrides config)"),
@@ -155,42 +154,30 @@ def recommend(
             except Exception as e:
                 console.print(f"[dim]Translation failed for {pid}: {e}[/dim]")
 
-    if json_output:
-        for r in results:
-            out = {
-                "date": today,
-                "slot": r.slot_index,
-                "reason": r.reason,
-                "paper": r.paper.to_dict(),
-            }
-            if r.paper_id in translations:
-                out["translation"] = translations[r.paper_id]
-            console.print(json.dumps(out, ensure_ascii=False))
-    else:
-        console.print(f"Daily Papers · {today}")
-        for r in results:
-            p = r.paper
-            abbr = _abbr(p.venue or "OpenAlex")
-            url = p.url
-            trans = translations.get(r.paper_id, {})
-
-            console.print("=====")
-            if trans.get("title_zh"):
-                console.print(f"[{abbr}] {p.title}")
-                console.print(f"[cyan]翻译: {trans['title_zh']}[/cyan]")
-            else:
-                console.print(f"[{abbr}] {p.title}")
-            if url:
-                console.print(f"Link: {url}")
-            console.print("-----")
-            console.print(f"Authors: {p.author_str}")
-            console.print("-----")
-            console.print(f"Abstract: {p.abstract}")
-            if trans.get("abstract_zh"):
-                console.print(f"[cyan]摘要翻译: {trans['abstract_zh']}[/cyan]")
+    console.print(f"Daily Papers · {today}")
+    for r in results:
+        p = r.paper
+        abbr = _abbr(p.venue or "OpenAlex")
+        url = p.url
+        trans = translations.get(r.paper_id, {})
 
         console.print("=====")
-        console.print(f"Pending: {len(papers)} | Selected: {len(results)}")
+        if trans.get("title_zh"):
+            console.print(f"[{abbr}] {p.title}")
+            console.print(f"[cyan]翻译: {trans['title_zh']}[/cyan]")
+        else:
+            console.print(f"[{abbr}] {p.title}")
+        if url:
+            console.print(f"Link: {url}")
+        console.print("-----")
+        console.print(f"Authors: {p.author_str}")
+        console.print("-----")
+        console.print(f"Abstract: {p.abstract}")
+        if trans.get("abstract_zh"):
+            console.print(f"[cyan]摘要翻译: {trans['abstract_zh']}[/cyan]")
+
+    console.print("=====")
+    console.print(f"Pending: {len(papers)} | Selected: {len(results)}")
 
     if not dry_run:
         picks = [{"paper_id": r.paper_id, "slot_index": r.slot_index} for r in results]
@@ -238,10 +225,10 @@ def recommend(
 
 @app.command()
 def update(
-    fetch_source: bool = typer.Option(
+    reset_db: bool = typer.Option(
         False,
-        "--fetch",
-        help="Fetch from OpenAlex before refreshing local metadata",
+        "--reset-db",
+        help="Recompute all scores and metadata in DB instead of fetching new papers",
     ),
     reset_status: bool = typer.Option(
         False,
@@ -251,32 +238,29 @@ def update(
     days: int = typer.Option(
         45,
         "--days",
-        help="How many days back to fetch when --fetch is used",
+        help="How many days back to fetch",
     ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
         help="Preview without saving",
     ),
-    email: bool = typer.Option(
-        False,
-        "--email",
-        help="Send fetch report via email when --fetch is used",
-    ),
 ) -> None:
-    """Update stored papers without generating recommendations."""
+    """Update stored papers by fetching from OpenAlex and refreshing metadata."""
     start_time = time.time()
     cfg = load_default_config()
     db_path = _db_path()
     data_dir = cfg.data_dir
     audit_entry = AuditEntry(action="update")
     details: dict[str, object] = {
-        "fetch": fetch_source,
+        "reset_db": reset_db,
         "reset_status": reset_status,
         "dry_run": dry_run,
     }
 
-    if fetch_source:
+    if reset_db:
+        console.print("[blue]Recomputing derived fields for stored papers...[/blue]")
+    else:
         console.print("[blue]Fetching from OpenAlex...[/blue]")
         papers, stats = fetch_papers(cfg, days=days)
         _print_fetch_report(stats)
@@ -295,23 +279,6 @@ def update(
                 **stats,
             }
         )
-
-        if email and not dry_run:
-            sent = send_fetch_report_email(
-                stats=stats,
-                papers_count=inserted + updated,
-                settings=cfg,
-                date_str=format_date(),
-            )
-            details["email"] = email
-            details["email_sent"] = sent
-            _handle_email_result(sent, audit_entry, "Email report sent.")
-        elif email:
-            console.print("[yellow]Email not sent during dry run.[/yellow]")
-            details["email"] = False
-    elif email:
-        console.print("[yellow]Email report is only sent when --fetch is used.[/yellow]")
-        details["email"] = False
 
     refresh = refresh_existing_papers(db_path, cfg, dry_run=dry_run)
     action_label = "would update" if dry_run else "updated"
@@ -383,7 +350,13 @@ def mark(
 
 
 @papers_app.command("stats")
-def stats() -> None:
+def stats(
+    status: str = typer.Option(
+        None,
+        "--status",
+        help="Show recent 10 papers with this status (recommended/read/starred/skip/pending)",
+    )
+) -> None:
     """Show statistics about the paper database."""
     db_path = _db_path()
     data = get_stats(db_path)
@@ -408,49 +381,38 @@ def stats() -> None:
     )
     console.print(f"States: {states}")
 
+    if status is not None:
+        if status not in PaperStatus.ALL:
+            allowed = ", ".join(sorted(PaperStatus.ALL))
+            console.print(f"[red]Invalid status '{status}'. Must be one of: {allowed}[/red]")
+            raise typer.Exit(1)
 
-@papers_app.command("history")
-def history(
-    limit: int = typer.Option(10, help="Number of recent papers to show"),
-    status: str = typer.Option(
-        "read",
-        help="Filter by status: recommended / read / starred / skip / pending",
-    ),
-) -> None:
-    """Show recent papers by status."""
-    if status not in PaperStatus.ALL:
-        allowed = ", ".join(sorted(PaperStatus.ALL))
-        console.print(f"[red]Invalid status '{status}'. Must be one of: {allowed}[/red]")
-        raise typer.Exit(1)
+        rows = get_recent_reads(db_path, limit=10, status=status)
+        title, empty_message, time_label = _HISTORY_LABELS[status]
 
-    db_path = _db_path()
-    rows = get_recent_reads(db_path, limit=limit, status=status)
-    title, empty_message, time_label = _HISTORY_LABELS[status]
+        console.print()
+        if not rows:
+            console.print(f"[yellow]{empty_message}[/yellow]")
+            return
 
-    if not rows:
-        console.print(f"[yellow]{empty_message}[/yellow]")
-        raise typer.Exit(0)
+        console.print(f"[bold]{title}[/bold]")
+        for p in rows:
+            abbr = _abbr(p.venue or "OpenAlex")
+            url = p.url
+            abstract = p.abstract
+            mark_time = p.changed_at
 
-    console.print(title)
-
-    for p in rows:
-        abbr = _abbr(p.venue or "OpenAlex")
-        url = p.url
-        abstract = p.abstract
-        mark_time = p.changed_at
-
+            console.print("=====")
+            console.print(f"[{abbr}] {p.title or 'No Title'}")
+            if url:
+                console.print(f"Link: {url}")
+            console.print("-----")
+            console.print(f"Authors: {p.author_str}")
+            if mark_time:
+                console.print(f"{time_label}: {mark_time}")
+            console.print("-----")
+            console.print(f"Abstract: {abstract}")
         console.print("=====")
-        console.print(f"[{abbr}] {p.title or 'No Title'}")
-        if url:
-            console.print(f"Link: {url}")
-        console.print("-----")
-        console.print(f"Authors: {p.author_str}")
-        if mark_time:
-            console.print(f"{time_label}: {mark_time}")
-        console.print("-----")
-        console.print(f"Abstract: {abstract}")
-
-    console.print("=====")
 
 
 def _start_dashboard(

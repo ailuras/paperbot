@@ -70,11 +70,11 @@ def test_update_help():
     result = runner.invoke(app, ["update", "--help"])
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "--fetch" in out
+    assert "--reset-db" in out
     assert "--days" in out
     assert "--reset-status" in out
     assert "--dry-run" in out
-    assert "--email" in out
+    assert "--email" not in out
     assert "--all" not in out
 
 
@@ -91,7 +91,7 @@ def test_papers_help():
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "mark" in out
-    assert "history" in out
+    assert "history" not in out
     assert "stats" in out
 
 
@@ -104,17 +104,10 @@ def test_papers_mark_help():
 
 
 def test_papers_stats_help():
-    """papers stats has no required args."""
+    """papers stats has a status option."""
     result = runner.invoke(app, ["papers", "stats", "--help"])
     assert result.exit_code == 0
-
-
-def test_papers_history_help():
-    """papers history has limit and status options."""
-    result = runner.invoke(app, ["papers", "history", "--help"])
-    assert result.exit_code == 0
     out = _strip_ansi(result.output)
-    assert "--limit" in out
     assert "--status" in out
 
 
@@ -262,7 +255,7 @@ def test_recommend_marks_recommended(cli_env: dict, sample_papers, monkeypatch):
 
 
 def test_update_fetch_dry_run(cli_env: dict, monkeypatch):
-    """update --fetch --dry-run prints report without saving."""
+    """update --dry-run prints report without saving."""
     from paperbot import cli
     from paperbot.db import get_paper_by_id_or_title
     from paperbot.models import Paper
@@ -284,7 +277,7 @@ def test_update_fetch_dry_run(cli_env: dict, monkeypatch):
 
     monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
 
-    result = runner.invoke(app, ["update", "--fetch", "--dry-run"], env=cli_env)
+    result = runner.invoke(app, ["update", "--dry-run"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "Dry run" in out
@@ -293,8 +286,9 @@ def test_update_fetch_dry_run(cli_env: dict, monkeypatch):
     assert get_paper_by_id_or_title(db_path, fetched.id) == []
 
 
-def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dict):
+def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dict, monkeypatch):
     """update refreshes derived local fields while preserving paper state."""
+    from paperbot import cli
     from paperbot.db import get_paper_by_id_or_title, get_stats, set_paper_status
     from paperbot.models import Paper
 
@@ -312,6 +306,16 @@ def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dic
     upsert_papers(db_path, [paper])
     set_paper_status(db_path, paper.id, "read")
 
+    def _fake_fetch(cfg, days=None):
+        return [], {
+            "range": "2024-01-01 ~ 2024-01-15",
+            "days": days or 45,
+            "track_stats": [],
+            "total_raw": 0,
+            "total_filtered": 0,
+        }
+    monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
+
     result = runner.invoke(app, ["update"], env=cli_env)
 
     assert result.exit_code == 0
@@ -324,14 +328,25 @@ def test_update_recomputes_existing_papers_without_resetting_status(cli_env: dic
     assert stats["pending"] == 0
 
 
-def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper):
+def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper, monkeypatch):
     """update --reset-status clears paper state after refreshing local fields."""
+    from paperbot import cli
     from paperbot.db import get_stats, set_paper_status
 
     db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
     init_db(db_path)
     upsert_papers(db_path, [sample_paper])
     set_paper_status(db_path, sample_paper.id, "read")
+
+    def _fake_fetch(cfg, days=None):
+        return [], {
+            "range": "2024-01-01 ~ 2024-01-15",
+            "days": days or 45,
+            "track_stats": [],
+            "total_raw": 0,
+            "total_filtered": 0,
+        }
+    monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
 
     result = runner.invoke(app, ["update", "--reset-status"], env=cli_env)
 
@@ -342,7 +357,7 @@ def test_update_reset_marks_all_papers_pending(cli_env: dict, sample_paper):
 
 
 def test_update_fetches_before_local_refresh(cli_env: dict, monkeypatch):
-    """update --fetch refetches source data before recomputing local fields."""
+    """update refetches source data before recomputing local fields."""
     from paperbot import cli
     from paperbot.db import get_paper_by_id_or_title
     from paperbot.models import Paper
@@ -368,7 +383,7 @@ def test_update_fetches_before_local_refresh(cli_env: dict, monkeypatch):
 
     monkeypatch.setattr(cli, "fetch_papers", _fake_fetch)
 
-    result = runner.invoke(app, ["update", "--fetch", "--days", "15"], env=cli_env)
+    result = runner.invoke(app, ["update", "--days", "15"], env=cli_env)
 
     assert result.exit_code == 0
     db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
@@ -378,8 +393,41 @@ def test_update_fetches_before_local_refresh(cli_env: dict, monkeypatch):
     assert paper.venue_abbr == "CAV"
 
 
-def test_history_command(cli_env: dict, sample_papers):
-    """history command lists recently read papers."""
+def test_update_reset_db(cli_env: dict, monkeypatch):
+    """update --reset-db recomputes derived fields without fetching."""
+    from paperbot import cli
+    from paperbot.db import get_paper_by_id_or_title
+    from paperbot.models import Paper
+
+    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
+    init_db(db_path)
+    paper = Paper(
+        id="W-update-1",
+        title="Update Me",
+        venue="CAV 2024 Computer Aided Verification",
+        cited_by_count=0,
+        score=0.0,
+        tier=0,
+        venue_abbr="Others",
+    )
+    upsert_papers(db_path, [paper])
+
+    def _fail_fetch(cfg, days=None):
+        pytest.fail("fetch_papers should not be called when --reset-db is set")
+
+    monkeypatch.setattr(cli, "fetch_papers", _fail_fetch)
+
+    result = runner.invoke(app, ["update", "--reset-db"], env=cli_env)
+    assert result.exit_code == 0
+
+    updated = get_paper_by_id_or_title(db_path, paper.id)[0]
+    assert updated.tier == 1
+    assert updated.score == 5.0
+    assert updated.venue_abbr == "CAV"
+
+
+def test_stats_with_status(cli_env: dict, sample_papers):
+    """stats --status lists papers with specified status."""
     db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
     init_db(db_path)
     upsert_papers(db_path, sample_papers)
@@ -388,77 +436,28 @@ def test_history_command(cli_env: dict, sample_papers):
 
     set_paper_status(db_path, sample_papers[0].id, "read")
 
-    result = runner.invoke(app, ["papers", "history"], env=cli_env)
+    result = runner.invoke(app, ["papers", "stats", "--status", "read"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
+    assert "PaperBot Stats" in out
     assert "Recent Reads" in out
-    assert "Read:" in out
     assert sample_papers[0].title in out
 
 
-def test_history_empty(cli_env: dict):
-    """history command handles empty state."""
-    result = runner.invoke(app, ["papers", "history"], env=cli_env)
-    assert result.exit_code == 0
-    out = _strip_ansi(result.output)
-    assert "No recent reads" in out
-
-
-def test_history_recommended_status(cli_env: dict, sample_papers):
-    """history --status recommended lists recommendations separately from reads."""
-    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
-    init_db(db_path)
-    upsert_papers(db_path, sample_papers)
-
-    from paperbot.db import set_paper_status
-
-    set_paper_status(db_path, sample_papers[0].id, "recommended")
-    set_paper_status(db_path, sample_papers[1].id, "read")
-
-    result = runner.invoke(
-        app, ["papers", "history", "--status", "recommended"], env=cli_env
-    )
-    assert result.exit_code == 0
-    out = _strip_ansi(result.output)
-    assert "Recent Recommendations" in out
-    assert "Recommended:" in out
-    assert sample_papers[0].title in out
-    assert sample_papers[1].title not in out
-
-
-def test_history_invalid_status(cli_env: dict):
-    """history rejects unknown statuses instead of returning arbitrary state rows."""
-    result = runner.invoke(app, ["papers", "history", "--status", "unknown"], env=cli_env)
-    assert result.exit_code == 1
-    out = _strip_ansi(result.output)
-    assert "Invalid status" in out
-
-
-def test_history_with_status(cli_env: dict, sample_papers):
-    """history --status filters by paper state."""
-    db_path = Path(cli_env["PAPERBOT_DATA_DIR"]) / "paperbot.db"
-    init_db(db_path)
-    upsert_papers(db_path, sample_papers)
-
-    from paperbot.db import set_paper_status
-
-    set_paper_status(db_path, sample_papers[0].id, "starred")
-
-    result = runner.invoke(
-        app, ["papers", "history", "--status", "starred"], env=cli_env
-    )
-    assert result.exit_code == 0
-    out = _strip_ansi(result.output)
-    assert "Recent Starred Papers" in out
-    assert sample_papers[0].title in out
-
-
-def test_history_status_empty(cli_env: dict):
-    """history --status handles empty state gracefully."""
-    result = runner.invoke(app, ["papers", "history", "--status", "skip"], env=cli_env)
+def test_stats_status_empty(cli_env: dict):
+    """stats --status handles empty state gracefully."""
+    result = runner.invoke(app, ["papers", "stats", "--status", "skip"], env=cli_env)
     assert result.exit_code == 0
     out = _strip_ansi(result.output)
     assert "No recent skipped papers" in out
+
+
+def test_stats_invalid_status(cli_env: dict):
+    """stats --status rejects unknown statuses."""
+    result = runner.invoke(app, ["papers", "stats", "--status", "unknown"], env=cli_env)
+    assert result.exit_code == 1
+    out = _strip_ansi(result.output)
+    assert "Invalid status" in out
 
 
 def test_dashboard_stop_not_running(cli_env: dict):
