@@ -163,126 +163,74 @@ struct ContentView: View {
             }
             .listStyle(.sidebar)
             .safeAreaInset(edge: .bottom) {
-                // Background operations toolbar
-                VStack(spacing: 8) {
-                    Divider()
-                    
-                    if !statusMessage.isEmpty {
+                // Status message bar in Sidebar bottom
+                if !statusMessage.isEmpty {
+                    VStack(spacing: 0) {
+                        Divider()
                         Text(statusMessage)
                             .font(.caption)
                             .foregroundColor(.secondary)
                             .lineLimit(1)
                             .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    
-                    HStack {
-                        Button(action: fetchPapers) {
-                            if isFetching {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Label("Fetch", systemImage: "arrow.clockwise")
-                            }
-                        }
-                        .disabled(isFetching || isRecommending)
-                        
-                        Button(action: recommendPapers) {
-                            if isRecommending {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Label("Recommend", systemImage: "wand.and.stars")
-                            }
-                        }
-                        .disabled(isFetching || isRecommending)
-                    }
-                    .padding(.bottom, 12)
+                    .background(Color(NSColor.windowBackgroundColor))
                 }
             }
         } content: {
             // MARK: - Middle List
-            VStack(spacing: 0) {
-                // Search & Sort Bar
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundColor(.secondary)
-                    TextField("Search title/abstract...", text: $searchKeyword)
-                        .textFieldStyle(.plain)
-                    
-                    if !searchKeyword.isEmpty {
-                        Button(action: { searchKeyword = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    
-                    Divider().frame(height: 16)
-                    
-                    Menu {
-                        Button("Sort by Score") { sortByScore = true }
-                        Button("Sort by Date") { sortByScore = false }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .foregroundColor(.secondary)
-                    }
-                    .menuStyle(.borderlessButton)
-                    .frame(width: 24)
-                }
-                .padding(10)
-                .background(Color(NSColor.controlBackgroundColor))
-                
-                Divider()
-                
-                List(selection: $selectedPaperId) {
-                    ForEach(filteredPapers) { paper in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack(alignment: .top) {
-                                Text(paper.title)
-                                    .font(.headline)
-                                    .lineLimit(2)
-                                    .foregroundColor(.primary)
-                                
-                                Spacer()
-                                
-                                // Score badge
-                                Text(String(format: "%.1f", paper.score))
-                                    .font(.caption2.bold())
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(scoreColor(paper.score).opacity(0.15))
-                                    .foregroundColor(scoreColor(paper.score))
-                                    .cornerRadius(4)
-                            }
+            List(selection: $selectedPaperId) {
+                ForEach(filteredPapers) { paper in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(alignment: .top) {
+                            Text(paper.title)
+                                .font(.headline)
+                                .lineLimit(2)
+                                .foregroundColor(.primary)
                             
-                            HStack {
-                                Text(paper.venueAbbr)
-                                    .font(.caption.bold())
-                                    .foregroundColor(.orange)
-                                
-                                Text("•")
-                                    .foregroundColor(.secondary)
-                                
-                                Text(paper.publicationDate)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                
-                                Spacer()
-                                
-                                // Track Tag
-                                Text(paper.track)
-                                    .font(.system(size: 9, weight: .bold))
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 1)
-                                    .background(Color.purple.opacity(0.12))
-                                    .foregroundColor(.purple)
-                                    .cornerRadius(3)
-                            }
+                            Spacer()
+                            
+                            // Score badge
+                            Text(String(format: "%.1f", paper.score))
+                                .font(.caption2.bold())
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(scoreColor(paper.score).opacity(0.15))
+                                .foregroundColor(scoreColor(paper.score))
+                                .cornerRadius(4)
                         }
-                        .padding(.vertical, 4)
-                        .tag(paper.id)
+                        
+                        HStack {
+                            Text(paper.venueAbbr)
+                                .font(.caption.bold())
+                                .foregroundColor(.orange)
+                            
+                            Text("•")
+                                .foregroundColor(.secondary)
+                            
+                            Text(paper.publicationDate)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Spacer()
+                            
+                            // Track Tag
+                            Text(paper.track)
+                                .font(.system(size: 9, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.purple.opacity(0.12))
+                                .foregroundColor(.purple)
+                                .cornerRadius(3)
+                        }
                     }
+                    .padding(.vertical, 4)
+                    .tag(paper.id)
                 }
-                .listStyle(.inset)
             }
+            .listStyle(.inset)
+            .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
         } detail: {
             // MARK: - Right Detail
             if let paper = selectedPaper {
@@ -421,6 +369,51 @@ struct ContentView: View {
                         .font(.headline)
                         .foregroundColor(.secondary)
                 }
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                // Sorting Menu
+                Menu {
+                    Button(action: { sortByScore = true }) {
+                        HStack {
+                            Text("Sort by Score")
+                            if sortByScore { Image(systemName: "checkmark") }
+                        }
+                    }
+                    Button(action: { sortByScore = false }) {
+                        HStack {
+                            Text("Sort by Date")
+                            if !sortByScore { Image(systemName: "checkmark") }
+                        }
+                    }
+                } label: {
+                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                }
+                
+                Divider()
+                
+                // Fetch button
+                Button(action: fetchPapers) {
+                    if isFetching {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Fetch", systemImage: "arrow.clockwise")
+                    }
+                }
+                .disabled(isFetching || isRecommending)
+                .help("Fetch new papers from OpenAlex")
+                
+                // Recommend button
+                Button(action: recommendPapers) {
+                    if isRecommending {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Label("Recommend", systemImage: "wand.and.stars")
+                    }
+                }
+                .disabled(isFetching || isRecommending)
+                .help("Generate daily paper recommendations")
             }
         }
     }

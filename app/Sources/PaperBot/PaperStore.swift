@@ -29,6 +29,16 @@ class PaperStore: ObservableObject {
     func loadPapers() {
         let fileManager = FileManager.default
         let url = dataURL
+        
+        // SQLite DB migration check
+        var dirURL = fileManager.homeDirectoryForCurrentUser.appendingPathComponent(".paperbot")
+        if let configDir = ConfigManager.shared.config?.data_dir {
+            let expanded = (configDir as NSString).expandingTildeInPath
+            dirURL = URL(fileURLWithPath: expanded)
+        }
+        let dbURL = dirURL.appendingPathComponent("paperbot.db")
+        SQLiteMigrator.migrateIfNeeded(dbPath: dbURL, jsonPath: url)
+        
         if fileManager.fileExists(atPath: url.path) {
             do {
                 let data = try Data(contentsOf: url)
