@@ -1,4 +1,18 @@
-.build/
+# Swift / SwiftPM
+app/.build/
+app/VellumX.app/
+.swiftpm/
+*.xcodeproj
+
+# macOS
 .DS_Store
-VellumX.app/
+
+# Editor
 .vscode/
+
+# Icon build working dir
+app/VellumX.iconset/
+
+# dmg packaging
+app/*.dmg
+app/dmg-staging/

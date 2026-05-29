@@ -18,6 +18,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_PATH" "$APP/Contents/MacOS/$BIN_NAME"
 cp Info.plist "$APP/Contents/Info.plist"
+[ -f Resources/VellumX.icns ] && cp Resources/VellumX.icns "$APP/Contents/Resources/VellumX.icns"
 
 echo "[3/4] codesign (ad-hoc, with entitlements)"
 codesign --force --sign - \

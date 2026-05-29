@@ -24,15 +24,21 @@ Migrated, upgraded, and refactored from the original `PaperBot`, it focuses on p
 This project is built purely using SwiftPM (Swift Package Manager) and **can be compiled in the terminal without Xcode**.
 
 ### 1. Compile & Build
-Run the following command in the root directory of the `VellumX` project:
+The Swift package lives under `app/`. Run from there:
 ```bash
+cd app
 ./build-app.sh release
 ```
-This will generate a signed `VellumX.app` application bundle in the current directory.
+This will generate a signed `VellumX.app` application bundle inside `app/`.
 
 ### 2. Launch the App
 ```bash
-open ./VellumX.app
+open ./VellumX.app          # from inside app/
+```
+
+### 3. (Optional) Package a DMG
+```bash
+./make-dmg.sh               # from inside app/, after building
 ```
 Once launched, you will see a `📚` icon in the macOS status bar (top-right corner). Click it to unfold today's academic dashboard.
 
