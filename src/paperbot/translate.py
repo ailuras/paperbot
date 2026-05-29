@@ -9,11 +9,8 @@ from typing import Any
 
 import httpx
 
+from paperbot.config import Settings
 from paperbot.models import Paper
-
-DEEPSEEK_API_KEY_ENV = "DEEPSEEK_API_KEY"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-DEEPSEEK_MODEL = "deepseek-v4-flash"
 
 # Lower temperature for stable, deterministic translations
 _TEMPERATURE = 0.3
@@ -30,19 +27,30 @@ class TranslationResult:
     source: str  # "api" or "cache"
 
 
-def _call_deepseek(text: str, system_prompt: str) -> str:
+def _call_deepseek(text: str, system_prompt: str, settings: Settings | None = None) -> str:
     """Call DeepSeek API for translation."""
-    api_key = os.environ.get(DEEPSEEK_API_KEY_ENV, "")
-    if not api_key:
-        raise RuntimeError(f"{DEEPSEEK_API_KEY_ENV} environment variable not set")
+    if settings is None:
+        try:
+            from paperbot.config import load_default_config
+            settings = load_default_config()
+        except Exception:
+            pass
 
-    url = f"{DEEPSEEK_BASE_URL}/chat/completions"
+    api_key_env = settings.translate.api_key_env if settings else "DEEPSEEK_API_KEY"
+    api_key = os.environ.get(api_key_env, "")
+    if not api_key:
+        raise RuntimeError(f"{api_key_env} environment variable not set")
+
+    base_url = settings.translate.base_url if settings else "https://api.deepseek.com"
+    model = settings.translate.model if settings else "deepseek-v4-flash"
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     payload: dict[str, Any] = {
-        "model": DEEPSEEK_MODEL,
+        "model": model,
         "messages": [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": text},
@@ -57,35 +65,40 @@ def _call_deepseek(text: str, system_prompt: str) -> str:
     return data["choices"][0]["message"]["content"].strip()
 
 
-_TRANSLATE_TITLE_PROMPT = (
-    "You are a professional academic translator. "
-    "Translate the following paper title into Chinese. "
-    "Preserve technical terms in English where appropriate. "
-    "Return ONLY the translated title, no explanations."
-)
-
-_TRANSLATE_ABSTRACT_PROMPT = (
-    "You are a professional academic translator. "
-    "Translate the following paper abstract into Chinese. "
-    "Preserve technical terms in English where appropriate. "
-    "Return ONLY the translated text, no explanations."
-)
-
-
-def translate_paper(title: str, abstract: str | None = None) -> TranslationResult:
+def translate_paper(
+    title: str,
+    abstract: str | None = None,
+    settings: Settings | None = None,
+) -> TranslationResult:
     """Translate paper title and abstract via DeepSeek API.
 
     Args:
         title: Paper title in English.
         abstract: Paper abstract in English (optional).
+        settings: Settings configuration containing translation settings.
 
     Returns:
         TranslationResult with Chinese translations.
     """
-    title_zh = _call_deepseek(title, _TRANSLATE_TITLE_PROMPT)
+    target_lang = settings.translate.target_language if settings else "中文"
+
+    title_prompt = (
+        "You are a professional academic translator. "
+        f"Translate the following paper title into {target_lang}. "
+        "Preserve technical terms in English where appropriate. "
+        "Return ONLY the translated title, no explanations."
+    )
+    abstract_prompt = (
+        "You are a professional academic translator. "
+        f"Translate the following paper abstract into {target_lang}. "
+        "Preserve technical terms in English where appropriate. "
+        "Return ONLY the translated text, no explanations."
+    )
+
+    title_zh = _call_deepseek(title, title_prompt, settings)
     abstract_zh = ""
     if abstract and abstract.strip():
-        abstract_zh = _call_deepseek(abstract, _TRANSLATE_ABSTRACT_PROMPT)
+        abstract_zh = _call_deepseek(abstract, abstract_prompt, settings)
 
     return TranslationResult(
         title_zh=title_zh,
@@ -94,7 +107,11 @@ def translate_paper(title: str, abstract: str | None = None) -> TranslationResul
     )
 
 
-def translate_paper_cached(db_path: Path, paper: Paper) -> dict[str, str]:
+def translate_paper_cached(
+    db_path: Path,
+    paper: Paper,
+    settings: Settings | None = None,
+) -> dict[str, str]:
     """Translate a paper with DB caching.
 
     Checks the translation cache first; on miss, calls the API and stores
@@ -106,7 +123,7 @@ def translate_paper_cached(db_path: Path, paper: Paper) -> dict[str, str]:
     if cached.get("title_zh"):
         return {**cached, "source": "cache"}
 
-    result = translate_paper(title=paper.title, abstract=paper.abstract)
+    result = translate_paper(title=paper.title, abstract=paper.abstract, settings=settings)
     set_paper_translation(db_path, paper.id, result.title_zh, result.abstract_zh)
     return {
         "title_zh": result.title_zh,
@@ -119,11 +136,11 @@ def translate_text(text: str, target_language: str = "中文") -> str:
     """Translate arbitrary text via DeepSeek API.
 
     Args:
-        text: Text to translate.
-        target_language: Target language, defaults to Chinese.
+      text: Text to translate.
+      target_language: Target language, defaults to Chinese.
 
     Returns:
-        Translated text.
+      Translated text.
     """
     system = (
         f"You are a professional translator. "

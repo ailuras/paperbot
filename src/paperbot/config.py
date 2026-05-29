@@ -61,6 +61,8 @@ class TranslateConfig(BaseModel):
     target_language: str = "中文"
     model: str = "deepseek-v4-flash"
     include_in_email: bool = True
+    api_key_env: str = "DEEPSEEK_API_KEY"
+    base_url: str = "https://api.deepseek.com"
 
 
 class MailConfig(BaseModel):
@@ -84,6 +86,7 @@ class Settings(BaseModel):
     recommendation: RecommendationConfig = Field(default_factory=RecommendationConfig)
     translate: TranslateConfig = Field(default_factory=TranslateConfig)
     mail: MailConfig = Field(default_factory=MailConfig)
+    semantic_scholar_key: str = ""
 
     model_config = {"populate_by_name": True}
 

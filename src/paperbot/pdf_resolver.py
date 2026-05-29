@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 
+from paperbot.config import Settings
 from paperbot.models import Paper
 
 logger = logging.getLogger(__name__)
@@ -197,7 +198,11 @@ class PdfResolver:
         return None
 
 
-def resolve_paper_pdf_cached(db_path: Path, paper: Paper) -> dict[str, str] | None:
+def resolve_paper_pdf_cached(
+    db_path: Path,
+    paper: Paper,
+    settings: Settings | None = None,
+) -> dict[str, str] | None:
     """Resolve a paper's PDF URL with DB caching.
 
     Checks the PDF cache first; on miss, uses PdfResolver to find the
@@ -214,7 +219,17 @@ def resolve_paper_pdf_cached(db_path: Path, paper: Paper) -> dict[str, str] | No
     if not doi:
         return None
 
-    with PdfResolver() as resolver:
+    if settings is None:
+        try:
+            from paperbot.config import load_default_config
+            settings = load_default_config()
+        except Exception:
+            pass
+
+    email = settings.openalex.mailto if settings else ""
+    s2_key = settings.semantic_scholar_key if settings else ""
+
+    with PdfResolver(email=email, semantic_scholar_key=s2_key) as resolver:
         result = resolver.resolve(doi, title=paper.title)
 
     if result:

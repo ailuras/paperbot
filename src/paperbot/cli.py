@@ -146,7 +146,7 @@ def recommend(
             if not pid:
                 continue
             try:
-                trans = translate_paper_cached(db_path, r.paper)
+                trans = translate_paper_cached(db_path, r.paper, settings=cfg)
                 translations[pid] = {
                     "title_zh": trans["title_zh"],
                     "abstract_zh": trans["abstract_zh"],
