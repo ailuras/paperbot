@@ -75,6 +75,7 @@ struct AppConfig: Codable {
     var recommendation: RecommendationConfig
     var translate: TranslateConfig
     var mail: MailConfig
+    var semantic_scholar_key: String?
 }
 
 @MainActor
