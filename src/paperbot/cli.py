@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import time
@@ -26,7 +25,7 @@ from paperbot.db import (
     upsert_papers,
 )
 from paperbot.fetch import fetch_papers
-from paperbot.mail import send_fetch_report_email, send_recommendation_email
+from paperbot.mail import send_recommendation_email
 from paperbot.models import PaperStatus
 from paperbot.recommend import recommend_papers
 from paperbot.translate import translate_paper_cached
