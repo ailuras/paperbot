@@ -26,8 +26,21 @@ VENUE_ABBR_MAP: dict[str, list[str]] = {
     "CADE": ["automated deduction"],
     "IJCAR": ["joint conference on automated reasoning"],
     "LICS": ["logic in computer science"],
-    "SAT": ["satisfiability testing", "theory and applications of satisfiability"],
-    "CP": ["constraint programming", "principles and practice of constraint programming"],
+    "SAT": [
+        "international conference on theory and applications of satisfiability testing",
+        "satisfiability testing",
+        "theory and applications of satisfiability",
+    ],
+    "CPAIOR": [
+        "integration of constraint programming, artificial intelligence, and operations research",
+        "integration of artificial intelligence and operations research techniques in constraint programming",
+        "constraint programming, artificial intelligence",
+    ],
+    "CP": [
+        "international conference on principles and practice of constraint programming",
+        "principles and practice of constraint programming",
+        "constraint programming",
+    ],
     "FM": ["symposium on formal methods"],
     "JAIR": ["journal of artificial intelligence research"],
     "AIJ": ["artificial intelligence"],
@@ -53,9 +66,14 @@ VENUE_ABBR_MAP: dict[str, list[str]] = {
     "SAS": ["static analysis symposium"],
     "ICLP": ["logic programming"],
     "FMCAD": ["formal methods in computer-aided design"],
-    "VMCAI": ["verification, model checking"],
-    "CPAIOR": ["constraint programming, artificial intelligence"],
-    "LPAR": ["logic for programming"],
+    "VMCAI": [
+        "verification, model checking, and abstract interpretation",
+        "verification, model checking",
+    ],
+    "LPAR": [
+        "logic for programming, artificial intelligence and reasoning",
+        "logic for programming",
+    ],
     "JAR": ["journal of automated reasoning"],
     "FMSD": ["formal methods in system design"],
     "ICSME": ["software maintenance"],
@@ -68,7 +86,7 @@ VENUE_ABBR_MAP: dict[str, list[str]] = {
     "ICFEM": ["formal engineering methods"],
     "ICECCS": ["engineering of complex computer systems"],
     "QRS": ["software quality, reliability"],
-    "AST": ["automated software testing"],
+    "AST": ["automation of software test", "automated software testing"],
     "ICTAI": ["tools with artificial intelligence"],
 }
 

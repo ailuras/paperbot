@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from paperbot.audit import AuditStatus, format_audit_status
-from paperbot.utils import _abbr, format_date
+from paperbot.utils import _abbr, compute_venue_abbr, format_date
 
 
 def test_format_date_default():
@@ -30,6 +30,17 @@ def test_abbr_fallback():
     """_abbr returns short prefix when no acronym found."""
     assert _abbr("Journal of Logic") == "Journal of"
     assert _abbr("") == "?"
+
+
+def test_compute_venue_abbr_matches_standard_formal_methods_names():
+    """Venue abbreviation aliases cover standard conference names."""
+    assert (
+        compute_venue_abbr(
+            "International Conference on Integration of Artificial Intelligence and Operations Research Techniques in Constraint Programming"
+        )
+        == "CPAIOR"
+    )
+    assert compute_venue_abbr("International Conference on Automation of Software Test") == "AST"
 
 
 def test_format_audit_status_success():

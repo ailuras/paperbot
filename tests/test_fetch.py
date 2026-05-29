@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from paperbot.config import load_config
 from paperbot.config import Settings
 from paperbot.fetch import (
     VenueScorer,
@@ -19,6 +22,47 @@ def test_venue_scorer_acronym_match(sample_config_dict: dict):
     scorer = VenueScorer(cfg)
     assert scorer.get_tier("Proceedings of CAV 2024") == 1
     assert scorer.get_tier("TACAS 2023") == 2
+
+
+def test_default_config_treats_top_venue_short_names_as_expected_tiers():
+    """Default scoring keeps common short venue names at their configured tiers."""
+    cfg_path = Path(__file__).resolve().parents[1] / "data" / "config.json.example"
+    cfg = load_config(cfg_path)
+    scorer = VenueScorer(cfg)
+
+    expected = {
+        "SAT 2024": 1,
+        "CP 2024": 1,
+        "IJCAR 2024": 1,
+        "CADE 2024": 1,
+        "FM 2024": 1,
+        "CCS 2024": 1,
+        "IEEE S&P 2024": 1,
+        "TSE 2024": 1,
+        "TOSEM 2024": 1,
+        "TOPLAS 2024": 1,
+        "JAIR 2024": 1,
+        "AIJ 2024": 1,
+    }
+    for venue, tier in expected.items():
+        assert scorer.get_tier(venue) == tier
+
+
+def test_default_config_prefers_specific_lower_tier_official_names():
+    """Specific tier-2 venue names should beat broader tier-1 substrings."""
+    cfg_path = Path(__file__).resolve().parents[1] / "data" / "config.json.example"
+    cfg = load_config(cfg_path)
+    scorer = VenueScorer(cfg)
+
+    expected = {
+        "International Symposium on Formal Methods in Computer-Aided Design": 2,
+        "International Conference on Integration of Constraint Programming, Artificial Intelligence, and Operations Research": 2,
+        "International Conference on the Integration of Constraint Programming, Artificial Intelligence, and Operations Research": 2,
+        "International Conference on Logic for Programming, Artificial Intelligence and Reasoning": 2,
+        "International Conference on Verification, Model Checking, and Abstract Interpretation": 2,
+    }
+    for venue, tier in expected.items():
+        assert scorer.get_tier(venue) == tier
 
 
 def test_venue_scorer_phrase_match(sample_config_dict: dict):

@@ -130,8 +130,18 @@
           "TACAS",
           "CADE",
           "IJCAR",
+          "SAT",
+          "CP",
+          "FM",
           "LICS",
-          "NDSS"
+          "NDSS",
+          "CCS",
+          "S&P",
+          "TSE",
+          "TOSEM",
+          "TOPLAS",
+          "JAIR",
+          "AIJ"
         ],
         "phrases": [
           "Computer Aided Verification",
@@ -156,8 +166,13 @@
           "Computer and Communications Security",
           "IEEE Transactions on Software Engineering",
           "ACM Transactions on Software Engineering",
+          "ACM Transactions on Software Engineering and Methodology",
+          "ACM Transactions on Programming Languages and Systems",
+          "International Conference on Theory and Applications of Satisfiability Testing",
           "Satisfiability Testing",
+          "International Conference on Principles and Practice of Constraint Programming",
           "Constraint Programming",
+          "International Symposium on Formal Methods",
           "Symposium on Formal Methods",
           "Journal of Artificial Intelligence Research",
           "Artificial Intelligence"
@@ -184,9 +199,14 @@
         "phrases": [
           "Static Analysis",
           "Logic Programming",
+          "International Symposium on Formal Methods in Computer-Aided Design",
           "Formal Methods in Computer-Aided Design",
+          "International Conference on Verification, Model Checking, and Abstract Interpretation",
+          "Verification, Model Checking, and Abstract Interpretation",
           "Verification, Model Checking",
+          "Integration of Constraint Programming, Artificial Intelligence, and Operations Research",
           "Constraint Programming, Artificial Intelligence",
+          "Logic for Programming, Artificial Intelligence and Reasoning",
           "Logic for Programming",
           "Journal of Automated Reasoning",
           "Formal Methods in System Design",
@@ -214,6 +234,7 @@
           "Formal Engineering Methods",
           "Engineering of Complex Computer Systems",
           "Software Quality, Reliability",
+          "Automation of Software Test",
           "Automated Software Testing",
           "Tools with Artificial Intelligence"
         ]
