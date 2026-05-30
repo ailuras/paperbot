@@ -1,79 +1,57 @@
 import SwiftUI
+import AppKit
+
+/// Bridges SwiftUI's `openWindow` action to AppKit code (the menu bar
+/// controller), so "Open VellumX" can recreate the main window even after it
+/// was closed. The App captures the action on appear.
+@MainActor
+final class MainWindowOpener {
+    static let shared = MainWindowOpener()
+    var openAction: (() -> Void)?
+
+    func open() {
+        // Prefer re-fronting an existing main window (a titled standard window,
+        // not the Settings or popover window) to avoid spawning duplicates.
+        if let window = NSApp.windows.first(where: {
+            $0.canBecomeMain && $0.styleMask.contains(.titled) && $0.frame.width >= 900
+        }) {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            openAction?()   // WindowGroup window was closed — recreate it
+        }
+    }
+}
 
 @main
 struct VellumXApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = PaperStore.shared
-    
-    var recommendedPapers: [Paper] {
-        store.papers.filter { $0.status == "recommended" }
-    }
-    
+    @StateObject private var settings = AppSettings.shared
+    @Environment(\.openWindow) private var openWindow
+
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             ContentView()
                 .frame(minWidth: 900, minHeight: 550)
+                .onAppear {
+                    MainWindowOpener.shared.openAction = { openWindow(id: "main") }
+                }
         }
 
-        MenuBarExtra {
-            if recommendedPapers.isEmpty {
-                Text("No recommendations for today.")
-                    .font(.caption)
-                Button("Run Recommend Engine") {
-                    if let config = ConfigManager.shared.config {
-                        let engine = RecommendEngine(config: config)
-                        _ = engine.recommend(papers: store.papers)
-                    }
-                }
-            } else {
-                Text("Today's Top Picks:")
-                    .font(.headline)
-                
-                ForEach(recommendedPapers) { paper in
-                    Menu(paper.title) {
-                        Button("Open PDF") {
-                            openPdf(for: paper)
-                        }
-                        Button("Mark Read") {
-                            store.setPaperStatus(id: paper.id, status: "read")
-                        }
-                        Button("Mark Starred") {
-                            store.setPaperStatus(id: paper.id, status: "starred")
-                        }
-                    }
-                }
-            }
-            Divider()
-            Button("Quit VellumX") {
-                NSApplication.shared.terminate(nil)
-            }
-        } label: {
-            Image(nsImage: Self.menuBarIcon)
+        Settings {
+            SettingsRootView()
+                .environmentObject(settings)
         }
     }
+}
 
-    /// Menu bar icon loaded from the bundled template PNG so it adapts to
-    /// light/dark menu bars. Falls back to an SF Symbol if the resource is missing.
-    static let menuBarIcon: NSImage = {
-        if let img = NSImage(named: "MenuBarIcon") {
-            img.isTemplate = true
-            img.size = NSSize(width: 18, height: 18)
-            return img
-        }
-        return NSImage(systemSymbolName: "books.vertical", accessibilityDescription: "VellumX")
-            ?? NSImage()
-    }()
-    
-    private func openPdf(for paper: Paper) {
-        if let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty, let url = URL(string: pdfUrl) {
-            NSWorkspace.shared.open(url)
-            return
-        }
-        
-        Task {
-            let resolver = PdfResolver()
-            if let resolvedUrl = await resolver.resolve(paper: paper), let url = URL(string: resolvedUrl) {
-                NSWorkspace.shared.open(url)
-            }
-        }
+/// Hosts the AppKit-based menu bar status item (see MenuBarController for why
+/// we avoid SwiftUI's MenuBarExtra with a custom image).
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var menuBar: MenuBarController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        menuBar = MenuBarController(store: .shared, settings: .shared)
     }
 }

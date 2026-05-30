@@ -12,9 +12,10 @@ class PaperStore: ObservableObject {
     var dbURL: URL {
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser
-        
-        // Target path under Documents/06-文献/VellumX
-        let targetDir = home.appendingPathComponent("Documents/06-文献/VellumX")
+
+        // Target directory is the user-configured storage location
+        // (AppSettings), defaulting to Documents/06-文献/VellumX.
+        let targetDir = AppSettings.shared.resolvedStorageDirectory
         let targetDb = targetDir.appendingPathComponent("vellumx.db")
         
         // Ensure directory exists
@@ -71,6 +72,65 @@ class PaperStore: ObservableObject {
         } else {
             print("Database opened at \(url.path)")
         }
+    }
+
+    private func closeDatabase() {
+        if db != nil {
+            sqlite3_close(db)
+            db = nil
+        }
+    }
+
+    /// Result of relocating the storage directory, surfaced to the UI.
+    enum RelocateResult {
+        case ok(URL)
+        case failed(String)
+    }
+
+    /// Change the folder that holds `vellumx.db`.
+    ///
+    /// - `migrate == true`: move the current DB into `newDir` (replacing any DB
+    ///   already there). `migrate == false`: just switch — open the DB already
+    ///   in `newDir`, or create a fresh one, leaving the old DB untouched.
+    ///
+    /// On success the new path is persisted to `AppSettings`, the database is
+    /// reopened, and papers are reloaded.
+    @discardableResult
+    func relocate(to newDir: URL, migrate: Bool) -> RelocateResult {
+        let fm = FileManager.default
+        let currentDb = dbURL                       // resolved under the OLD setting
+        let destDb = newDir.appendingPathComponent("vellumx.db")
+
+        do {
+            try fm.createDirectory(at: newDir, withIntermediateDirectories: true)
+        } catch {
+            return .failed("无法创建目录：\(error.localizedDescription)")
+        }
+
+        // Don't act if the target resolves to the same file.
+        if currentDb.standardizedFileURL != destDb.standardizedFileURL, migrate {
+            closeDatabase()
+            do {
+                if fm.fileExists(atPath: destDb.path) {
+                    try fm.removeItem(at: destDb)   // replace existing DB at target
+                }
+                if fm.fileExists(atPath: currentDb.path) {
+                    try fm.moveItem(at: currentDb, to: destDb)
+                }
+            } catch {
+                openDatabase()                       // reopen old DB on failure
+                return .failed("迁移失败：\(error.localizedDescription)")
+            }
+        } else if !migrate {
+            closeDatabase()
+        }
+
+        // Persist the new location, then reopen against it.
+        AppSettings.shared.storageDirectory = newDir.path
+        openDatabase()
+        createTablesIfNeeded()
+        loadPapers()
+        return .ok(destDb)
     }
     
     private func createTablesIfNeeded() {
