@@ -16,6 +16,7 @@ struct PaperListView: View {
     let onSelectPaper: (String) -> Void
 
     @Binding var sortByScore: Bool
+    @State private var showSortOptions = false
 
     private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
         if set.contains(value) { set.remove(value) } else { set.insert(value) }
@@ -69,6 +70,33 @@ struct PaperListView: View {
         }
         .padding(14)
         .frame(width: 230)
+    }
+
+    private var sortPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Sort")
+                .font(.headline)
+
+            Button {
+                sortByScore = true
+                showSortOptions = false
+            } label: {
+                Label("Score", systemImage: sortByScore ? "checkmark.circle.fill" : "number")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                sortByScore = false
+                showSortOptions = false
+            } label: {
+                Label("Date", systemImage: sortByScore ? "calendar" : "checkmark.circle.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .frame(width: 170)
     }
 
     var body: some View {
@@ -148,16 +176,11 @@ struct PaperListView: View {
                     .help("Filter by field and tier")
                     .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
 
-                    Menu {
-                        Picker("Sort", selection: $sortByScore) {
-                            Label("Score", systemImage: "number").tag(true)
-                            Label("Date", systemImage: "calendar").tag(false)
-                        }
-                        .pickerStyle(.inline)
-                    } label: {
+                    Button { showSortOptions.toggle() } label: {
                         Label("Sort", systemImage: "arrow.up.arrow.down")
                     }
                     .help("Sort papers")
+                    .popover(isPresented: $showSortOptions, arrowEdge: .bottom) { sortPopover }
                 }
             }
         }
