@@ -11,6 +11,8 @@ struct ContentView: View {
     
     // Selection state
     @State private var selectedPaperId: String?
+    /// Last paper actually opened; retained when the list selection clears.
+    @State private var lastViewedPaperId: String?
     
     // Async execution states
     @State private var isFetching: Bool = false
@@ -114,8 +116,11 @@ struct ContentView: View {
         return result
     }
     
+    /// The paper whose details are shown. Driven by `lastViewedPaperId` (not the
+    /// live list selection) so clicking empty space in the list — which clears
+    /// the selection — keeps the last opened paper's details visible.
     var selectedPaper: Paper? {
-        guard let id = selectedPaperId else { return nil }
+        guard let id = lastViewedPaperId else { return nil }
         return store.papers.first(where: { $0.id == id })
     }
     
@@ -232,6 +237,11 @@ struct ContentView: View {
             }
             .listStyle(.inset)
             .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
+            .onChange(of: selectedPaperId) { _, newValue in
+                // Remember the last opened paper; ignore deselection (nil) so
+                // clicking empty space keeps the detail view populated.
+                if let newValue { lastViewedPaperId = newValue }
+            }
         } detail: {
             // MARK: - Right Detail
             if let paper = selectedPaper {
