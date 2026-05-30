@@ -138,32 +138,24 @@ final class AppSettings: ObservableObject {
 
     /// Bump when the bundled default tracks/venues change so existing installs
     /// refresh them once on next launch.
-    static let currentSeedVersion = 4
+    static let currentSeedVersion = 5
 
     // MARK: - Defaults (SAT / SMT / CP focus)
 
+    /// Interests are the three solving paradigms (SAT / SMT / CP). Their papers
+    /// can come from any field — AI, software engineering, formal methods — so
+    /// the queries/keywords target the technique, while the venue ratings (which
+    /// span all those fields) handle scoring.
     static let defaultTracks: [TrackPref] = [
         TrackPref(name: "SAT", query: "SAT solver boolean satisfiability",
                   keywords: ["sat solver", "boolean satisfiability", "propositional satisfiability",
-                             "cdcl", "conflict-driven", "sat solving"]),
+                             "cdcl", "conflict-driven clause learning", "maxsat", "sat solving"]),
         TrackPref(name: "SMT", query: "satisfiability modulo theories SMT solver",
                   keywords: ["smt solver", "satisfiability modulo theories", "smt",
                              "z3", "cvc5", "theory solver", "bit-vector"]),
         TrackPref(name: "CP", query: "constraint programming constraint satisfaction",
                   keywords: ["constraint programming", "constraint satisfaction", "constraint solver",
-                             "constraint propagation", "global constraint", "csp"]),
-        TrackPref(name: "Automated Reasoning", query: "automated reasoning theorem proving",
-                  keywords: ["automated reasoning", "theorem proving", "automated deduction",
-                             "proof assistant", "first-order logic", "resolution calculus"]),
-        TrackPref(name: "Formal Verification", query: "formal verification model checking",
-                  keywords: ["formal verification", "model checking", "formal methods",
-                             "temporal logic", "reachability analysis", "invariant inference"]),
-        TrackPref(name: "Program Analysis", query: "program analysis static analysis symbolic execution",
-                  keywords: ["program analysis", "static analysis", "symbolic execution",
-                             "abstract interpretation", "dataflow analysis", "program synthesis"]),
-        TrackPref(name: "Software Engineering", query: "software engineering software testing",
-                  keywords: ["software engineering", "software testing", "fuzzing",
-                             "bug detection", "fault localization", "program repair", "automated testing"])
+                             "constraint propagation", "global constraint", "csp"])
     ]
 
     /// Default venue ratings for a software-engineering + automated-reasoning
