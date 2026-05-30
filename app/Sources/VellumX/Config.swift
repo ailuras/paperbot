@@ -103,7 +103,22 @@ class ConfigManager {
         var cfg = AppConfig.builtin
         let s = AppSettings.shared
 
-        // Advanced file (optional): override scoring/filters only.
+        // Venue ratings from the visual settings build the scoring tiers,
+        // overriding the built-in default set.
+        if !s.venues.isEmpty {
+            var tiers: [String: ScoringTier] = [:]
+            let grouped = Dictionary(grouping: s.venues, by: { $0.tier })
+            for (tier, prefs) in grouped {
+                var venues: [String: [String]] = [:]
+                for p in prefs { venues[p.abbr, default: []].append(p.phrase) }
+                let points = AppSettings.tierPoints[tier] ?? max(1, 12 - 2 * tier)
+                tiers[String(tier)] = ScoringTier(points: points, venues: venues)
+            }
+            cfg.scoring.tiers = tiers
+        }
+
+        // Advanced file (optional): override scoring/filters only. Loaded after
+        // venues so an explicit advanced file always wins.
         if let adv = loadAdvanced() {
             if let scoring = adv.scoring { cfg.scoring = scoring }
             if let filters = adv.filters { cfg.filters = filters }

@@ -23,9 +23,15 @@ class PaperStore: ObservableObject {
         
         // Auto-migration check: If target DB does not exist
         if !fileManager.fileExists(atPath: targetDb.path) {
+            // Check the previous default location (Documents/06-文献/VellumX),
+            // so users upgrading from the old default keep their data.
+            let oldDefaultDb = home.appendingPathComponent("Documents/06-文献/VellumX/vellumx.db")
             // Check legacy folder under Documents/06-文献/PaperBot
             let paperBotDb = home.appendingPathComponent("Documents/06-文献/PaperBot/paperbot.db")
-            if fileManager.fileExists(atPath: paperBotDb.path) {
+            if fileManager.fileExists(atPath: oldDefaultDb.path) {
+                print("Migrating database from previous default \(oldDefaultDb.path)...")
+                try? fileManager.copyItem(at: oldDefaultDb, to: targetDb)
+            } else if fileManager.fileExists(atPath: paperBotDb.path) {
                 print("Migrating database from \(paperBotDb.path) to \(targetDb.path)...")
                 do {
                     try fileManager.copyItem(at: paperBotDb, to: targetDb)
@@ -381,8 +387,11 @@ class PaperStore: ObservableObject {
             sqlite3_bind_text(stmt, 1, id, -1, nil)
             sqlite3_bind_text(stmt, 2, status, -1, nil)
             if sqlite3_step(stmt) == SQLITE_DONE {
-                // Update memory
+                // Update memory. Paper is a reference type, so mutating it in
+                // place does not fire @Published papers — notify observers
+                // explicitly so the UI refreshes immediately.
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
+                    objectWillChange.send()
                     papers[idx].status = status
                     papers[idx].changedAt = Date()
                 }
@@ -390,7 +399,7 @@ class PaperStore: ObservableObject {
             sqlite3_finalize(stmt)
         }
     }
-    
+
     func setPaperNote(id: String, note: String) {
         let sql = """
         INSERT INTO paper_notes (paper_id, note, updated_at)
@@ -430,8 +439,9 @@ class PaperStore: ObservableObject {
             sqlite3_bind_text(stmt, 2, titleZh, -1, nil)
             sqlite3_bind_text(stmt, 3, abstractZh, -1, nil)
             if sqlite3_step(stmt) == SQLITE_DONE {
-                // Update memory
+                // Update memory (reference type — notify observers explicitly).
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
+                    objectWillChange.send()
                     papers[idx].titleZh = titleZh
                     papers[idx].abstractZh = abstractZh
                 }
@@ -439,7 +449,7 @@ class PaperStore: ObservableObject {
             sqlite3_finalize(stmt)
         }
     }
-    
+
     func setPaperPdf(id: String, pdfUrl: String, pdfSource: String) {
         let sql = """
         INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)

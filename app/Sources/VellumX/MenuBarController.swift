@@ -93,20 +93,20 @@ struct MenuBarContentView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if recommendedPapers.isEmpty {
-                Text("No recommendations for today.")
+                Text(L10n.t(.noRecommendations))
                     .font(.caption)
-                Button("Run Recommend Engine") {
+                Button(L10n.t(.runRecommendEngine)) {
                     let engine = RecommendEngine(config: ConfigManager.shared.effectiveConfig)
                     _ = engine.recommend(papers: store.papers)
                 }
             } else {
-                Text("Today's Top Picks:")
+                Text(L10n.t(.todaysTopPicks))
                     .font(.headline)
                 ForEach(recommendedPapers) { paper in
                     Menu(paper.title) {
-                        Button("Open PDF") { openPdf(for: paper) }
-                        Button("Mark Read") { store.setPaperStatus(id: paper.id, status: "read") }
-                        Button("Mark Starred") { store.setPaperStatus(id: paper.id, status: "starred") }
+                        Button(L10n.t(.openPDF)) { openPdf(for: paper) }
+                        Button(L10n.t(.markRead)) { store.setPaperStatus(id: paper.id, status: "read") }
+                        Button(L10n.t(.markStarred)) { store.setPaperStatus(id: paper.id, status: "starred") }
                     }
                 }
             }
@@ -120,7 +120,7 @@ struct MenuBarContentView: View {
                             .resizable()
                             .frame(width: 14, height: 14)
                             .opacity(0.62)
-                        Text("Open VellumX")
+                        Text(L10n.t(.openVellumX))
                     }
                     .foregroundStyle(.primary.opacity(0.82))
                 }
@@ -131,7 +131,7 @@ struct MenuBarContentView: View {
                 Button {
                     NSApplication.shared.terminate(nil)
                 } label: {
-                    Label("Quit", systemImage: "power")
+                    Label(L10n.t(.quit), systemImage: "power")
                         .foregroundStyle(.primary.opacity(0.68))
                 }
                 .buttonStyle(.plain)

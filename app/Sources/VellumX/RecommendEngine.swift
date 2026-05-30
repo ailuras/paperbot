@@ -33,7 +33,14 @@ class RecommendEngine {
         let recentDays = recConfig.recent_days
         
         if papers.isEmpty { return [] }
-        
+
+        // Reset any prior recommendations back to pending so repeated runs
+        // replace the day's picks rather than stacking new ones on top.
+        // (Papers the user already acted on — read/starred/skip — are left as-is.)
+        for paper in papers where paper.status == "recommended" {
+            PaperStore.shared.setPaperStatus(id: paper.id, status: "pending")
+        }
+
         let calendar = Calendar.current
         guard let cutoffDate = calendar.date(byAdding: .day, value: -recentDays, to: Date()) else {
             return []
