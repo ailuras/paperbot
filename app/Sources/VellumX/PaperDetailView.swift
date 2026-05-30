@@ -40,7 +40,7 @@ struct PaperDetailView: View {
                 abstractSection
 
                 // MARK: Translation
-                if !paper.titleZh.isEmpty || isTranslating {
+                if !paper.abstractZh.isEmpty || isTranslating {
                     translationSection
                 }
 

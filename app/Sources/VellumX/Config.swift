@@ -153,9 +153,15 @@ class ConfigManager {
         cfg.openalex.default_max_results = s.defaultMaxResults
         cfg.openalex.topic_filter = s.topicFilter
         cfg.translate.enabled = s.translateEnabled
-        cfg.translate.base_url = s.deepSeekBaseURL
-        cfg.translate.model = s.deepSeekModel
-        cfg.translate.target_language = s.targetLanguage
+        if !s.deepSeekBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cfg.translate.base_url = s.deepSeekBaseURL
+        }
+        if !s.deepSeekModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cfg.translate.model = s.deepSeekModel
+        }
+        if !s.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cfg.translate.target_language = s.targetLanguage
+        }
         if !s.tracks.isEmpty {
             cfg.tracks = Dictionary(uniqueKeysWithValues: s.tracks.map {
                 ($0.name, TrackConfig(query: $0.query, keywords: $0.keywords, color: nil))

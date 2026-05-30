@@ -38,7 +38,12 @@ class DeepSeekTranslator {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            throw NSError(domain: "DeepSeekTranslator", code: status, userInfo: [NSLocalizedDescriptionKey: "Bad response status: \(status)"])
+            let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = body?.isEmpty == false
+                ? "DeepSeek error \(status): \(body!)"
+                : "DeepSeek error \(status)"
+            throw NSError(domain: "DeepSeekTranslator", code: status, userInfo: [NSLocalizedDescriptionKey: message])
         }
 
         // Parse JSON response manually
@@ -57,33 +62,20 @@ class DeepSeekTranslator {
         return result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    func translate(
+    func translateAbstract(
         id: String,
-        title: String,
         abstract: String,
-        cachedTitleZh: String,
         cachedAbstractZh: String
-    ) async throws -> (titleZh: String, abstractZh: String) {
-        // Cache check
-        if !cachedTitleZh.isEmpty {
+    ) async throws -> String {
+        if !cachedAbstractZh.isEmpty {
             print("Translation cache hit for paper \(id)")
-            return (cachedTitleZh, cachedAbstractZh)
+            return cachedAbstractZh
         }
 
         let targetLang = config.translate.target_language
-
-        let titlePrompt = "You are a professional academic translator. Translate the following paper title into \(targetLang). Preserve technical terms in English where appropriate. Return ONLY the translated title, no explanations."
         let abstractPrompt = "You are a professional academic translator. Translate the following paper abstract into \(targetLang). Preserve technical terms in English where appropriate. Return ONLY the translated text, no explanations."
 
-        print("Translating paper title to \(targetLang)...")
-        let titleZh = try await callDeepSeek(text: title, systemPrompt: titlePrompt)
-
-        var abstractZh = ""
-        if !abstract.isEmpty {
-            print("Translating paper abstract to \(targetLang)...")
-            abstractZh = try await callDeepSeek(text: abstract, systemPrompt: abstractPrompt)
-        }
-
-        return (titleZh, abstractZh)
+        print("Translating paper abstract to \(targetLang)...")
+        return try await callDeepSeek(text: abstract, systemPrompt: abstractPrompt)
     }
 }

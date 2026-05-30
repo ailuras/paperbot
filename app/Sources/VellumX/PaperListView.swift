@@ -117,46 +117,48 @@ struct PaperListView: View {
         .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
         .toolbar {
             ToolbarItemGroup(placement: .automatic) {
-                Button(action: onFetch) {
-                    if isFetching {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "arrow.clockwise")
-                            .symbolVariant(.circle.fill)
+                ControlGroup {
+                    Button(action: onFetch) {
+                        if isFetching {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .symbolVariant(.circle.fill)
+                        }
                     }
-                }
-                .disabled(isFetching || isRecommending)
-                .help("Fetch new papers from OpenAlex")
+                    .disabled(isFetching || isRecommending)
+                    .help("Fetch new papers from OpenAlex")
 
-                Button(action: onRecommend) {
-                    if isRecommending {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "wand.and.stars")
-                            .symbolVariant(.circle.fill)
+                    Button(action: onRecommend) {
+                        if isRecommending {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "wand.and.stars")
+                                .symbolVariant(.circle.fill)
+                        }
                     }
-                }
-                .disabled(isFetching || isRecommending)
-                .help("Generate daily paper recommendations")
+                    .disabled(isFetching || isRecommending)
+                    .help("Generate daily paper recommendations")
 
-                Button { showFilters.toggle() } label: {
-                    Label("Filter", systemImage: filtersActive
-                          ? "line.3.horizontal.decrease.circle.fill"
-                          : "line.3.horizontal.decrease.circle")
-                }
-                .help("Filter by field and tier")
-                .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
-
-                Menu {
-                    Picker("Sort", selection: $sortByScore) {
-                        Label("Score", systemImage: "number").tag(true)
-                        Label("Date", systemImage: "calendar").tag(false)
+                    Button { showFilters.toggle() } label: {
+                        Label("Filter", systemImage: filtersActive
+                              ? "line.3.horizontal.decrease.circle.fill"
+                              : "line.3.horizontal.decrease.circle")
                     }
-                    .pickerStyle(.inline)
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
+                    .help("Filter by field and tier")
+                    .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
+
+                    Menu {
+                        Picker("Sort", selection: $sortByScore) {
+                            Label("Score", systemImage: "number").tag(true)
+                            Label("Date", systemImage: "calendar").tag(false)
+                        }
+                        .pickerStyle(.inline)
+                    } label: {
+                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                    }
+                    .help("Sort papers")
                 }
-                .help("Sort papers")
             }
         }
         .onChange(of: selectedPaperId) { _, newValue in

@@ -118,14 +118,20 @@ final class AppSettings: ObservableObject {
             try? JSONDecoder().decode(Stored.self, from: $0)
         }
         let d = AppConfig.builtin   // pull defaults from the built-in config
+        func nonEmpty(_ value: String?, fallback: String) -> String {
+            guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return fallback
+            }
+            return value
+        }
 
         storageDirectory   = stored?.storageDirectory ?? ""
         menuBarEnabled     = stored?.menuBarEnabled ?? true
         language           = stored?.language ?? "en"
         translateEnabled   = stored?.translateEnabled ?? d.translate.enabled
-        deepSeekBaseURL    = stored?.deepSeekBaseURL ?? d.translate.base_url
-        deepSeekModel      = stored?.deepSeekModel ?? d.translate.model
-        targetLanguage     = stored?.targetLanguage ?? d.translate.target_language
+        deepSeekBaseURL    = nonEmpty(stored?.deepSeekBaseURL, fallback: d.translate.base_url)
+        deepSeekModel      = nonEmpty(stored?.deepSeekModel, fallback: d.translate.model)
+        targetLanguage     = nonEmpty(stored?.targetLanguage, fallback: d.translate.target_language)
         dailyCount         = stored?.dailyCount ?? d.recommendation.daily_count
         qualitySlots       = stored?.qualitySlots ?? d.recommendation.quality_slots
         highScoreThreshold = stored?.highScoreThreshold ?? d.recommendation.high_score_threshold

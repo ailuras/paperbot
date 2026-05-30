@@ -221,8 +221,12 @@ struct ContentView: View {
     }
 
     private func translate(paper: Paper) {
+        guard !paper.abstract.isEmpty else {
+            statusMessage = "No abstract available to translate"
+            return
+        }
         isTranslating = true
-        statusMessage = "Translating with DeepSeek..."
+        statusMessage = "Translating abstract with DeepSeek..."
         let config = ConfigManager.shared.effectiveConfig
 
         Task {
@@ -231,17 +235,14 @@ struct ContentView: View {
                     ? (ProcessInfo.processInfo.environment[config.translate.api_key_env] ?? "")
                     : settings.deepSeekAPIKey
                 let translator = DeepSeekTranslator(config: config, apiKey: apiKey)
-                let (titleZh, abstractZh) = try await translator.translate(
+                let abstractZh = try await translator.translateAbstract(
                     id: paper.id,
-                    title: paper.title,
                     abstract: paper.abstract,
-                    cachedTitleZh: paper.titleZh,
                     cachedAbstractZh: paper.abstractZh
                 )
-                paper.titleZh = titleZh
                 paper.abstractZh = abstractZh
-                PaperStore.shared.setPaperTranslation(id: paper.id, titleZh: titleZh, abstractZh: abstractZh)
-                statusMessage = "Translated successfully!"
+                PaperStore.shared.setPaperTranslation(id: paper.id, titleZh: paper.titleZh, abstractZh: abstractZh)
+                statusMessage = "Abstract translated successfully!"
             } catch {
                 statusMessage = "Translation failed: \(error.localizedDescription)"
             }
