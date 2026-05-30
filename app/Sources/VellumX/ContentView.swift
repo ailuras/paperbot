@@ -261,13 +261,7 @@ struct ContentView: View {
                             Spacer()
                             
                             // Score badge
-                            Text(String(format: "%.1f", paper.score))
-                                .font(.caption2.bold())
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(scoreColor(paper.score).opacity(0.15))
-                                .foregroundColor(scoreColor(paper.score))
-                                .cornerRadius(4)
+                            ScoreBadgeView(score: paper.score)
                         }
                         
                         HStack {
@@ -300,207 +294,84 @@ struct ContentView: View {
             }
             .listStyle(.inset)
             .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
+            .toolbar {
+                ToolbarItemGroup(placement: .automatic) {
+                    fetchButton
+                    recommendButton
+                    filterButton
+                    sortMenu
+                }
+            }
             .onChange(of: selectedPaperId) { _, newValue in
                 // Remember the last opened paper; ignore deselection (nil) so
                 // clicking empty space keeps the detail view populated.
                 if let newValue { lastViewedPaperId = newValue }
             }
         } detail: {
-            // MARK: - Right Detail
             if let paper = selectedPaper {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Title & Status
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                Text(paper.venue)
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.orange)
-                                
-                                Spacer()
-                                
-                                // Status Selector
-                                Picker("", selection: Binding(
-                                    get: { paper.status },
-                                    set: { store.setPaperStatus(id: paper.id, status: $0) }
-                                )) {
-                                    Text("Pending").tag("pending")
-                                    Text("Recommended").tag("recommended")
-                                    Text("Read").tag("read")
-                                    Text("Starred").tag("starred")
-                                    Text("Skip").tag("skip")
-                                }
-                                .pickerStyle(.segmented)
-                                .frame(width: 320)
-                            }
-                            
-                            Text(paper.title)
-                                .font(.title)
-                                .bold()
-                                .foregroundColor(.primary)
-                            
-                            if !paper.titleZh.isEmpty {
-                                Text(paper.titleZh)
-                                    .font(.title3)
-                                    .bold()
-                                    .foregroundColor(.orange)
-                                    .padding(.top, 4)
-                            }
-                            
-                            Text(paper.authors.joined(separator: ", "))
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        
-                        Divider()
-                        
-                        // Control buttons
-                        HStack(spacing: 12) {
-                            // PDF Resolution button
-                            Button(action: { resolvePdf(for: paper) }) {
-                                if isResolvingPdf {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Label(paper.pdfUrl == nil ? "Resolve PDF" : "Open PDF", systemImage: "doc.plaintext")
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(isResolvingPdf)
-                            
-                            // DeepSeek Translation button
-                            Button(action: { translate(paper: paper) }) {
-                                if isTranslating {
-                                    ProgressView().controlSize(.small)
-                                } else {
-                                    Label("Translate", systemImage: "character.book.closed")
-                                }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isTranslating)
-                            
-                            if let doi = paper.doi {
-                                Link(destination: URL(string: doi.hasPrefix("http") ? doi : "https://doi.org/\(doi)")!) {
-                                    Label("DOI Link", systemImage: "safari")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        }
-                        
-                        // Abstract
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Abstract")
-                                .font(.headline)
-                                .foregroundColor(.primary)
-                            
-                            Text(paper.abstract)
-                                .font(.body)
-                                .lineSpacing(4)
-                                .foregroundColor(.secondary)
-                            
-                            if !paper.abstractZh.isEmpty {
-                                Divider().padding(.vertical, 8)
-                                Text("摘要翻译 (DeepSeek)")
-                                    .font(.headline)
-                                    .foregroundColor(.orange)
-                                
-                                Text(paper.abstractZh)
-                                    .font(.body)
-                                    .lineSpacing(4)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                        
-                        Divider()
-                        
-                        // Personal Notes
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Notes")
-                                .font(.headline)
-                            
-                            TextEditor(text: Binding(
-                                get: { paper.note },
-                                set: { store.setPaperNote(id: paper.id, note: $0) }
-                            ))
-                            .frame(minHeight: 120)
-                            .font(.system(.body, design: .monospaced))
-                            .padding(6)
-                            .background(Color(NSColor.controlBackgroundColor))
-                            .border(Color.secondary.opacity(0.2))
-                            .cornerRadius(4)
-                        }
-                    }
-                    .padding(24)
-                }
+                PaperDetailView(
+                    paper: paper,
+                    isTranslating: $isTranslating,
+                    isResolvingPdf: $isResolvingPdf,
+                    statusMessage: $statusMessage,
+                    onTranslate: translate,
+                    onResolvePdf: resolvePdf
+                )
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "books.vertical.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 60, height: 60)
-                        .foregroundColor(.secondary.opacity(0.3))
-                    Text("Select a paper to view details")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
-                }
+                EmptyDetailView()
             }
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Field / Tier filter popover
-                Button {
-                    showFilters.toggle()
-                } label: {
-                    Label("Filter", systemImage: filtersActive
-                          ? "line.3.horizontal.decrease.circle.fill"
-                          : "line.3.horizontal.decrease.circle")
-                }
-                .help("Filter by field and tier")
-                .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
+    }
 
-                // Sorting Menu
-                Menu {
-                    Button(action: { sortByScore = true }) {
-                        HStack {
-                            Text("Sort by Score")
-                            if sortByScore { Image(systemName: "checkmark") }
-                        }
-                    }
-                    Button(action: { sortByScore = false }) {
-                        HStack {
-                            Text("Sort by Date")
-                            if !sortByScore { Image(systemName: "checkmark") }
-                        }
-                    }
-                } label: {
-                    Label("Sort", systemImage: "arrow.up.arrow.down")
-                }
-                
-                Divider()
-                
-                // Fetch button
-                Button(action: fetchPapers) {
-                    if isFetching {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("Fetch", systemImage: "arrow.clockwise")
-                    }
-                }
-                .disabled(isFetching || isRecommending)
-                .help("Fetch new papers from OpenAlex")
-                
-                // Recommend button
-                Button(action: recommendPapers) {
-                    if isRecommending {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Label("Recommend", systemImage: "wand.and.stars")
-                    }
-                }
-                .disabled(isFetching || isRecommending)
-                .help("Generate daily paper recommendations")
+    // MARK: - Toolbar pieces
+
+    private var fetchButton: some View {
+        Button(action: fetchPapers) {
+            if isFetching {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "arrow.clockwise")
+                    .symbolVariant(.circle.fill)
             }
         }
+        .disabled(isFetching || isRecommending)
+        .help("Fetch new papers from OpenAlex")
+    }
+
+    private var recommendButton: some View {
+        Button(action: recommendPapers) {
+            if isRecommending {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "wand.and.stars")
+                    .symbolVariant(.circle.fill)
+            }
+        }
+        .disabled(isFetching || isRecommending)
+        .help("Generate daily paper recommendations")
+    }
+
+    private var filterButton: some View {
+        Button { showFilters.toggle() } label: {
+            Label("Filter", systemImage: filtersActive
+                  ? "line.3.horizontal.decrease.circle.fill"
+                  : "line.3.horizontal.decrease.circle")
+        }
+        .help("Filter by field and tier")
+        .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort", selection: $sortByScore) {
+                Label("Score", systemImage: "number").tag(true)
+                Label("Date", systemImage: "calendar").tag(false)
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .help("Sort papers")
     }
     
     // MARK: - Helper Methods
@@ -581,5 +452,27 @@ struct ContentView: View {
             }
             isResolvingPdf = false
         }
+    }
+}
+
+// MARK: - Score Badge (extracted to avoid type-checker timeout)
+
+struct ScoreBadgeView: View {
+    let score: Double
+
+    private var color: Color {
+        if score >= 20.0 { return .red }
+        if score >= 10.0 { return .orange }
+        return .green
+    }
+
+    var body: some View {
+        Text(String(format: "%.1f", score))
+            .font(.caption2.bold())
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.15))
+            .foregroundColor(color)
+            .cornerRadius(4)
     }
 }
