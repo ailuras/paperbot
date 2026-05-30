@@ -141,18 +141,13 @@ struct PapersSettingsTab: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 GroupBox(L10n.t(.dailyRecommendations)) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Stepper("\(L10n.t(.dailyCount)): \(settings.dailyCount)",
-                                value: $settings.dailyCount, in: 1...20)
-                        Stepper("\(L10n.t(.qualitySlots)): \(settings.qualitySlots)",
-                                value: $settings.qualitySlots, in: 0...20)
-                        Stepper("\(L10n.t(.highScoreThreshold)): \(settings.highScoreThreshold)",
-                                value: $settings.highScoreThreshold, in: 0...100)
-                        Stepper("\(L10n.t(.recentWindow)): \(settings.recentDays)",
-                                value: $settings.recentDays, in: 1...365)
+                    VStack(spacing: 10) {
+                        stepperRow(L10n.t(.dailyCount), value: $settings.dailyCount, in: 1...20)
+                        stepperRow(L10n.t(.qualitySlots), value: $settings.qualitySlots, in: 0...20)
+                        stepperRow(L10n.t(.highScoreThreshold), value: $settings.highScoreThreshold, in: 0...100)
+                        stepperRow(L10n.t(.recentWindow), value: $settings.recentDays, in: 1...365)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(6)
+                    .padding(8)
                 }
 
                 GroupBox(L10n.t(.openAlexFetch)) {
@@ -177,6 +172,22 @@ struct PapersSettingsTab: View {
                 }
             }
             .padding()
+        }
+    }
+
+    /// Aligned row: label on the left, current value + a compact stepper on the
+    /// right, so all four rows line up on a shared trailing edge.
+    private func stepperRow(_ label: String, value: Binding<Int>, in range: ClosedRange<Int>) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Text("\(value.wrappedValue)")
+                .monospacedDigit()
+                .frame(width: 44, alignment: .trailing)
+                .foregroundStyle(.secondary)
+            Stepper("", value: value, in: range)
+                .labelsHidden()
+                .controlSize(.small)
         }
     }
 
