@@ -99,6 +99,12 @@ struct PaperListView: View {
         .frame(width: 170)
     }
 
+    private func toolbarIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 18, weight: .semibold))
+            .frame(width: 22, height: 22)
+    }
+
     var body: some View {
         List(selection: $selectedPaperId) {
             ForEach(papers) { paper in
@@ -148,37 +154,43 @@ struct PaperListView: View {
                 ControlGroup {
                     Button(action: onFetch) {
                         if isFetching {
-                            ProgressView().controlSize(.small)
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 22, height: 22)
                         } else {
-                            Image(systemName: "arrow.clockwise")
-                                .symbolVariant(.circle.fill)
+                            toolbarIcon("arrow.clockwise.circle.fill")
                         }
                     }
                     .disabled(isFetching || isRecommending)
+                    .accessibilityLabel("Fetch new papers")
                     .help("Fetch new papers from OpenAlex")
 
                     Button(action: onRecommend) {
                         if isRecommending {
-                            ProgressView().controlSize(.small)
+                            ProgressView()
+                                .controlSize(.small)
+                                .frame(width: 22, height: 22)
                         } else {
-                            Image(systemName: "wand.and.stars")
-                                .symbolVariant(.circle.fill)
+                            toolbarIcon("wand.and.stars")
                         }
                     }
                     .disabled(isFetching || isRecommending)
+                    .accessibilityLabel("Generate recommendations")
                     .help("Generate daily paper recommendations")
 
                     Button { showFilters.toggle() } label: {
-                        Label("Filter", systemImage: filtersActive
-                              ? "line.3.horizontal.decrease.circle.fill"
-                              : "line.3.horizontal.decrease.circle")
+                        toolbarIcon(filtersActive
+                                    ? "line.3.horizontal.decrease.circle.fill"
+                                    : "line.3.horizontal.decrease.circle")
                     }
+                    .accessibilityLabel("Filter papers")
                     .help("Filter by field and tier")
                     .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
 
                     Button { showSortOptions.toggle() } label: {
-                        Label("Sort", systemImage: "arrow.up.arrow.down")
+                        toolbarIcon("arrow.up.arrow.down")
                     }
+                    .accessibilityLabel("Sort papers")
                     .help("Sort papers")
                     .popover(isPresented: $showSortOptions, arrowEdge: .bottom) { sortPopover }
                 }
