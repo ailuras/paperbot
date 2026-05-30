@@ -10,10 +10,12 @@ struct ContentView: View {
     @State private var searchKeyword: String = ""
     @State private var sortByScore: Bool = true
 
-    // Multi-select taxonomy filters (union within a group, intersect across).
-    @State private var selectedTopics: Set<String> = []
+    // Topic is single-select; Fields/Tier are multi-select (in the toolbar
+    // filter popover). Union within a group, intersect across groups.
+    @State private var selectedTopic: String?
     @State private var selectedFields: Set<String> = []
     @State private var selectedTiers: Set<Int> = []
+    @State private var showFilters = false
     
     // Selection state
     @State private var selectedPaperId: String?
@@ -93,10 +95,11 @@ struct ContentView: View {
 
         // 1b. Taxonomy filters (multi-select): union within a group, intersect
         // across groups. An empty group doesn't filter.
-        if !selectedTopics.isEmpty {
+        if let topic = selectedTopic {
             result = result.filter { paper in
-                let tracks = paper.track.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                return !selectedTopics.isDisjoint(with: Set(tracks))
+                paper.track.split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+                    .contains(topic)
             }
         }
         if !selectedFields.isEmpty {
@@ -155,68 +158,73 @@ struct ContentView: View {
         }
     }
 
+    private var filtersActive: Bool { !selectedFields.isEmpty || !selectedTiers.isEmpty }
+
+    /// Toolbar filter popover: Fields + Tier multi-select (with right-click
+    /// color), keeping these out of the sidebar for a cleaner look.
+    private var filterPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Filters").font(.headline)
+                Spacer()
+                Button("Clear") { selectedFields = []; selectedTiers = [] }
+                    .controlSize(.small)
+                    .disabled(!filtersActive)
+            }
+            if !settings.allFields.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("FIELDS").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(settings.allFields, id: \.self) { field in
+                        FilterRow(title: field, colorKey: "field:\(field)",
+                                  defaultColor: .teal,
+                                  isSelected: selectedFields.contains(field)) {
+                            toggle(field, in: &selectedFields)
+                        }
+                    }
+                }
+            }
+            if !settings.allTiers.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("TIER").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(settings.allTiers, id: \.self) { tier in
+                        FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
+                                  defaultColor: tierDefaultColor(tier),
+                                  isSelected: selectedTiers.contains(tier)) {
+                            toggle(tier, in: &selectedTiers)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 230)
+    }
+
     var body: some View {
         NavigationSplitView {
             // MARK: - Left Sidebar
             List(selection: $selectedSidebarItem) {
                 Section("Library") {
-                    NavigationLink(value: SidebarItem.recommended) {
-                        Label(SidebarItem.recommended.displayName, systemImage: SidebarItem.recommended.iconName)
-                            .foregroundColor(SidebarItem.recommended.iconColor)
-                    }
-                    NavigationLink(value: SidebarItem.pending) {
-                        Label(SidebarItem.pending.displayName, systemImage: SidebarItem.pending.iconName)
-                            .foregroundColor(SidebarItem.pending.iconColor)
-                    }
-                    NavigationLink(value: SidebarItem.starred) {
-                        Label(SidebarItem.starred.displayName, systemImage: SidebarItem.starred.iconName)
-                            .foregroundColor(SidebarItem.starred.iconColor)
-                    }
-                    NavigationLink(value: SidebarItem.read) {
-                        Label(SidebarItem.read.displayName, systemImage: SidebarItem.read.iconName)
-                            .foregroundColor(SidebarItem.read.iconColor)
-                    }
-                    NavigationLink(value: SidebarItem.skipped) {
-                        Label(SidebarItem.skipped.displayName, systemImage: SidebarItem.skipped.iconName)
-                            .foregroundColor(SidebarItem.skipped.iconColor)
-                    }
-                    NavigationLink(value: SidebarItem.all) {
-                        Label(SidebarItem.all.displayName, systemImage: SidebarItem.all.iconName)
-                            .foregroundColor(SidebarItem.all.iconColor)
+                    ForEach([SidebarItem.recommended, .pending, .starred, .read, .skipped, .all], id: \.self) { item in
+                        NavigationLink(value: item) {
+                            Label {
+                                Text(item.displayName)
+                            } icon: {
+                                Image(systemName: item.iconName)
+                                    .foregroundStyle(item.iconColor)
+                            }
+                        }
                     }
                 }
-                
+
                 if !settings.tracks.isEmpty {
                     Section("Topics") {
                         ForEach(settings.tracks.map(\.name), id: \.self) { name in
                             FilterRow(title: name, colorKey: "topic:\(name)",
                                       defaultColor: .purple,
-                                      isSelected: selectedTopics.contains(name)) {
-                                toggle(name, in: &selectedTopics)
-                            }
-                        }
-                    }
-                }
-
-                if !settings.allFields.isEmpty {
-                    Section("Fields") {
-                        ForEach(settings.allFields, id: \.self) { field in
-                            FilterRow(title: field, colorKey: "field:\(field)",
-                                      defaultColor: .teal,
-                                      isSelected: selectedFields.contains(field)) {
-                                toggle(field, in: &selectedFields)
-                            }
-                        }
-                    }
-                }
-
-                if !settings.allTiers.isEmpty {
-                    Section("Tier") {
-                        ForEach(settings.allTiers, id: \.self) { tier in
-                            FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
-                                      defaultColor: tierDefaultColor(tier),
-                                      isSelected: selectedTiers.contains(tier)) {
-                                toggle(tier, in: &selectedTiers)
+                                      isSelected: selectedTopic == name) {
+                                selectedTopic = (selectedTopic == name) ? nil : name
                             }
                         }
                     }
@@ -439,6 +447,17 @@ struct ContentView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                // Field / Tier filter popover
+                Button {
+                    showFilters.toggle()
+                } label: {
+                    Label("Filter", systemImage: filtersActive
+                          ? "line.3.horizontal.decrease.circle.fill"
+                          : "line.3.horizontal.decrease.circle")
+                }
+                .help("Filter by field and tier")
+                .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
+
                 // Sorting Menu
                 Menu {
                     Button(action: { sortByScore = true }) {
