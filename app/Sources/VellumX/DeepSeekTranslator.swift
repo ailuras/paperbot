@@ -4,21 +4,18 @@ import Foundation
 class DeepSeekTranslator {
     let config: AppConfig
     
-    init(config: AppConfig = ConfigManager.shared.config ?? AppConfig(
-        openalex: OpenAlexConfig(base_url: "", mailto: "", api_key_env: "", timeout_seconds: 0, per_page: 0, default_days: 0, default_max_results: 0, topic_filter: ""),
-        tracks: [:],
-        scoring: ScoringConfig(tiers: [:], citation_breakpoints: [], max_citation_points: 0),
-        recommendation: RecommendationConfig(daily_count: 0, quality_slots: 0, high_score_threshold: 0, recent_days: 0),
-        translate: TranslateConfig(enabled: false, target_language: "中文", model: "deepseek-v4-flash", include_in_email: true, api_key_env: "DEEPSEEK_API_KEY", base_url: "https://api.deepseek.com"),
-        mail: MailConfig(smtp_host: "", smtp_port: 0, smtp_user: "", smtp_password: "", from_addr: "", to_addrs: [], use_tls: false, dashboard_url: "")
-    )) {
+    init(config: AppConfig = ConfigManager.shared.effectiveConfig) {
         self.config = config
     }
     
     private func callDeepSeek(text: String, systemPrompt: String) async throws -> String {
-        let apiKey = ProcessInfo.processInfo.environment[config.translate.api_key_env] ?? ""
+        // Prefer the key entered in Settings (stored in the Keychain); fall back
+        // to the environment variable for backward compatibility.
+        let apiKey = AppSettings.shared.deepSeekAPIKey.isEmpty
+            ? (ProcessInfo.processInfo.environment[config.translate.api_key_env] ?? "")
+            : AppSettings.shared.deepSeekAPIKey
         if apiKey.isEmpty {
-            throw NSError(domain: "DeepSeekTranslator", code: 401, userInfo: [NSLocalizedDescriptionKey: "DeepSeek API Key not set in environment variable \(config.translate.api_key_env)"])
+            throw NSError(domain: "DeepSeekTranslator", code: 401, userInfo: [NSLocalizedDescriptionKey: "DeepSeek API key not set — add it in Settings ▸ API"])
         }
         
         let baseUrl = config.translate.base_url

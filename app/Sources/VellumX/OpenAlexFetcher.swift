@@ -87,14 +87,7 @@ class OpenAlexFetcher {
     let config: AppConfig
     let scorer: VenueScorer
     
-    init(config: AppConfig = ConfigManager.shared.config ?? AppConfig(
-        openalex: OpenAlexConfig(base_url: "https://api.openalex.org/works", mailto: "", api_key_env: "OPENALEX_API_KEY", timeout_seconds: 20, per_page: 100, default_days: 45, default_max_results: 1000, topic_filter: "topics.field.id:17"),
-        tracks: [:],
-        scoring: ScoringConfig(tiers: [:], citation_breakpoints: [], max_citation_points: 40),
-        recommendation: RecommendationConfig(daily_count: 3, quality_slots: 1, high_score_threshold: 5, recent_days: 30),
-        translate: TranslateConfig(enabled: false, target_language: "中文", model: "", include_in_email: false, api_key_env: "", base_url: ""),
-        mail: MailConfig(smtp_host: "", smtp_port: 0, smtp_user: "", smtp_password: "", from_addr: "", to_addrs: [], use_tls: false, dashboard_url: "")
-    )) {
+    init(config: AppConfig = ConfigManager.shared.effectiveConfig) {
         self.config = config
         self.scorer = VenueScorer(config: config)
     }

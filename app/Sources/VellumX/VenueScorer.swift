@@ -4,7 +4,7 @@ import Foundation
 class VenueScorer {
     let config: AppConfig?
 
-    init(config: AppConfig? = ConfigManager.shared.config) {
+    init(config: AppConfig? = ConfigManager.shared.effectiveConfig) {
         self.config = config
     }
 

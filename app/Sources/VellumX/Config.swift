@@ -78,57 +78,84 @@ struct AppConfig: Codable {
     var semantic_scholar_key: String?
 }
 
+/// Optional advanced-config file format. Everything is optional: a user only
+/// needs to override the rarely-changed bits (scoring tiers, filters). The
+/// legacy full `config.json` also decodes into these fields, so an old PaperBot
+/// config still supplies its venue tiers.
+struct AdvancedConfig: Codable {
+    var scoring: ScoringConfig?
+    var filters: FiltersConfig?
+}
+
+/// Produces the effective `AppConfig` consumed by the engines. It is always
+/// available (never nil): personalization comes from `AppSettings`, advanced
+/// overrides from an optional external file, and everything else from
+/// `AppConfig.builtin`.
 @MainActor
 class ConfigManager {
     static let shared = ConfigManager()
-    var config: AppConfig?
 
-    private init() {
-        loadConfig()
+    private init() {}
+
+    /// The merged config. Build order: built-in defaults → advanced file
+    /// overrides (scoring/filters) → visual personalization (wins).
+    var effectiveConfig: AppConfig {
+        var cfg = AppConfig.builtin
+        let s = AppSettings.shared
+
+        // Advanced file (optional): override scoring/filters only.
+        if let adv = loadAdvanced() {
+            if let scoring = adv.scoring { cfg.scoring = scoring }
+            if let filters = adv.filters { cfg.filters = filters }
+        }
+
+        // Personalization from the visual settings.
+        cfg.recommendation = RecommendationConfig(
+            daily_count: s.dailyCount,
+            quality_slots: s.qualitySlots,
+            high_score_threshold: s.highScoreThreshold,
+            recent_days: s.recentDays
+        )
+        cfg.openalex.mailto = s.openAlexMailto
+        cfg.openalex.per_page = s.perPage
+        cfg.openalex.default_days = s.defaultDays
+        cfg.openalex.default_max_results = s.defaultMaxResults
+        cfg.openalex.topic_filter = s.topicFilter
+        cfg.translate.enabled = s.translateEnabled
+        cfg.translate.base_url = s.deepSeekBaseURL
+        cfg.translate.model = s.deepSeekModel
+        cfg.translate.target_language = s.targetLanguage
+        if !s.tracks.isEmpty {
+            cfg.tracks = Dictionary(uniqueKeysWithValues: s.tracks.map {
+                ($0.name, TrackConfig(query: $0.query, keywords: $0.keywords, color: nil))
+            })
+        }
+        return cfg
     }
 
-    func loadConfig() {
-        let fileManager = FileManager.default
-        var configPath: URL?
-
-        // 1. Check environment variable
-        if let envPath = ProcessInfo.processInfo.environment["PAPERBOT_CONFIG"] {
-            configPath = URL(fileURLWithPath: envPath)
+    /// Resolved path of the advanced config file, honoring an explicit setting,
+    /// then `$PAPERBOT_CONFIG`, then the legacy `~/.vellumx/config.json` /
+    /// `~/.paperbot/config.json` locations.
+    var advancedConfigURL: URL? {
+        let s = AppSettings.shared
+        if !s.advancedConfigPath.isEmpty {
+            return URL(fileURLWithPath: (s.advancedConfigPath as NSString).expandingTildeInPath)
         }
-
-        // 2. Check ~/.vellumx/config.json
-        if configPath == nil {
-            let home = fileManager.homeDirectoryForCurrentUser
-            let vellumxDotPath = home.appendingPathComponent(".vellumx/config.json")
-            let paperBotDotPath = home.appendingPathComponent(".paperbot/config.json")
-            if fileManager.fileExists(atPath: vellumxDotPath.path) {
-                configPath = vellumxDotPath
-            } else if fileManager.fileExists(atPath: paperBotDotPath.path) {
-                configPath = paperBotDotPath
-            }
+        if let env = ProcessInfo.processInfo.environment["PAPERBOT_CONFIG"] {
+            return URL(fileURLWithPath: env)
         }
-
-        // 3. Fallback to workspace data/config.json or relative data/config.json
-        if configPath == nil {
-            let currentDir = URL(fileURLWithPath: fileManager.currentDirectoryPath)
-            let workspacePath = currentDir.appendingPathComponent("data/config.json")
-            if fileManager.fileExists(atPath: workspacePath.path) {
-                configPath = workspacePath
-            }
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        for p in [".vellumx/config.json", ".paperbot/config.json"] {
+            let u = home.appendingPathComponent(p)
+            if FileManager.default.fileExists(atPath: u.path) { return u }
         }
+        return nil
+    }
 
-        guard let path = configPath else {
-            print("Warning: config.json not found in env, ~/.vellumx, or current dir")
-            return
-        }
-
-        do {
-            let data = try Data(contentsOf: path)
-            let decoder = JSONDecoder()
-            self.config = try decoder.decode(AppConfig.self, from: data)
-            print("Successfully loaded config from \(path.path)")
-        } catch {
-            print("Error loading config from \(path.path): \(error)")
-        }
+    private func loadAdvanced() -> AdvancedConfig? {
+        guard let url = advancedConfigURL,
+              FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return try? JSONDecoder().decode(AdvancedConfig.self, from: data)
     }
 }

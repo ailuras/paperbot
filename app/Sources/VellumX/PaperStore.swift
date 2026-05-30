@@ -36,7 +36,7 @@ class PaperStore: ObservableObject {
             } else {
                 // Check older legacy path ~/.paperbot/paperbot.db
                 var legacyDir = home.appendingPathComponent(".paperbot")
-                if let configDir = ConfigManager.shared.config?.data_dir {
+                if let configDir = ConfigManager.shared.effectiveConfig.data_dir {
                     let expanded = (configDir as NSString).expandingTildeInPath
                     legacyDir = URL(fileURLWithPath: expanded)
                 }

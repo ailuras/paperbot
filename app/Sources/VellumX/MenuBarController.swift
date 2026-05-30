@@ -96,10 +96,8 @@ struct MenuBarContentView: View {
                 Text("No recommendations for today.")
                     .font(.caption)
                 Button("Run Recommend Engine") {
-                    if let config = ConfigManager.shared.config {
-                        let engine = RecommendEngine(config: config)
-                        _ = engine.recommend(papers: store.papers)
-                    }
+                    let engine = RecommendEngine(config: ConfigManager.shared.effectiveConfig)
+                    _ = engine.recommend(papers: store.papers)
                 }
             } else {
                 Text("Today's Top Picks:")

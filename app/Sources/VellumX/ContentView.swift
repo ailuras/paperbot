@@ -150,7 +150,8 @@ struct ContentView: View {
                     }
                 }
                 
-                if let config = ConfigManager.shared.config {
+                if !ConfigManager.shared.effectiveConfig.tracks.isEmpty {
+                    let config = ConfigManager.shared.effectiveConfig
                     Section("Tracks") {
                         ForEach(Array(config.tracks.keys).sorted(), id: \.self) { trackName in
                             NavigationLink(value: SidebarItem.track(trackName)) {
@@ -427,8 +428,9 @@ struct ContentView: View {
     }
     
     private func fetchPapers() {
-        guard let config = ConfigManager.shared.config else {
-            statusMessage = "Error: config not loaded"
+        let config = ConfigManager.shared.effectiveConfig
+        guard !config.tracks.isEmpty else {
+            statusMessage = "No tracks configured — add one in Settings ▸ Papers"
             return
         }
         isFetching = true
@@ -448,10 +450,7 @@ struct ContentView: View {
     }
     
     private func recommendPapers() {
-        guard let config = ConfigManager.shared.config else {
-            statusMessage = "Error: config not loaded"
-            return
-        }
+        let config = ConfigManager.shared.effectiveConfig
         isRecommending = true
         statusMessage = "Running recommendation engine..."
         
