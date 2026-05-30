@@ -38,10 +38,10 @@ struct FilterRow: View {
         .contextMenu {
             Menu("Color") {
                 ForEach(LabelColor.allCases) { c in
-                    Button(c.title) { settings.labelColors[colorKey] = c.rawValue }
+                    Button(c.title) { settings.setLabelColor(key: colorKey, colorName: c.rawValue) }
                 }
                 Divider()
-                Button("Default") { settings.labelColors[colorKey] = nil }
+                Button("Default") { settings.setLabelColor(key: colorKey, colorName: nil) }
             }
         }
     }

@@ -171,6 +171,18 @@ final class AppSettings: ObservableObject {
         venues.first(where: { $0.abbr == abbr })?.field
     }
 
+    /// Set or remove a custom label color. Must go through a copy-then-replace
+    /// so the @Published dictionary fires objectWillChange.
+    func setLabelColor(key: String, colorName: String?) {
+        var colors = labelColors
+        if let colorName {
+            colors[key] = colorName
+        } else {
+            colors.removeValue(forKey: key)
+        }
+        labelColors = colors
+    }
+
     // MARK: - Defaults (SAT / SMT / CP focus)
 
     /// Interests are the three solving paradigms (SAT / SMT / CP). Their papers
