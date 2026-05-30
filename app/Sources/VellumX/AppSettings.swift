@@ -149,7 +149,7 @@ final class AppSettings: ObservableObject {
 
     /// Bump when the bundled default tracks/venues change so existing installs
     /// refresh them once on next launch.
-    static let currentSeedVersion = 6
+    static let currentSeedVersion = 7
 
     // MARK: - Derived taxonomy (for the sidebar filters)
 
@@ -216,6 +216,9 @@ final class AppSettings: ObservableObject {
         VenuePref(abbr: "JAIR",  phrase: "journal of artificial intelligence research", tier: 1, field: "AI"),
         VenuePref(abbr: "AAAI",  phrase: "aaai conference on artificial intelligence", tier: 1, field: "AI"),
         VenuePref(abbr: "IJCAI", phrase: "international joint conference on artificial intelligence", tier: 1, field: "AI"),
+        VenuePref(abbr: "NeurIPS", phrase: "neural information processing systems", tier: 1, field: "AI"),
+        VenuePref(abbr: "ICLR",  phrase: "learning representations", tier: 1, field: "AI"),
+        VenuePref(abbr: "ICML",  phrase: "international conference on machine learning", tier: 1, field: "AI"),
 
         // ── Tier 2 ──
         VenuePref(abbr: "TACAS", phrase: "tools and algorithms for the construction", tier: 2, field: "FM"),
@@ -236,8 +239,6 @@ final class AppSettings: ObservableObject {
         VenuePref(abbr: "STTT",  phrase: "software tools for technology transfer", tier: 2, field: "FM"),
         VenuePref(abbr: "FAoC",  phrase: "formal aspects of computing", tier: 2, field: "FM"),
         VenuePref(abbr: "SCP",   phrase: "science of computer programming", tier: 2, field: "PL"),
-        VenuePref(abbr: "VLDB",  phrase: "vldb endowment", tier: 2, field: "DB"),
-        VenuePref(abbr: "SIGMOD", phrase: "acm on management of data", tier: 2, field: "DB"),
 
         // ── Tier 3 ──
         VenuePref(abbr: "ICST",  phrase: "software testing, verification and validation", tier: 3, field: "SE"),
