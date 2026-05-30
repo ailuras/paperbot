@@ -272,21 +272,24 @@ struct VenuesEditor: View {
                 Text(L10n.t(.noVenues)).font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 8) {
-                Text(L10n.t(.abbr)).font(.caption).foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
+                Text(L10n.t(.abbr)).font(.caption).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
+                Text(L10n.t(.field)).font(.caption).foregroundStyle(.secondary).frame(width: 56, alignment: .leading)
                 Text(L10n.t(.matchPhrase)).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                Text(L10n.t(.tier)).font(.caption).foregroundStyle(.secondary).frame(width: 90, alignment: .leading)
-                Spacer().frame(width: 24)
+                Text(L10n.t(.tier)).font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
+                Spacer().frame(width: 20)
             }
             ForEach($venues) { $venue in
                 HStack(spacing: 8) {
                     TextField(L10n.t(.abbr), text: $venue.abbr)
-                        .textFieldStyle(.roundedBorder).frame(width: 70)
+                        .textFieldStyle(.roundedBorder).frame(width: 64)
+                    TextField(L10n.t(.field), text: fieldBinding(for: $venue))
+                        .textFieldStyle(.roundedBorder).frame(width: 56)
                     TextField(L10n.t(.matchPhrase), text: $venue.phrase)
                         .textFieldStyle(.roundedBorder).frame(maxWidth: .infinity)
                     Picker("", selection: $venue.tier) {
                         ForEach(1...5, id: \.self) { Text("\(L10n.t(.tier)) \($0)").tag($0) }
                     }
-                    .labelsHidden().frame(width: 90)
+                    .labelsHidden().frame(width: 84)
                     Button(role: .destructive) {
                         venues.removeAll { $0.id == venue.id }
                     } label: { Image(systemName: "trash") }
@@ -294,11 +297,19 @@ struct VenuesEditor: View {
                 }
             }
             Button {
-                venues.append(VenuePref(abbr: "", phrase: "", tier: 3))
+                venues.append(VenuePref(abbr: "", phrase: "", tier: 3, field: ""))
             } label: { Label(L10n.t(.addVenue), systemImage: "plus") }
             .buttonStyle(.borderless)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Edit the optional `field` as a plain string (empty == none).
+    private func fieldBinding(for venue: Binding<VenuePref>) -> Binding<String> {
+        Binding(
+            get: { venue.wrappedValue.field ?? "" },
+            set: { venue.wrappedValue.field = $0.isEmpty ? nil : $0 }
+        )
     }
 }
 

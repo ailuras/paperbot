@@ -3,11 +3,17 @@ import AppKit
 
 struct ContentView: View {
     @StateObject private var store = PaperStore.shared
-    
+    @ObservedObject private var settings = AppSettings.shared
+
     // Filter and Sort states
     @State private var selectedSidebarItem: SidebarItem? = .recommended
     @State private var searchKeyword: String = ""
     @State private var sortByScore: Bool = true
+
+    // Multi-select taxonomy filters (union within a group, intersect across).
+    @State private var selectedTopics: Set<String> = []
+    @State private var selectedFields: Set<String> = []
+    @State private var selectedTiers: Set<Int> = []
     
     // Selection state
     @State private var selectedPaperId: String?
@@ -28,8 +34,7 @@ struct ContentView: View {
         case starred
         case read
         case skipped
-        case track(String)
-        
+
         var displayName: String {
             switch self {
             case .all: return "All Papers"
@@ -38,10 +43,9 @@ struct ContentView: View {
             case .starred: return "Starred"
             case .read: return "Read"
             case .skipped: return "Skipped"
-            case .track(let name): return name
             }
         }
-        
+
         var iconName: String {
             switch self {
             case .all: return "books.vertical"
@@ -50,10 +54,9 @@ struct ContentView: View {
             case .starred: return "star"
             case .read: return "checkmark.circle"
             case .skipped: return "eye.slash"
-            case .track: return "tag"
             }
         }
-        
+
         var iconColor: Color {
             switch self {
             case .all: return .primary
@@ -62,7 +65,6 @@ struct ContentView: View {
             case .starred: return .yellow
             case .read: return .green
             case .skipped: return .secondary
-            case .track: return .purple
             }
         }
     }
@@ -86,11 +88,27 @@ struct ContentView: View {
                 result = result.filter { $0.status == "read" }
             case .skipped:
                 result = result.filter { $0.status == "skip" }
-            case .track(let name):
-                result = result.filter { $0.track.split(separator: ",").map({ $0.trimmingCharacters(in: .whitespaces) }).contains(name) }
             }
         }
-        
+
+        // 1b. Taxonomy filters (multi-select): union within a group, intersect
+        // across groups. An empty group doesn't filter.
+        if !selectedTopics.isEmpty {
+            result = result.filter { paper in
+                let tracks = paper.track.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                return !selectedTopics.isDisjoint(with: Set(tracks))
+            }
+        }
+        if !selectedFields.isEmpty {
+            result = result.filter { paper in
+                guard let f = settings.field(forAbbr: paper.venueAbbr) else { return false }
+                return selectedFields.contains(f)
+            }
+        }
+        if !selectedTiers.isEmpty {
+            result = result.filter { selectedTiers.contains($0.tier) }
+        }
+
         // 2. Filter by search keyword
         if !searchKeyword.isEmpty {
             let kw = searchKeyword.lowercased()
@@ -124,6 +142,19 @@ struct ContentView: View {
         return store.papers.first(where: { $0.id == id })
     }
     
+    private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
+        if set.contains(value) { set.remove(value) } else { set.insert(value) }
+    }
+
+    private func tierDefaultColor(_ tier: Int) -> LabelColor {
+        switch tier {
+        case 1: return .red
+        case 2: return .orange
+        case 3: return .yellow
+        default: return .gray
+        }
+    }
+
     var body: some View {
         NavigationSplitView {
             // MARK: - Left Sidebar
@@ -155,13 +186,37 @@ struct ContentView: View {
                     }
                 }
                 
-                if !ConfigManager.shared.effectiveConfig.tracks.isEmpty {
-                    let config = ConfigManager.shared.effectiveConfig
-                    Section("Tracks") {
-                        ForEach(Array(config.tracks.keys).sorted(), id: \.self) { trackName in
-                            NavigationLink(value: SidebarItem.track(trackName)) {
-                                Label(trackName, systemImage: "tag")
-                                    .foregroundColor(.purple)
+                if !settings.tracks.isEmpty {
+                    Section("Topics") {
+                        ForEach(settings.tracks.map(\.name), id: \.self) { name in
+                            FilterRow(title: name, colorKey: "topic:\(name)",
+                                      defaultColor: .purple,
+                                      isSelected: selectedTopics.contains(name)) {
+                                toggle(name, in: &selectedTopics)
+                            }
+                        }
+                    }
+                }
+
+                if !settings.allFields.isEmpty {
+                    Section("Fields") {
+                        ForEach(settings.allFields, id: \.self) { field in
+                            FilterRow(title: field, colorKey: "field:\(field)",
+                                      defaultColor: .teal,
+                                      isSelected: selectedFields.contains(field)) {
+                                toggle(field, in: &selectedFields)
+                            }
+                        }
+                    }
+                }
+
+                if !settings.allTiers.isEmpty {
+                    Section("Tier") {
+                        ForEach(settings.allTiers, id: \.self) { tier in
+                            FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
+                                      defaultColor: tierDefaultColor(tier),
+                                      isSelected: selectedTiers.contains(tier)) {
+                                toggle(tier, in: &selectedTiers)
                             }
                         }
                     }

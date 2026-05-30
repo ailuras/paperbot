@@ -19,7 +19,7 @@ enum L10n {
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
-        case noVenues, abbr, matchPhrase, tier, addVenue
+        case noVenues, abbr, matchPhrase, tier, addVenue, field
         // Config file
         case notSet, advancedConfigFile, path, open, revealInFinder, clear, advancedConfigHint
         // Menu bar
@@ -90,6 +90,7 @@ enum L10n {
         case .matchPhrase:        return ("Match phrase", "匹配词")
         case .tier:               return ("Tier", "评级")
         case .addVenue:           return ("Add Venue", "添加会议")
+        case .field:              return ("Field", "领域")
 
         case .notSet:             return ("(not set)", "（未设置）")
         case .advancedConfigFile: return ("Advanced Config File", "高级配置文件")
