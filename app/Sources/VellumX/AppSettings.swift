@@ -119,18 +119,22 @@ final class AppSettings: ObservableObject {
         advancedConfigPath = stored?.advancedConfigPath ?? ""
         deepSeekAPIKey     = Keychain.get(Self.apiKeyAccount) ?? ""
 
-        // Seed default tracks/venues once, so the app is useful out of the box
-        // (and the user can edit them). A flag avoids re-seeding after the user
-        // intentionally clears them.
-        if stored?.didSeedDefaults == true {
+        // Seed default tracks/venues. `seedVersion` lets us ship improved
+        // defaults: when the bundled version is newer than what's stored, the
+        // defaults are refreshed once. Below that, the user's edits are kept.
+        if (stored?.seedVersion ?? 0) >= AppSettings.currentSeedVersion {
             tracks = stored?.tracks ?? []
             venues = stored?.venues ?? []
         } else {
-            tracks = (stored?.tracks?.isEmpty == false) ? stored!.tracks! : AppSettings.defaultTracks
-            venues = (stored?.venues?.isEmpty == false) ? stored!.venues! : AppSettings.defaultVenues
-            save()   // persist the seed + flag
+            tracks = AppSettings.defaultTracks
+            venues = AppSettings.defaultVenues
+            save()   // persist the new seed + version
         }
     }
+
+    /// Bump when the bundled default tracks/venues change so existing installs
+    /// refresh them once on next launch.
+    static let currentSeedVersion = 2
 
     // MARK: - Defaults (SAT / SMT / CP focus)
 
@@ -143,18 +147,67 @@ final class AppSettings: ObservableObject {
                   keywords: ["constraint programming", "constraint satisfaction", "csp", "constraint solver"])
     ]
 
+    /// Default venue ratings for a software-engineering + automated-reasoning
+    /// researcher. Tier 1 = strongest. `phrase` is matched case-insensitively
+    /// against the OpenAlex venue display name, so phrases are chosen to be
+    /// substrings of how OpenAlex actually labels each venue. The user can edit
+    /// all of this in Settings ▸ Papers.
     static let defaultVenues: [VenuePref] = [
+        // ── Tier 1: top software engineering + automated reasoning + AI/PL ──
+        // Software engineering
+        VenuePref(abbr: "ICSE",  phrase: "international conference on software engineering", tier: 1),
+        VenuePref(abbr: "FSE",   phrase: "acm on software engineering", tier: 1),
+        VenuePref(abbr: "ASE",   phrase: "automated software engineering", tier: 1),
+        VenuePref(abbr: "ISSTA", phrase: "software testing and analysis", tier: 1),
+        VenuePref(abbr: "TSE",   phrase: "transactions on software engineering", tier: 1),
+        VenuePref(abbr: "TOSEM", phrase: "software engineering and methodology", tier: 1),
+        // Programming languages (PACMPL covers POPL/PLDI/OOPSLA/ICFP)
+        VenuePref(abbr: "PACMPL", phrase: "acm on programming languages", tier: 1),
+        VenuePref(abbr: "TOPLAS", phrase: "transactions on programming languages and systems", tier: 1),
+        // Automated reasoning / constraint solving (top)
         VenuePref(abbr: "CAV",   phrase: "computer aided verification", tier: 1),
-        VenuePref(abbr: "POPL",  phrase: "principles of programming languages", tier: 1),
-        VenuePref(abbr: "PLDI",  phrase: "programming language design and implementation", tier: 1),
-        VenuePref(abbr: "LICS",  phrase: "logic in computer science", tier: 1),
+        VenuePref(abbr: "CP",    phrase: "constraint programming", tier: 1),
+        VenuePref(abbr: "SAT",   phrase: "satisfiability testing", tier: 1),
+        VenuePref(abbr: "JAR",   phrase: "journal of automated reasoning", tier: 1),
+        VenuePref(abbr: "AIJ",   phrase: "artificial intelligence", tier: 1),
+        VenuePref(abbr: "JAIR",  phrase: "journal of artificial intelligence research", tier: 1),
+        VenuePref(abbr: "AAAI",  phrase: "aaai conference on artificial intelligence", tier: 1),
+        VenuePref(abbr: "IJCAI", phrase: "international joint conference on artificial intelligence", tier: 1),
+
+        // ── Tier 2: strong FM / verification / SE / DB venues ──
         VenuePref(abbr: "TACAS", phrase: "tools and algorithms for the construction", tier: 2),
         VenuePref(abbr: "CADE",  phrase: "automated deduction", tier: 2),
         VenuePref(abbr: "IJCAR", phrase: "joint conference on automated reasoning", tier: 2),
+        VenuePref(abbr: "LICS",  phrase: "logic in computer science", tier: 2),
         VenuePref(abbr: "FMCAD", phrase: "formal methods in computer-aided design", tier: 2),
-        VenuePref(abbr: "SAT",   phrase: "theory and applications of satisfiability testing", tier: 3),
-        VenuePref(abbr: "CP",    phrase: "principles and practice of constraint programming", tier: 3),
-        VenuePref(abbr: "CPAIOR", phrase: "integration of constraint programming", tier: 3),
+        VenuePref(abbr: "CONCUR", phrase: "concurrency theory", tier: 2),
+        VenuePref(abbr: "ESOP",  phrase: "european symposium on programming", tier: 2),
+        VenuePref(abbr: "ECOOP", phrase: "object-oriented programming", tier: 2),
+        VenuePref(abbr: "ICAPS", phrase: "automated planning and scheduling", tier: 2),
+        VenuePref(abbr: "FM",    phrase: "international symposium on formal methods", tier: 2),
+        VenuePref(abbr: "VMCAI", phrase: "verification, model checking", tier: 2),
+        VenuePref(abbr: "ITP",   phrase: "interactive theorem proving", tier: 2),
+        VenuePref(abbr: "EMSE",  phrase: "empirical software engineering", tier: 2),
+        VenuePref(abbr: "TOCL",  phrase: "transactions on computational logic", tier: 2),
+        VenuePref(abbr: "FMSD",  phrase: "formal methods in system design", tier: 2),
+        VenuePref(abbr: "STTT",  phrase: "software tools for technology transfer", tier: 2),
+        VenuePref(abbr: "FAoC",  phrase: "formal aspects of computing", tier: 2),
+        VenuePref(abbr: "SCP",   phrase: "science of computer programming", tier: 2),
+        VenuePref(abbr: "VLDB",  phrase: "vldb endowment", tier: 2),
+        VenuePref(abbr: "SIGMOD", phrase: "acm on management of data", tier: 2),
+
+        // ── Tier 3: solid specialized venues ──
+        VenuePref(abbr: "ICST",  phrase: "software testing, verification and validation", tier: 3),
+        VenuePref(abbr: "SANER", phrase: "software analysis, evolution and reengineering", tier: 3),
+        VenuePref(abbr: "ICSME", phrase: "software maintenance and evolution", tier: 3),
+        VenuePref(abbr: "MSR",   phrase: "mining software repositories", tier: 3),
+        VenuePref(abbr: "SEFM",  phrase: "software engineering and formal methods", tier: 3),
+        VenuePref(abbr: "ICLP",  phrase: "logic programming", tier: 3),
+        VenuePref(abbr: "TABLEAUX", phrase: "analytic tableaux", tier: 3),
+        VenuePref(abbr: "SOCS",  phrase: "combinatorial search", tier: 3),
+        VenuePref(abbr: "EPTCS", phrase: "electronic proceedings in theoretical computer science", tier: 3),
+
+        // ── Tier 4: preprints ──
         VenuePref(abbr: "arXiv", phrase: "arxiv", tier: 4)
     ]
 
@@ -178,7 +231,7 @@ final class AppSettings: ObservableObject {
         var tracks: [TrackPref]?
         var venues: [VenuePref]?
         var advancedConfigPath: String?
-        var didSeedDefaults: Bool?
+        var seedVersion: Int?
     }
 
     private func save() {
@@ -202,7 +255,7 @@ final class AppSettings: ObservableObject {
             tracks: tracks,
             venues: venues,
             advancedConfigPath: advancedConfigPath,
-            didSeedDefaults: true
+            seedVersion: AppSettings.currentSeedVersion
         )
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try? enc.encode(stored).write(to: url, options: .atomic)
