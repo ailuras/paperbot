@@ -1,10 +1,9 @@
 import Foundation
 
-@MainActor
 class PdfResolver {
     let config: AppConfig
     
-    init(config: AppConfig = ConfigManager.shared.effectiveConfig) {
+    init(config: AppConfig) {
         self.config = config
     }
     
@@ -111,41 +110,33 @@ class PdfResolver {
         return nil
     }
     
-    func resolve(paper: Paper) async -> String? {
+    func resolve(id: String, title: String, doi: String?, currentPdfUrl: String?) async -> (url: String, source: String)? {
         // Cache / Preset check
-        if let currentPdf = paper.pdfUrl, !currentPdf.isEmpty {
-            return currentPdf
+        if let currentPdf = currentPdfUrl, !currentPdf.isEmpty {
+            return (currentPdf, "cached")
         }
         
-        guard let doi = paper.doi, !doi.isEmpty else {
+        guard let doi = doi, !doi.isEmpty else {
             // If no DOI, fallback to arXiv title lookup
-            if let arxivPdf = await fetchArxiv(title: paper.title) {
-                paper.pdfUrl = arxivPdf
-                PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: arxivPdf, pdfSource: "arxiv")
-                return arxivPdf
+            if let arxivPdf = await fetchArxiv(title: title) {
+                return (arxivPdf, "arxiv")
             }
             return nil
         }
         
         // Layer 2: Unpaywall
         if let unpaywallPdf = await fetchUnpaywall(doi: doi) {
-            paper.pdfUrl = unpaywallPdf
-            PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: unpaywallPdf, pdfSource: "unpaywall")
-            return unpaywallPdf
+            return (unpaywallPdf, "unpaywall")
         }
         
         // Layer 3: arXiv
-        if let arxivPdf = await fetchArxiv(title: paper.title) {
-            paper.pdfUrl = arxivPdf
-            PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: arxivPdf, pdfSource: "arxiv")
-            return arxivPdf
+        if let arxivPdf = await fetchArxiv(title: title) {
+            return (arxivPdf, "arxiv")
         }
         
         // Layer 4: Semantic Scholar
         if let s2Pdf = await fetchSemanticScholar(doi: doi) {
-            paper.pdfUrl = s2Pdf
-            PaperStore.shared.setPaperPdf(id: paper.id, pdfUrl: s2Pdf, pdfSource: "semanticscholar")
-            return s2Pdf
+            return (s2Pdf, "semanticscholar")
         }
         
         return nil

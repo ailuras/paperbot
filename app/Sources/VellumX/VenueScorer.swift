@@ -1,11 +1,39 @@
 import Foundation
 
-@MainActor
 class VenueScorer {
     let config: AppConfig?
-
-    init(config: AppConfig? = ConfigManager.shared.effectiveConfig) {
+    
+    // Pre-built caches for O(1) exact-match and O(k) substring-match lookups.
+    private let exactMatches: [String: (tier: Int, abbr: String)]
+    private let substringMatches: [(phrase: String, tier: Int, abbr: String)]
+    
+    init(config: AppConfig?, venues: [VenuePref] = []) {
         self.config = config
+        
+        var exact: [String: (tier: Int, abbr: String)] = [:]
+        var substring: [(phrase: String, tier: Int, abbr: String)] = []
+        
+        for v in venues where !v.phrase.isEmpty {
+            let key = v.phrase.lowercased()
+            if v.exact == true {
+                // For exact matches, keep the strongest tier (lowest number).
+                if let existing = exact[key] {
+                    if v.tier < existing.tier {
+                        exact[key] = (v.tier, v.abbr)
+                    }
+                } else {
+                    exact[key] = (v.tier, v.abbr)
+                }
+            } else {
+                substring.append((key, v.tier, v.abbr))
+            }
+        }
+        
+        // Longer phrases first = more specific matches take priority.
+        substring.sort { $0.phrase.count > $1.phrase.count }
+        
+        self.exactMatches = exact
+        self.substringMatches = substring
     }
 
     func getTier(venue: String) -> Int {
@@ -19,30 +47,30 @@ class VenueScorer {
             }
         }
 
-        // Prefer the editable venue ratings (the source of truth). Strongest
-        // tier (lowest number) wins; on a tie, the longer phrase wins (more
-        // specific). Exact-flagged entries must match the whole venue name.
-        let prefs = AppSettings.shared.venues
-        if !prefs.isEmpty {
-            var best: (tier: Int, len: Int)?
-            for p in prefs where !p.phrase.isEmpty {
-                let phrase = p.phrase.lowercased()
-                let matched = (p.exact == true) ? (venueLower == phrase) : venueLower.contains(phrase)
-                guard matched else { continue }
-                if best == nil || p.tier < best!.tier || (p.tier == best!.tier && phrase.count > best!.len) {
-                    best = (p.tier, phrase.count)
+        // 1. Exact-match cache (O(1))
+        if let match = exactMatches[venueLower] {
+            return match.tier
+        }
+        
+        // 2. Substring-match cache (O(k), k = number of substring rules)
+        var best: (tier: Int, len: Int)?
+        for rule in substringMatches {
+            if venueLower.contains(rule.phrase) {
+                let len = rule.phrase.count
+                if best == nil || rule.tier < best!.tier || (rule.tier == best!.tier && len > best!.len) {
+                    best = (rule.tier, len)
                 }
             }
-            return best?.tier ?? 0
         }
+        if let best { return best.tier }
 
         // Fallback: advanced-config scoring tiers (when no visual venues set).
         guard let config = config else { return 0 }
         let tiers = config.scoring.tiers
         let sortedTierNums = tiers.keys.compactMap { Int($0) }.sorted()
         for tierNum in sortedTierNums {
-            guard let venues = tiers[String(tierNum)]?.venues else { continue }
-            for (_, phrases) in venues {
+            guard let tierVenues = tiers[String(tierNum)]?.venues else { continue }
+            for (_, phrases) in tierVenues {
                 for phrase in phrases where venueLower.contains(phrase.lowercased()) {
                     return tierNum
                 }
@@ -92,20 +120,16 @@ class VenueScorer {
         let venueLower = venue.lowercased()
         if venueLower.contains("arxiv") { return "arXiv" }
 
-        // Use the editable venue ratings: the longest matching phrase wins
-        // (most specific), with exact entries requiring a full-name match.
-        let prefs = AppSettings.shared.venues
-        if !prefs.isEmpty {
-            var best: (abbr: String, len: Int)?
-            for p in prefs where !p.phrase.isEmpty {
-                let phrase = p.phrase.lowercased()
-                let matched = (p.exact == true) ? (venueLower == phrase) : venueLower.contains(phrase)
-                if matched, best == nil || phrase.count > best!.len {
-                    best = (p.abbr, phrase.count)
-                }
+        // 1. Exact-match cache (O(1))
+        if let match = exactMatches[venueLower] {
+            return match.abbr
+        }
+        
+        // 2. Substring-match cache (O(k))
+        for rule in substringMatches {
+            if venueLower.contains(rule.phrase) {
+                return rule.abbr
             }
-            if let best { return best.abbr }
-            return "Others"
         }
 
         // Fallback: advanced-config scoring tiers.

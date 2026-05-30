@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SQLite3
 
 /// SQLite needs to COPY bound Swift strings: a Swift String bridges to a C
@@ -9,8 +10,9 @@ import SQLite3
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
 @MainActor
+@Observable
 class PaperStore: ObservableObject {
-    @Published var papers: [Paper] = []
+    var papers: [Paper] = []
     
     static let shared = PaperStore()
     
@@ -20,49 +22,27 @@ class PaperStore: ObservableObject {
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser
 
-        // Target directory is the user-configured storage location
-        // (AppSettings), defaulting to Documents/06-文献/VellumX.
         let targetDir = AppSettings.shared.resolvedStorageDirectory
         let targetDb = targetDir.appendingPathComponent("vellumx.db")
         
-        // Ensure directory exists
         try? fileManager.createDirectory(at: targetDir, withIntermediateDirectories: true)
         
-        // Auto-migration check: If target DB does not exist
         if !fileManager.fileExists(atPath: targetDb.path) {
-            // Check the previous default location (Documents/06-文献/VellumX),
-            // so users upgrading from the old default keep their data.
             let oldDefaultDb = home.appendingPathComponent("Documents/06-文献/VellumX/vellumx.db")
-            // Check legacy folder under Documents/06-文献/PaperBot
             let paperBotDb = home.appendingPathComponent("Documents/06-文献/PaperBot/paperbot.db")
             if fileManager.fileExists(atPath: oldDefaultDb.path) {
-                print("Migrating database from previous default \(oldDefaultDb.path)...")
                 try? fileManager.copyItem(at: oldDefaultDb, to: targetDb)
             } else if fileManager.fileExists(atPath: paperBotDb.path) {
-                print("Migrating database from \(paperBotDb.path) to \(targetDb.path)...")
-                do {
-                    try fileManager.copyItem(at: paperBotDb, to: targetDb)
-                    print("Database migrated successfully from PaperBot!")
-                } catch {
-                    print("Failed to copy database from PaperBot: \(error)")
-                }
+                try? fileManager.copyItem(at: paperBotDb, to: targetDb)
             } else {
-                // Check older legacy path ~/.paperbot/paperbot.db
                 var legacyDir = home.appendingPathComponent(".paperbot")
                 if let configDir = ConfigManager.shared.effectiveConfig.data_dir {
                     let expanded = (configDir as NSString).expandingTildeInPath
                     legacyDir = URL(fileURLWithPath: expanded)
                 }
                 let legacyDb = legacyDir.appendingPathComponent("paperbot.db")
-                
                 if fileManager.fileExists(atPath: legacyDb.path) {
-                    print("Migrating database from legacy path \(legacyDb.path) to \(targetDb.path)...")
-                    do {
-                        try fileManager.copyItem(at: legacyDb, to: targetDb)
-                        print("Database migrated successfully from legacy path!")
-                    } catch {
-                        print("Failed to copy legacy database: \(error)")
-                    }
+                    try? fileManager.copyItem(at: legacyDb, to: targetDb)
                 }
             }
         }
@@ -75,8 +55,6 @@ class PaperStore: ObservableObject {
         createTablesIfNeeded()
         loadPapers()
     }
-    
-
     
     private func openDatabase() {
         let url = dbURL
@@ -94,24 +72,15 @@ class PaperStore: ObservableObject {
         }
     }
 
-    /// Result of relocating the storage directory, surfaced to the UI.
     enum RelocateResult {
         case ok(URL)
         case failed(String)
     }
 
-    /// Change the folder that holds `vellumx.db`.
-    ///
-    /// - `migrate == true`: move the current DB into `newDir` (replacing any DB
-    ///   already there). `migrate == false`: just switch — open the DB already
-    ///   in `newDir`, or create a fresh one, leaving the old DB untouched.
-    ///
-    /// On success the new path is persisted to `AppSettings`, the database is
-    /// reopened, and papers are reloaded.
     @discardableResult
     func relocate(to newDir: URL, migrate: Bool) -> RelocateResult {
         let fm = FileManager.default
-        let currentDb = dbURL                       // resolved under the OLD setting
+        let currentDb = dbURL
         let destDb = newDir.appendingPathComponent("vellumx.db")
 
         do {
@@ -120,25 +89,23 @@ class PaperStore: ObservableObject {
             return .failed("无法创建目录：\(error.localizedDescription)")
         }
 
-        // Don't act if the target resolves to the same file.
         if currentDb.standardizedFileURL != destDb.standardizedFileURL, migrate {
             closeDatabase()
             do {
                 if fm.fileExists(atPath: destDb.path) {
-                    try fm.removeItem(at: destDb)   // replace existing DB at target
+                    try fm.removeItem(at: destDb)
                 }
                 if fm.fileExists(atPath: currentDb.path) {
                     try fm.moveItem(at: currentDb, to: destDb)
                 }
             } catch {
-                openDatabase()                       // reopen old DB on failure
+                openDatabase()
                 return .failed("迁移失败：\(error.localizedDescription)")
             }
         } else if !migrate {
             closeDatabase()
         }
 
-        // Persist the new location, then reopen against it.
         AppSettings.shared.storageDirectory = newDir.path
         openDatabase()
         createTablesIfNeeded()
@@ -252,7 +219,8 @@ class PaperStore: ObservableObject {
             let tierRaw = String(cString: sqlite3_column_text(stmt, 13))
             let tier = Int(tierRaw) ?? 0
             
-            let status = String(cString: sqlite3_column_text(stmt, 14))
+            let statusRaw = String(cString: sqlite3_column_text(stmt, 14))
+            let status = PaperStatus(rawValue: statusRaw) ?? .pending
             let note = String(cString: sqlite3_column_text(stmt, 15))
             let titleZh = String(cString: sqlite3_column_text(stmt, 16))
             let abstractZh = String(cString: sqlite3_column_text(stmt, 17))
@@ -360,7 +328,6 @@ class PaperStore: ObservableObject {
                         if sqlite3_step(insertStmt) == SQLITE_DONE {
                             inserted += 1
                             
-                            // Auto-mark new papers as pending
                             let stateSql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
                             var stateStmt: OpaquePointer?
                             if sqlite3_prepare_v2(db, stateSql, -1, &stateStmt, nil) == SQLITE_OK {
@@ -375,12 +342,11 @@ class PaperStore: ObservableObject {
             }
         }
         
-        // Reload into memory
         loadPapers()
         return (inserted, updated)
     }
     
-    func setPaperStatus(id: String, status: String) {
+    func setPaperStatus(id: String, status: PaperStatus) {
         let sql = """
         INSERT INTO paper_states (paper_id, status, changed_at)
         VALUES (?, ?, datetime('now'))
@@ -392,13 +358,9 @@ class PaperStore: ObservableObject {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, status, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, status.rawValue, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
-                // Update memory. Paper is a reference type, so mutating it in
-                // place does not fire @Published papers — notify observers
-                // explicitly so the UI refreshes immediately.
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
-                    objectWillChange.send()
                     papers[idx].status = status
                     papers[idx].changedAt = Date()
                 }
@@ -421,7 +383,6 @@ class PaperStore: ObservableObject {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 2, note, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
-                // Update memory
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].note = note
                 }
@@ -446,9 +407,7 @@ class PaperStore: ObservableObject {
             sqlite3_bind_text(stmt, 2, titleZh, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 3, abstractZh, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
-                // Update memory (reference type — notify observers explicitly).
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
-                    objectWillChange.send()
                     papers[idx].titleZh = titleZh
                     papers[idx].abstractZh = abstractZh
                 }
@@ -473,7 +432,6 @@ class PaperStore: ObservableObject {
             sqlite3_bind_text(stmt, 2, pdfUrl, -1, SQLITE_TRANSIENT)
             sqlite3_bind_text(stmt, 3, pdfSource, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
-                // Update memory
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].pdfUrl = pdfUrl
                 }

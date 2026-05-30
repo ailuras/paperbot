@@ -1,6 +1,6 @@
 import SwiftUI
 import AppKit
-import Combine
+import Observation
 
 /// Owns the menu bar status item.
 ///
@@ -13,7 +13,6 @@ import Combine
 final class MenuBarController {
     private var statusItem: NSStatusItem?
     private let popover = NSPopover()
-    private var cancellable: AnyCancellable?
 
     private let store: PaperStore
     private let settings: AppSettings
@@ -30,9 +29,16 @@ final class MenuBarController {
         )
 
         // Show/hide the status item in step with the setting (default on).
-        apply(enabled: settings.menuBarEnabled)
-        cancellable = settings.$menuBarEnabled.sink { [weak self] enabled in
-            self?.apply(enabled: enabled)
+        observeMenuBarEnabled()
+    }
+    
+    private func observeMenuBarEnabled() {
+        withObservationTracking {
+            apply(enabled: settings.menuBarEnabled)
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.observeMenuBarEnabled()
+            }
         }
     }
 
@@ -87,7 +93,7 @@ struct MenuBarContentView: View {
     let closePopover: () -> Void
 
     private var recommendedPapers: [Paper] {
-        store.papers.filter { $0.status == "recommended" }
+        store.papers.filter { $0.status == .recommended }
     }
 
     var body: some View {
@@ -96,8 +102,15 @@ struct MenuBarContentView: View {
                 Text(L10n.t(.noRecommendations))
                     .font(.caption)
                 Button(L10n.t(.runRecommendEngine)) {
-                    let engine = RecommendEngine(config: ConfigManager.shared.effectiveConfig)
-                    _ = engine.recommend(papers: store.papers)
+                    let cfg = ConfigManager.shared.effectiveConfig
+                    let engine = RecommendEngine(config: cfg)
+                    let (selected, resetIds) = engine.recommend(papers: store.papers)
+                    for id in resetIds {
+                        store.setPaperStatus(id: id, status: .pending)
+                    }
+                    for r in selected {
+                        store.setPaperStatus(id: r.paper.id, status: .recommended)
+                    }
                 }
             } else {
                 Text(L10n.t(.todaysTopPicks))
@@ -105,8 +118,8 @@ struct MenuBarContentView: View {
                 ForEach(recommendedPapers) { paper in
                     Menu(paper.title) {
                         Button(L10n.t(.openPDF)) { openPdf(for: paper) }
-                        Button(L10n.t(.markRead)) { store.setPaperStatus(id: paper.id, status: "read") }
-                        Button(L10n.t(.markStarred)) { store.setPaperStatus(id: paper.id, status: "starred") }
+                        Button(L10n.t(.markRead)) { store.setPaperStatus(id: paper.id, status: .read) }
+                        Button(L10n.t(.markStarred)) { store.setPaperStatus(id: paper.id, status: .starred) }
                     }
                 }
             }
@@ -156,9 +169,14 @@ struct MenuBarContentView: View {
             return
         }
         Task {
-            let resolver = PdfResolver()
-            if let resolvedUrl = await resolver.resolve(paper: paper), let url = URL(string: resolvedUrl) {
-                NSWorkspace.shared.open(url)
+            let cfg = ConfigManager.shared.effectiveConfig
+            let resolver = PdfResolver(config: cfg)
+            if let result = await resolver.resolve(id: paper.id, title: paper.title, doi: paper.doi, currentPdfUrl: paper.pdfUrl) {
+                paper.pdfUrl = result.url
+                store.setPaperPdf(id: paper.id, pdfUrl: result.url, pdfSource: result.source)
+                if let url = URL(string: result.url) {
+                    NSWorkspace.shared.open(url)
+                }
             }
         }
     }

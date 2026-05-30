@@ -11,7 +11,15 @@ struct FilterRow: View {
     let isSelected: Bool
     let onToggle: () -> Void
 
-    @ObservedObject private var settings = AppSettings.shared
+    private var settings: AppSettings = .shared
+
+    init(title: String, colorKey: String, defaultColor: LabelColor, isSelected: Bool, onToggle: @escaping () -> Void) {
+        self.title = title
+        self.colorKey = colorKey
+        self.defaultColor = defaultColor
+        self.isSelected = isSelected
+        self.onToggle = onToggle
+    }
 
     private var color: Color {
         LabelColor.color(named: settings.labelColors[colorKey]) ?? defaultColor.color

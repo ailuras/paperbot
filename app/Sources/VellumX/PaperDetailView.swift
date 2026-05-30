@@ -15,17 +15,13 @@ struct PaperDetailView: View {
     @FocusState private var noteFocused: Bool
 
     // Status configuration
-    private let statuses: [(String, String, Color)] = [
-        ("pending",     "clock",        .blue),
-        ("recommended", "sparkles",     .orange),
-        ("read",        "checkmark.circle", .green),
-        ("starred",     "star.fill",    .yellow),
-        ("skip",        "eye.slash",    .secondary)
+    private let statuses: [(PaperStatus, String, Color)] = [
+        (.pending,     "clock",        .blue),
+        (.recommended, "sparkles",     .orange),
+        (.read,        "checkmark.circle", .green),
+        (.starred,     "star.fill",    .yellow),
+        (.skip,        "eye.slash",    .secondary)
     ]
-
-    private var currentStatusIndex: Int {
-        statuses.firstIndex { $0.0 == paper.status } ?? 0
-    }
 
     var body: some View {
         ScrollView {
@@ -122,16 +118,16 @@ struct PaperDetailView: View {
     private var statusBar: some View {
         HStack(spacing: 6) {
             ForEach(Array(statuses.enumerated()), id: \.offset) { index, item in
-                let (key, icon, color) = item
-                let isActive = paper.status == key
+                let (status, icon, color) = item
+                let isActive = paper.status == status
 
                 Button {
-                    PaperStore.shared.setPaperStatus(id: paper.id, status: key)
+                    PaperStore.shared.setPaperStatus(id: paper.id, status: status)
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: icon)
                             .font(.system(size: 11, weight: .semibold))
-                        Text(statusLabel(for: key))
+                        Text(statusLabel(for: status))
                             .font(.system(size: 12, weight: isActive ? .bold : .medium))
                     }
                     .padding(.horizontal, 10)
@@ -149,15 +145,8 @@ struct PaperDetailView: View {
         }
     }
 
-    private func statusLabel(for key: String) -> String {
-        switch key {
-        case "pending":     return "Pending"
-        case "recommended": return "Recommended"
-        case "read":        return "Read"
-        case "starred":     return "Starred"
-        case "skip":        return "Skip"
-        default:            return key.capitalized
-        }
+    private func statusLabel(for status: PaperStatus) -> String {
+        status.displayName
     }
 
     // MARK: - Action Bar

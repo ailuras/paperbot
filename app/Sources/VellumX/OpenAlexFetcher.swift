@@ -82,14 +82,13 @@ struct OpenAlexResponse: Decodable {
 
 // MARK: - Fetcher Class
 
-@MainActor
 class OpenAlexFetcher {
     let config: AppConfig
     let scorer: VenueScorer
     
-    init(config: AppConfig = ConfigManager.shared.effectiveConfig) {
+    init(config: AppConfig, venues: [VenuePref] = []) {
         self.config = config
-        self.scorer = VenueScorer(config: config)
+        self.scorer = VenueScorer(config: config, venues: venues)
     }
     
     private func restoreAbstract(from index: [String: [Int]]?) -> String {

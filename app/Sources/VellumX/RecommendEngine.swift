@@ -6,11 +6,10 @@ struct RecommendationResult {
     var slotIndex: Int
 }
 
-@MainActor
 class RecommendEngine {
     let config: AppConfig
     
-    init(config: AppConfig = ConfigManager.shared.effectiveConfig) {
+    init(config: AppConfig) {
         self.config = config
     }
     
@@ -25,29 +24,26 @@ class RecommendEngine {
         return pubDate >= cutoff
     }
     
-    func recommend(papers: [Paper], count: Int? = nil) -> [RecommendationResult] {
+    func recommend(papers: [Paper], count: Int? = nil) -> (selected: [RecommendationResult], resetIds: [String]) {
         let recConfig = config.recommendation
         let dailyCount = count ?? recConfig.daily_count
         let qualitySlots = min(recConfig.quality_slots, dailyCount)
         let highThreshold = Double(recConfig.high_score_threshold)
         let recentDays = recConfig.recent_days
         
-        if papers.isEmpty { return [] }
+        if papers.isEmpty { return (selected: [], resetIds: []) }
 
-        // Reset any prior recommendations back to pending so repeated runs
-        // replace the day's picks rather than stacking new ones on top.
-        // (Papers the user already acted on — read/starred/skip — are left as-is.)
-        for paper in papers where paper.status == "recommended" {
-            PaperStore.shared.setPaperStatus(id: paper.id, status: "pending")
-        }
+        // Collect papers to reset: any prior recommendations should go back
+        // to pending so repeated runs replace the day's picks.
+        let toReset = papers.filter { $0.status == .recommended }.map(\.id)
 
         let calendar = Calendar.current
         guard let cutoffDate = calendar.date(byAdding: .day, value: -recentDays, to: Date()) else {
-            return []
+            return (selected: [], resetIds: [])
         }
         
         // Pools
-        let pendingPapers = papers.filter { $0.status == "pending" }
+        let pendingPapers = papers.filter { $0.status == .pending }
         let recentPool = pendingPapers.filter { isRecent(paper: $0, cutoff: cutoffDate) }
         let highScorePool = pendingPapers.filter { $0.score >= highThreshold }
         
@@ -95,11 +91,6 @@ class RecommendEngine {
             }
         }
         
-        // Automatically mark recommended papers in Store
-        for result in selected {
-            PaperStore.shared.setPaperStatus(id: result.paper.id, status: "recommended")
-        }
-        
-        return selected
+        return (selected: selected, resetIds: toReset)
     }
 }

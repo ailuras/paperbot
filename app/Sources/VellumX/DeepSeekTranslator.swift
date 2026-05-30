@@ -1,19 +1,15 @@
 import Foundation
 
-@MainActor
 class DeepSeekTranslator {
     let config: AppConfig
+    let apiKey: String
     
-    init(config: AppConfig = ConfigManager.shared.effectiveConfig) {
+    init(config: AppConfig, apiKey: String) {
         self.config = config
+        self.apiKey = apiKey
     }
     
     private func callDeepSeek(text: String, systemPrompt: String) async throws -> String {
-        // Prefer the key entered in Settings (stored in the Keychain); fall back
-        // to the environment variable for backward compatibility.
-        let apiKey = AppSettings.shared.deepSeekAPIKey.isEmpty
-            ? (ProcessInfo.processInfo.environment[config.translate.api_key_env] ?? "")
-            : AppSettings.shared.deepSeekAPIKey
         if apiKey.isEmpty {
             throw NSError(domain: "DeepSeekTranslator", code: 401, userInfo: [NSLocalizedDescriptionKey: "DeepSeek API key not set — add it in Settings ▸ API"])
         }
@@ -61,11 +57,11 @@ class DeepSeekTranslator {
         return result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
     
-    func translate(paper: Paper) async throws {
+    func translate(id: String, title: String, abstract: String, cachedTitleZh: String) async throws -> (titleZh: String, abstractZh: String) {
         // Cache check
-        if !paper.titleZh.isEmpty {
-            print("Translation cache hit for paper \(paper.id)")
-            return
+        if !cachedTitleZh.isEmpty {
+            print("Translation cache hit for paper \(id)")
+            return (cachedTitleZh, "")
         }
         
         let targetLang = config.translate.target_language
@@ -74,18 +70,14 @@ class DeepSeekTranslator {
         let abstractPrompt = "You are a professional academic translator. Translate the following paper abstract into \(targetLang). Preserve technical terms in English where appropriate. Return ONLY the translated text, no explanations."
         
         print("Translating paper title to \(targetLang)...")
-        let titleZh = try await callDeepSeek(text: paper.title, systemPrompt: titlePrompt)
+        let titleZh = try await callDeepSeek(text: title, systemPrompt: titlePrompt)
         
         var abstractZh = ""
-        if !paper.abstract.isEmpty {
+        if !abstract.isEmpty {
             print("Translating paper abstract to \(targetLang)...")
-            abstractZh = try await callDeepSeek(text: paper.abstract, systemPrompt: abstractPrompt)
+            abstractZh = try await callDeepSeek(text: abstract, systemPrompt: abstractPrompt)
         }
         
-        paper.titleZh = titleZh
-        paper.abstractZh = abstractZh
-        
-        // Save automatically to SQLite
-        PaperStore.shared.setPaperTranslation(id: paper.id, titleZh: titleZh, abstractZh: abstractZh)
+        return (titleZh, abstractZh)
     }
 }
