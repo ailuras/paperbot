@@ -62,6 +62,40 @@ class DeepSeekTranslator {
         return result.choices.first?.message.content.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    func fetchModels() async throws -> [String] {
+        if apiKey.isEmpty {
+            throw NSError(domain: "DeepSeekTranslator", code: 401, userInfo: [NSLocalizedDescriptionKey: "DeepSeek API key not set — add it in Settings ▸ API"])
+        }
+
+        let baseUrl = config.translate.base_url
+        let url = URL(string: "\(baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/models")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let body = String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let message = body?.isEmpty == false
+                ? "DeepSeek error \(status): \(body!)"
+                : "DeepSeek error \(status)"
+            throw NSError(domain: "DeepSeekTranslator", code: status, userInfo: [NSLocalizedDescriptionKey: message])
+        }
+
+        struct ModelsResponse: Decodable {
+            struct Model: Decodable {
+                var id: String
+            }
+
+            var data: [Model]
+        }
+
+        let result = try JSONDecoder().decode(ModelsResponse.self, from: data)
+        return result.data.map(\.id).sorted()
+    }
+
     func translateAbstract(
         id: String,
         abstract: String,

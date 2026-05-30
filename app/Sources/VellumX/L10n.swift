@@ -14,6 +14,7 @@ enum L10n {
         case choose, storageUpdated
         // API
         case deepseekSection, enableTranslation, apiKeyHint, model, targetLanguage
+        case testConnection, testingConnection, connectionOK, connectionFailed
         // Papers
         case dailyRecommendations, dailyCount, qualitySlots, highScoreThreshold, recentWindow
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
@@ -65,6 +66,10 @@ enum L10n {
                                           "API Key 安全存储在系统钥匙串中，不写入配置文件。")
         case .model:              return ("Model", "模型")
         case .targetLanguage:     return ("Target language", "目标语言")
+        case .testConnection:     return ("Test Connection", "测试连接")
+        case .testingConnection:  return ("Testing connection…", "正在测试连接…")
+        case .connectionOK:       return ("Connection OK", "连接正常")
+        case .connectionFailed:   return ("Connection failed", "连接失败")
 
         case .dailyRecommendations: return ("Daily Recommendations", "每日推荐")
         case .dailyCount:         return ("Daily count", "每日推荐数")
