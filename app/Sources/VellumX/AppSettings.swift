@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 
 /// One academic track: an OpenAlex search query plus the keywords used to keep
 /// only relevant results. Editable in Settings.
@@ -35,6 +36,7 @@ struct VenuePref: Codable, Identifiable, Equatable {
 ///
 /// The DeepSeek API key is sensitive and stored in the Keychain, not here.
 @MainActor
+@Observable
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
@@ -44,47 +46,50 @@ final class AppSettings: ObservableObject {
 
     // ── General ──────────────────────────────────────────────────────────
     /// Folder holding `vellumx.db`. Empty = default (see `defaultStorageDirectory`).
-    @Published var storageDirectory: String { didSet { save() } }
-    @Published var menuBarEnabled: Bool { didSet { save() } }
+    var storageDirectory: String { didSet { save() } }
+    var menuBarEnabled: Bool { didSet { save() } }
     /// UI language. "en" or "zh". Default English.
-    @Published var language: String { didSet { save() } }
+    var language: String { didSet { save() } }
 
     // ── API (DeepSeek translation) ───────────────────────────────────────
-    @Published var translateEnabled: Bool { didSet { save() } }
-    @Published var deepSeekBaseURL: String { didSet { save() } }
-    @Published var deepSeekModel: String { didSet { save() } }
-    @Published var targetLanguage: String { didSet { save() } }
+    var translateEnabled: Bool { didSet { save() } }
+    var deepSeekBaseURL: String { didSet { save() } }
+    var deepSeekModel: String { didSet { save() } }
+    var targetLanguage: String { didSet { save() } }
     /// Bridges the Keychain-stored key into SwiftUI. Reads/writes the Keychain.
-    @Published var deepSeekAPIKey: String {
+    var deepSeekAPIKey: String {
         didSet { Keychain.set(deepSeekAPIKey, for: Self.apiKeyAccount) }
     }
 
     // ── Recommendation knobs ─────────────────────────────────────────────
-    @Published var dailyCount: Int { didSet { save() } }
-    @Published var qualitySlots: Int { didSet { save() } }
-    @Published var highScoreThreshold: Int { didSet { save() } }
-    @Published var recentDays: Int { didSet { save() } }
+    var dailyCount: Int { didSet { save() } }
+    var qualitySlots: Int { didSet { save() } }
+    var highScoreThreshold: Int { didSet { save() } }
+    var recentDays: Int { didSet { save() } }
 
     // ── OpenAlex fetch params ────────────────────────────────────────────
-    @Published var openAlexMailto: String { didSet { save() } }
-    @Published var perPage: Int { didSet { save() } }
-    @Published var defaultDays: Int { didSet { save() } }
-    @Published var defaultMaxResults: Int { didSet { save() } }
-    @Published var topicFilter: String { didSet { save() } }
+    var openAlexMailto: String { didSet { save() } }
+    var perPage: Int { didSet { save() } }
+    var defaultDays: Int { didSet { save() } }
+    var defaultMaxResults: Int { didSet { save() } }
+    var topicFilter: String { didSet { save() } }
 
     // ── Tracks / venues ──────────────────────────────────────────────────
-    @Published var tracks: [TrackPref] { didSet { save() } }
-    @Published var venues: [VenuePref] { didSet { save() } }
+    var tracks: [TrackPref] { didSet { save() } }
+    var venues: [VenuePref] { didSet { save() } }
 
     // ── Sidebar label colors ─────────────────────────────────────────────
     /// Custom colors for sidebar filter labels, keyed "topic:<name>",
     /// "field:<name>", "tier:<n>" → a color name (see LabelColor). Absent =
     /// the category's default color.
-    @Published var labelColors: [String: String] { didSet { save() } }
+    var labelColors: [String: String] { didSet { save() } }
 
     // ── Advanced ─────────────────────────────────────────────────────────
     /// Optional path to an external advanced config file. Empty = none.
-    @Published var advancedConfigPath: String { didSet { save() } }
+    var advancedConfigPath: String { didSet { save() } }
+
+    /// Bumped on every `save()` so `ConfigManager` can cache `effectiveConfig`.
+    private(set) var configVersion: Int = 0
 
     private let url: URL
     private static let apiKeyAccount = "deepseek-api-key"
@@ -292,6 +297,7 @@ final class AppSettings: ObservableObject {
     }
 
     private func save() {
+        configVersion += 1
         let stored = Stored(
             storageDirectory: storageDirectory,
             menuBarEnabled: menuBarEnabled,

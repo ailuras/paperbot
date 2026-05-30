@@ -25,8 +25,8 @@ final class MainWindowOpener {
 @main
 struct VellumXApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store = PaperStore.shared
-    @StateObject private var settings = AppSettings.shared
+    @State private var store = PaperStore.shared
+    @State private var settings = AppSettings.shared
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
@@ -40,7 +40,6 @@ struct VellumXApp: App {
 
         Settings {
             SettingsRootView()
-                .environmentObject(settings)
         }
     }
 }

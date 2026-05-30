@@ -95,24 +95,40 @@ struct AdvancedConfig: Codable {
 class ConfigManager {
     static let shared = ConfigManager()
 
+    private var cached: AppConfig?
+    private var cachedVersion: Int = -1
+
     private init() {}
 
     /// The merged config. Build order: built-in defaults → advanced file
     /// overrides (scoring/filters) → visual personalization (wins).
     var effectiveConfig: AppConfig {
+        let version = AppSettings.shared.configVersion
+        if let cached, cachedVersion == version { return cached }
+        let cfg = buildConfig()
+        cached = cfg
+        cachedVersion = version
+        return cfg
+    }
+
+    private func buildConfig() -> AppConfig {
         var cfg = AppConfig.builtin
         let s = AppSettings.shared
 
         // Venue ratings from the visual settings build the scoring tiers,
-        // overriding the built-in default set.
+        // overriding the built-in default set. Single-pass grouping.
         if !s.venues.isEmpty {
+            var venuesByTier: [String: [String: [String]]] = [:]
+            for p in s.venues {
+                let tierKey = String(p.tier)
+                venuesByTier[tierKey, default: [:]][p.abbr, default: []].append(p.phrase)
+            }
             var tiers: [String: ScoringTier] = [:]
-            let grouped = Dictionary(grouping: s.venues, by: { $0.tier })
-            for (tier, prefs) in grouped {
-                var venues: [String: [String]] = [:]
-                for p in prefs { venues[p.abbr, default: []].append(p.phrase) }
-                let points = AppSettings.tierPoints[tier] ?? max(1, 12 - 2 * tier)
-                tiers[String(tier)] = ScoringTier(points: points, venues: venues)
+            for (tierKey, venues) in venuesByTier {
+                if let tier = Int(tierKey) {
+                    let points = AppSettings.tierPoints[tier] ?? max(1, 12 - 2 * tier)
+                    tiers[tierKey] = ScoringTier(points: points, venues: venues)
+                }
             }
             cfg.scoring.tiers = tiers
         }
