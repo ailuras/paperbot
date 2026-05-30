@@ -9,66 +9,46 @@ class VenueScorer {
     }
 
     func getTier(venue: String) -> Int {
-        guard let config = config else { return 0 }
         if venue.isEmpty { return 0 }
         let venueLower = venue.lowercased()
 
         // Blacklist check
-        if let blacklist = config.filters?.venue_blacklist {
-            for blocked in blacklist {
-                if venueLower.contains(blocked.lowercased()) {
-                    return 0
-                }
+        if let blacklist = config?.filters?.venue_blacklist {
+            for blocked in blacklist where venueLower.contains(blocked.lowercased()) {
+                return 0
             }
         }
 
+        // Prefer the editable venue ratings (the source of truth). Strongest
+        // tier (lowest number) wins; on a tie, the longer phrase wins (more
+        // specific). Exact-flagged entries must match the whole venue name.
+        let prefs = AppSettings.shared.venues
+        if !prefs.isEmpty {
+            var best: (tier: Int, len: Int)?
+            for p in prefs where !p.phrase.isEmpty {
+                let phrase = p.phrase.lowercased()
+                let matched = (p.exact == true) ? (venueLower == phrase) : venueLower.contains(phrase)
+                guard matched else { continue }
+                if best == nil || p.tier < best!.tier || (p.tier == best!.tier && phrase.count > best!.len) {
+                    best = (p.tier, phrase.count)
+                }
+            }
+            return best?.tier ?? 0
+        }
+
+        // Fallback: advanced-config scoring tiers (when no visual venues set).
+        guard let config = config else { return 0 }
         let tiers = config.scoring.tiers
         let sortedTierNums = tiers.keys.compactMap { Int($0) }.sorted()
-
         for tierNum in sortedTierNums {
-            guard let tier = tiers[String(tierNum)] else { continue }
-            guard let venues = tier.venues else { continue }
-
-            for (abbr, phrases) in venues {
-                // Word boundary check for abbreviation (e.g. \bcav\b)
-                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: abbr.lowercased()))\\b"
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-                   regex.firstMatch(in: venueLower, options: [], range: NSRange(location: 0, length: venueLower.utf16.count)) != nil {
+            guard let venues = tiers[String(tierNum)]?.venues else { continue }
+            for (_, phrases) in venues {
+                for phrase in phrases where venueLower.contains(phrase.lowercased()) {
                     return tierNum
                 }
-
-                // Phrase check
-                for phrase in phrases {
-                    let phraseLower = phrase.lowercased()
-                    if venueLower.contains(phraseLower) {
-                        if hasMoreSpecificLowerTierPhrase(venueLower: venueLower, phraseLower: phraseLower, currentTier: tierNum, sortedTiers: sortedTierNums) {
-                            continue
-                        }
-                        return tierNum
-                    }
-                }
             }
         }
-
         return 0
-    }
-
-    private func hasMoreSpecificLowerTierPhrase(venueLower: String, phraseLower: String, currentTier: Int, sortedTiers: [Int]) -> Bool {
-        guard let config = config else { return false }
-        let lowerTiers = sortedTiers.filter { $0 > currentTier }
-
-        for lowerTier in lowerTiers {
-            guard let tier = config.scoring.tiers[String(lowerTier)], let venues = tier.venues else { continue }
-            for phrases in venues.values {
-                for lowerPhrase in phrases {
-                    let lp = lowerPhrase.lowercased()
-                    if lp.contains(phraseLower) && venueLower.contains(lp) && lp != phraseLower {
-                        return true
-                    }
-                }
-            }
-        }
-        return false
     }
 
     func citationScore(citations: Int) -> Double {
@@ -110,44 +90,37 @@ class VenueScorer {
     func computeVenueAbbr(venue: String) -> String {
         if venue.isEmpty { return "Others" }
         let venueLower = venue.lowercased()
-        if venueLower.contains("arxiv") {
-            return "arXiv"
+        if venueLower.contains("arxiv") { return "arXiv" }
+
+        // Use the editable venue ratings: the longest matching phrase wins
+        // (most specific), with exact entries requiring a full-name match.
+        let prefs = AppSettings.shared.venues
+        if !prefs.isEmpty {
+            var best: (abbr: String, len: Int)?
+            for p in prefs where !p.phrase.isEmpty {
+                let phrase = p.phrase.lowercased()
+                let matched = (p.exact == true) ? (venueLower == phrase) : venueLower.contains(phrase)
+                if matched, best == nil || phrase.count > best!.len {
+                    best = (p.abbr, phrase.count)
+                }
+            }
+            if let best { return best.abbr }
+            return "Others"
         }
 
+        // Fallback: advanced-config scoring tiers.
         guard let config = config else { return "Others" }
-
-        // Gather candidates (abbr, phrase)
         var candidates: [(abbr: String, phrase: String)] = []
         for tier in config.scoring.tiers.values {
             guard let venues = tier.venues else { continue }
             for (abbr, phrases) in venues {
-                for phrase in phrases {
-                    candidates.append((abbr, phrase))
-                }
+                for phrase in phrases { candidates.append((abbr, phrase)) }
             }
         }
-
-        // Sort by phrase length descending
         candidates.sort { $0.phrase.count > $1.phrase.count }
-
-        for candidate in candidates {
-            if venueLower.contains(candidate.phrase.lowercased()) {
-                return candidate.abbr
-            }
+        for candidate in candidates where venueLower.contains(candidate.phrase.lowercased()) {
+            return candidate.abbr
         }
-
-        // Fallback to checking exact word boundary for acronym
-        for tier in config.scoring.tiers.values {
-            guard let venues = tier.venues else { continue }
-            for abbr in venues.keys {
-                let pattern = "\\b\(NSRegularExpression.escapedPattern(for: abbr.lowercased()))\\b"
-                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
-                   regex.firstMatch(in: venueLower, options: [], range: NSRange(location: 0, length: venueLower.utf16.count)) != nil {
-                    return abbr
-                }
-            }
-        }
-
         return "Others"
     }
 }

@@ -17,6 +17,10 @@ struct VenuePref: Codable, Identifiable, Equatable {
     var abbr: String
     var phrase: String
     var tier: Int
+    /// When true, `phrase` must equal the whole venue name (case-insensitive),
+    /// not just be a substring. Used for short journal names like "Artificial
+    /// Intelligence" that would otherwise over-match (AAAI, FLAIRS, …).
+    var exact: Bool?
 }
 
 /// App-wide user settings, persisted as JSON under Application Support
@@ -134,7 +138,7 @@ final class AppSettings: ObservableObject {
 
     /// Bump when the bundled default tracks/venues change so existing installs
     /// refresh them once on next launch.
-    static let currentSeedVersion = 2
+    static let currentSeedVersion = 3
 
     // MARK: - Defaults (SAT / SMT / CP focus)
 
@@ -169,7 +173,7 @@ final class AppSettings: ObservableObject {
         VenuePref(abbr: "CP",    phrase: "constraint programming", tier: 1),
         VenuePref(abbr: "SAT",   phrase: "satisfiability testing", tier: 1),
         VenuePref(abbr: "JAR",   phrase: "journal of automated reasoning", tier: 1),
-        VenuePref(abbr: "AIJ",   phrase: "artificial intelligence", tier: 1),
+        VenuePref(abbr: "AIJ",   phrase: "artificial intelligence", tier: 1, exact: true),
         VenuePref(abbr: "JAIR",  phrase: "journal of artificial intelligence research", tier: 1),
         VenuePref(abbr: "AAAI",  phrase: "aaai conference on artificial intelligence", tier: 1),
         VenuePref(abbr: "IJCAI", phrase: "international joint conference on artificial intelligence", tier: 1),
