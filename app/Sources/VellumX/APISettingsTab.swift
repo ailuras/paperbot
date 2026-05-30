@@ -14,59 +14,80 @@ struct APISettingsTab: View {
         Form {
             Section(L10n.t(.deepseekSection)) {
                 Toggle(L10n.t(.enableTranslation), isOn: $settings.translateEnabled)
-                SecureField("API Key", text: $settings.deepSeekAPIKey)
-                    .onSubmit { loadModels() }
-                Text(L10n.t(.apiKeyHint))
-                    .font(.caption).foregroundStyle(.secondary)
-                TextField("Base URL", text: $settings.deepSeekBaseURL)
-                    .onSubmit { loadModels() }
-                Picker(L10n.t(.model), selection: $settings.deepSeekModel) {
-                    if availableModels.isEmpty {
-                        Text(settings.deepSeekModel.isEmpty ? L10n.t(.modelsUnavailable) : settings.deepSeekModel)
-                            .tag(settings.deepSeekModel)
-                    } else {
-                        ForEach(availableModels, id: \.self) { model in
-                            Text(model).tag(model)
-                        }
-                    }
-                }
-                .disabled(availableModels.isEmpty)
-                HStack {
-                    Button {
-                        loadModels()
-                    } label: {
-                        if isLoadingModels {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text(L10n.t(.refreshModels))
-                        }
-                    }
-                    .disabled(isLoadingModels)
-
-                    if let modelMessage {
-                        Text(modelMessage)
-                            .font(.caption)
-                            .foregroundStyle(modelIsError ? .red : .secondary)
-                    }
-                }
                 TextField(L10n.t(.targetLanguage), text: $settings.targetLanguage)
-                HStack {
-                    Button {
-                        testConnection()
-                    } label: {
-                        if isTestingConnection {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text(L10n.t(.testConnection))
-                        }
-                    }
-                    .disabled(isTestingConnection)
+            }
 
-                    if let connectionMessage {
-                        Text(connectionMessage)
-                            .font(.caption)
-                            .foregroundStyle(connectionIsError ? .red : .green)
+            Section(L10n.t(.apiConnection)) {
+                LabeledContent(L10n.t(.apiKey)) {
+                    HStack(spacing: 8) {
+                        SecureField("", text: $settings.deepSeekAPIKey)
+                            .textFieldStyle(.roundedBorder)
+                            .onSubmit { loadModels() }
+
+                        Button {
+                            testConnection()
+                        } label: {
+                            if isTestingConnection {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Label(L10n.t(.testConnection), systemImage: "checkmark.circle")
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(isTestingConnection)
                     }
+                }
+
+                LabeledContent(L10n.t(.baseURL)) {
+                    TextField("", text: $settings.deepSeekBaseURL)
+                        .textFieldStyle(.roundedBorder)
+                        .onSubmit { loadModels() }
+                }
+
+                if let connectionMessage {
+                    statusText(connectionMessage, isError: connectionIsError, successColor: .green)
+                }
+
+                Text(L10n.t(.apiKeyHint))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(L10n.t(.modelSelection)) {
+                LabeledContent(L10n.t(.model)) {
+                    HStack(spacing: 8) {
+                        Picker("", selection: $settings.deepSeekModel) {
+                            if availableModels.isEmpty {
+                                Text(settings.deepSeekModel.isEmpty ? L10n.t(.modelsUnavailable) : settings.deepSeekModel)
+                                    .tag(settings.deepSeekModel)
+                            } else {
+                                ForEach(availableModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .disabled(availableModels.isEmpty)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        Button {
+                            loadModels()
+                        } label: {
+                            if isLoadingModels {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                        }
+                        .controlSize(.small)
+                        .disabled(isLoadingModels)
+                        .help(L10n.t(.refreshModels))
+                    }
+                }
+
+                if let modelMessage {
+                    statusText(modelMessage, isError: modelIsError, successColor: .secondary)
                 }
             }
         }
@@ -76,6 +97,17 @@ struct APISettingsTab: View {
                 loadModels()
             }
         }
+    }
+
+    private func statusText(_ text: String, isError: Bool, successColor: Color) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: isError ? "exclamationmark.triangle" : "checkmark.circle")
+                .font(.caption)
+            Text(text)
+                .font(.caption)
+                .lineLimit(2)
+        }
+        .foregroundStyle(isError ? .red : successColor)
     }
 
     private func testConnection() {

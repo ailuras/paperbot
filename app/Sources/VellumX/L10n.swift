@@ -16,6 +16,7 @@ enum L10n {
         case deepseekSection, enableTranslation, apiKeyHint, model, targetLanguage
         case testConnection, testingConnection, connectionOK, connectionFailed
         case refreshModels, loadingModels, modelsLoaded, modelsUnavailable
+        case apiConnection, modelSelection, apiKey, baseURL
         // Papers
         case dailyRecommendations, dailyCount, qualitySlots, highScoreThreshold, recentWindow
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
@@ -75,6 +76,10 @@ enum L10n {
         case .loadingModels:      return ("Loading models…", "正在加载模型…")
         case .modelsLoaded:       return ("Models loaded", "模型已加载")
         case .modelsUnavailable:  return ("Configure API key, then refresh models.", "配置 API Key 后刷新模型。")
+        case .apiConnection:      return ("Connection", "连接")
+        case .modelSelection:     return ("Model Selection", "模型选择")
+        case .apiKey:             return ("API Key", "API Key")
+        case .baseURL:            return ("Base URL", "Base URL")
 
         case .dailyRecommendations: return ("Daily Recommendations", "每日推荐")
         case .dailyCount:         return ("Daily count", "每日推荐数")
