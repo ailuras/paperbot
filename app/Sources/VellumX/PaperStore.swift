@@ -1,6 +1,13 @@
 import Foundation
 import SQLite3
 
+/// SQLite needs to COPY bound Swift strings: a Swift String bridges to a C
+/// pointer that is only valid for the duration of the bind call, so passing
+/// SQLITE_STATIC (nil) leaves SQLite with a dangling pointer by the time
+/// sqlite3_step runs — it then stores empty/garbage. SQLITE_TRANSIENT tells
+/// SQLite to make its own copy.
+private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
 @MainActor
 class PaperStore: ObservableObject {
     @Published var papers: [Paper] = []
@@ -290,7 +297,7 @@ class PaperStore: ObservableObject {
             var existsStmt: OpaquePointer?
             let checkQuery = "SELECT 1 FROM papers WHERE id = ?"
             if sqlite3_prepare_v2(db, checkQuery, -1, &existsStmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(existsStmt, 1, paper.id, -1, nil)
+                sqlite3_bind_text(existsStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
                 let exists = sqlite3_step(existsStmt) == SQLITE_ROW
                 sqlite3_finalize(existsStmt)
                 
@@ -309,17 +316,17 @@ class PaperStore: ObservableObject {
                     """
                     var updateStmt: OpaquePointer?
                     if sqlite3_prepare_v2(db, updateSql, -1, &updateStmt, nil) == SQLITE_OK {
-                        sqlite3_bind_text(updateStmt, 1, paper.doi, -1, nil)
-                        sqlite3_bind_text(updateStmt, 2, paper.title, -1, nil)
-                        sqlite3_bind_text(updateStmt, 3, authorsJson, -1, nil)
-                        sqlite3_bind_text(updateStmt, 4, paper.publicationDate, -1, nil)
-                        sqlite3_bind_text(updateStmt, 5, paper.venue, -1, nil)
+                        sqlite3_bind_text(updateStmt, 1, paper.doi, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 2, paper.title, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 3, authorsJson, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 4, paper.publicationDate, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 5, paper.venue, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_int(updateStmt, 6, Int32(paper.citedByCount))
-                        sqlite3_bind_text(updateStmt, 7, paper.abstract, -1, nil)
-                        sqlite3_bind_text(updateStmt, 8, paper.landingPageUrl, -1, nil)
-                        sqlite3_bind_text(updateStmt, 9, paper.pdfUrl, -1, nil)
-                        sqlite3_bind_text(updateStmt, 10, paper.track, -1, nil)
-                        sqlite3_bind_text(updateStmt, 11, paper.id, -1, nil)
+                        sqlite3_bind_text(updateStmt, 7, paper.abstract, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 8, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 9, paper.pdfUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 10, paper.track, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 11, paper.id, -1, SQLITE_TRANSIENT)
                         
                         if sqlite3_step(updateStmt) == SQLITE_DONE {
                             updated += 1
@@ -335,20 +342,20 @@ class PaperStore: ObservableObject {
                     """
                     var insertStmt: OpaquePointer?
                     if sqlite3_prepare_v2(db, insertSql, -1, &insertStmt, nil) == SQLITE_OK {
-                        sqlite3_bind_text(insertStmt, 1, paper.id, -1, nil)
-                        sqlite3_bind_text(insertStmt, 2, paper.doi, -1, nil)
-                        sqlite3_bind_text(insertStmt, 3, paper.title, -1, nil)
-                        sqlite3_bind_text(insertStmt, 4, authorsJson, -1, nil)
-                        sqlite3_bind_text(insertStmt, 5, paper.publicationDate, -1, nil)
-                        sqlite3_bind_text(insertStmt, 6, paper.venue, -1, nil)
-                        sqlite3_bind_text(insertStmt, 7, paper.venueAbbr, -1, nil)
+                        sqlite3_bind_text(insertStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 2, paper.doi, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 3, paper.title, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 4, authorsJson, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 5, paper.publicationDate, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 6, paper.venue, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 7, paper.venueAbbr, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_int(insertStmt, 8, Int32(paper.citedByCount))
-                        sqlite3_bind_text(insertStmt, 9, paper.abstract, -1, nil)
-                        sqlite3_bind_text(insertStmt, 10, paper.landingPageUrl, -1, nil)
-                        sqlite3_bind_text(insertStmt, 11, paper.pdfUrl, -1, nil)
-                        sqlite3_bind_text(insertStmt, 12, paper.track, -1, nil)
+                        sqlite3_bind_text(insertStmt, 9, paper.abstract, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 10, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 11, paper.pdfUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 12, paper.track, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_double(insertStmt, 13, paper.score)
-                        sqlite3_bind_text(insertStmt, 14, String(paper.tier), -1, nil)
+                        sqlite3_bind_text(insertStmt, 14, String(paper.tier), -1, SQLITE_TRANSIENT)
                         
                         if sqlite3_step(insertStmt) == SQLITE_DONE {
                             inserted += 1
@@ -357,7 +364,7 @@ class PaperStore: ObservableObject {
                             let stateSql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
                             var stateStmt: OpaquePointer?
                             if sqlite3_prepare_v2(db, stateSql, -1, &stateStmt, nil) == SQLITE_OK {
-                                sqlite3_bind_text(stateStmt, 1, paper.id, -1, nil)
+                                sqlite3_bind_text(stateStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
                                 sqlite3_step(stateStmt)
                                 sqlite3_finalize(stateStmt)
                             }
@@ -384,8 +391,8 @@ class PaperStore: ObservableObject {
         
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, id, -1, nil)
-            sqlite3_bind_text(stmt, 2, status, -1, nil)
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, status, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 // Update memory. Paper is a reference type, so mutating it in
                 // place does not fire @Published papers — notify observers
@@ -411,8 +418,8 @@ class PaperStore: ObservableObject {
         
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, id, -1, nil)
-            sqlite3_bind_text(stmt, 2, note, -1, nil)
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, note, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 // Update memory
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
@@ -435,9 +442,9 @@ class PaperStore: ObservableObject {
         
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, id, -1, nil)
-            sqlite3_bind_text(stmt, 2, titleZh, -1, nil)
-            sqlite3_bind_text(stmt, 3, abstractZh, -1, nil)
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, titleZh, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, abstractZh, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 // Update memory (reference type — notify observers explicitly).
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
@@ -462,9 +469,9 @@ class PaperStore: ObservableObject {
         
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, id, -1, nil)
-            sqlite3_bind_text(stmt, 2, pdfUrl, -1, nil)
-            sqlite3_bind_text(stmt, 3, pdfSource, -1, nil)
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, pdfUrl, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 3, pdfSource, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 // Update memory
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
