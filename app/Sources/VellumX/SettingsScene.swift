@@ -175,20 +175,28 @@ struct PapersSettingsTab: View {
         }
     }
 
-    /// Aligned row: label on the left, current value + a compact stepper on the
-    /// right, so all four rows line up on a shared trailing edge.
+    /// Aligned row: label on the left, an editable numeric field plus a compact
+    /// stepper on the right, so all rows line up and the value can be typed.
     private func stepperRow(_ label: String, value: Binding<Int>, in range: ClosedRange<Int>) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Text(label)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Text("\(value.wrappedValue)")
-                .monospacedDigit()
-                .frame(width: 44, alignment: .trailing)
-                .foregroundStyle(.secondary)
+            TextField("", value: clamped(value, to: range), format: .number)
+                .multilineTextAlignment(.trailing)
+                .frame(width: 56)
+                .textFieldStyle(.roundedBorder)
             Stepper("", value: value, in: range)
                 .labelsHidden()
                 .controlSize(.small)
         }
+    }
+
+    /// Keeps a typed value within the allowed range on commit.
+    private func clamped(_ value: Binding<Int>, to range: ClosedRange<Int>) -> Binding<Int> {
+        Binding(
+            get: { value.wrappedValue },
+            set: { value.wrappedValue = min(max($0, range.lowerBound), range.upperBound) }
+        )
     }
 
     private func labeledField(_ label: String, text: Binding<String>) -> some View {
