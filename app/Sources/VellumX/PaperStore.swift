@@ -13,20 +13,21 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 @Observable
 class PaperStore: ObservableObject {
     var papers: [Paper] = []
-    
+    var paperVersion: Int = 0
+
     static let shared = PaperStore()
-    
+
     private var db: OpaquePointer?
-    
+
     var dbURL: URL {
         let fileManager = FileManager.default
         let home = fileManager.homeDirectoryForCurrentUser
 
         let targetDir = AppSettings.shared.resolvedStorageDirectory
         let targetDb = targetDir.appendingPathComponent("vellumx.db")
-        
+
         try? fileManager.createDirectory(at: targetDir, withIntermediateDirectories: true)
-        
+
         if !fileManager.fileExists(atPath: targetDb.path) {
             let oldDefaultDb = home.appendingPathComponent("Documents/06-文献/VellumX/vellumx.db")
             let paperBotDb = home.appendingPathComponent("Documents/06-文献/PaperBot/paperbot.db")
@@ -46,16 +47,16 @@ class PaperStore: ObservableObject {
                 }
             }
         }
-        
+
         return targetDb
     }
-    
+
     private init() {
         openDatabase()
         createTablesIfNeeded()
         loadPapers()
     }
-    
+
     private func openDatabase() {
         let url = dbURL
         if sqlite3_open(url.path, &db) != SQLITE_OK {
@@ -112,7 +113,7 @@ class PaperStore: ObservableObject {
         loadPapers()
         return .ok(destDb)
     }
-    
+
     private func createTablesIfNeeded() {
         let schema = """
         CREATE TABLE IF NOT EXISTS papers (
@@ -133,26 +134,26 @@ class PaperStore: ObservableObject {
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
         );
-        
+
         CREATE TABLE IF NOT EXISTS paper_states (
             paper_id TEXT PRIMARY KEY,
             status TEXT NOT NULL DEFAULT 'pending',
             changed_at TEXT DEFAULT (datetime('now'))
         );
-        
+
         CREATE TABLE IF NOT EXISTS paper_notes (
             paper_id TEXT PRIMARY KEY,
             note TEXT NOT NULL DEFAULT '',
             updated_at TEXT DEFAULT (datetime('now'))
         );
-        
+
         CREATE TABLE IF NOT EXISTS paper_translations (
             paper_id TEXT PRIMARY KEY,
             title_zh TEXT,
             abstract_zh TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
         );
-        
+
         CREATE TABLE IF NOT EXISTS paper_pdfs (
             paper_id TEXT PRIMARY KEY,
             pdf_url TEXT NOT NULL,
@@ -160,7 +161,7 @@ class PaperStore: ObservableObject {
             resolved_at TEXT DEFAULT (datetime('now'))
         );
         """
-        
+
         var errorMsg: UnsafeMutablePointer<Int8>?
         if sqlite3_exec(db, schema, nil, nil, &errorMsg) != SQLITE_OK {
             let error = errorMsg.map { String(cString: $0) } ?? "unknown error"
@@ -168,7 +169,7 @@ class PaperStore: ObservableObject {
             sqlite3_free(errorMsg)
         }
     }
-    
+
     func loadPapers() {
         let query = """
         SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue, p.venue_abbr,
@@ -181,7 +182,7 @@ class PaperStore: ObservableObject {
         LEFT JOIN paper_translations pt ON p.id = pt.paper_id
         LEFT JOIN paper_pdfs f ON p.id = f.paper_id
         """
-        
+
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, query, -1, &stmt, nil) != SQLITE_OK {
             print("Failed to prepare statement for loading papers")
@@ -190,14 +191,14 @@ class PaperStore: ObservableObject {
         defer {
             sqlite3_finalize(stmt)
         }
-        
+
         var loadedPapers: [Paper] = []
-        
+
         while sqlite3_step(stmt) == SQLITE_ROW {
             let id = String(cString: sqlite3_column_text(stmt, 0))
             let doi = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
             let title = String(cString: sqlite3_column_text(stmt, 2))
-            
+
             var authors: [String] = []
             if let authorsRaw = sqlite3_column_text(stmt, 3) {
                 let authorsStr = String(cString: authorsRaw)
@@ -205,7 +206,7 @@ class PaperStore: ObservableObject {
                     authors = (try? JSONDecoder().decode([String].self, from: data)) ?? []
                 }
             }
-            
+
             let pubDate = sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? ""
             let venue = String(cString: sqlite3_column_text(stmt, 5))
             let venueAbbr = String(cString: sqlite3_column_text(stmt, 6))
@@ -215,21 +216,21 @@ class PaperStore: ObservableObject {
             let pdfUrl = sqlite3_column_text(stmt, 10).map { String(cString: $0) }
             let track = String(cString: sqlite3_column_text(stmt, 11))
             let score = sqlite3_column_double(stmt, 12)
-            
+
             let tierRaw = String(cString: sqlite3_column_text(stmt, 13))
             let tier = Int(tierRaw) ?? 0
-            
+
             let statusRaw = String(cString: sqlite3_column_text(stmt, 14))
             let status = PaperStatus(rawValue: statusRaw) ?? .pending
             let note = String(cString: sqlite3_column_text(stmt, 15))
             let titleZh = String(cString: sqlite3_column_text(stmt, 16))
             let abstractZh = String(cString: sqlite3_column_text(stmt, 17))
-            
+
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
                 pubYear = Int(pubDate.prefix(4))
             }
-            
+
             let paper = Paper(
                 id: id,
                 doi: doi,
@@ -253,14 +254,15 @@ class PaperStore: ObservableObject {
             )
             loadedPapers.append(paper)
         }
-        
+
         self.papers = loadedPapers
+        paperVersion += 1
     }
-    
+
     func addOrUpdate(papers newPapers: [Paper]) -> (inserted: Int, updated: Int) {
         var inserted = 0
         var updated = 0
-        
+
         for paper in newPapers {
             var existsStmt: OpaquePointer?
             let checkQuery = "SELECT 1 FROM papers WHERE id = ?"
@@ -268,12 +270,12 @@ class PaperStore: ObservableObject {
                 sqlite3_bind_text(existsStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
                 let exists = sqlite3_step(existsStmt) == SQLITE_ROW
                 sqlite3_finalize(existsStmt)
-                
+
                 var authorsJson = ""
                 if let authorsData = try? JSONEncoder().encode(paper.authors) {
                     authorsJson = String(data: authorsData, encoding: .utf8) ?? "[]"
                 }
-                
+
                 if exists {
                     let updateSql = """
                     UPDATE papers SET
@@ -295,7 +297,7 @@ class PaperStore: ObservableObject {
                         sqlite3_bind_text(updateStmt, 9, paper.pdfUrl, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(updateStmt, 10, paper.track, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(updateStmt, 11, paper.id, -1, SQLITE_TRANSIENT)
-                        
+
                         if sqlite3_step(updateStmt) == SQLITE_DONE {
                             updated += 1
                         }
@@ -324,10 +326,10 @@ class PaperStore: ObservableObject {
                         sqlite3_bind_text(insertStmt, 12, paper.track, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_double(insertStmt, 13, paper.score)
                         sqlite3_bind_text(insertStmt, 14, String(paper.tier), -1, SQLITE_TRANSIENT)
-                        
+
                         if sqlite3_step(insertStmt) == SQLITE_DONE {
                             inserted += 1
-                            
+
                             let stateSql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
                             var stateStmt: OpaquePointer?
                             if sqlite3_prepare_v2(db, stateSql, -1, &stateStmt, nil) == SQLITE_OK {
@@ -341,11 +343,11 @@ class PaperStore: ObservableObject {
                 }
             }
         }
-        
+
         loadPapers()
         return (inserted, updated)
     }
-    
+
     func setPaperStatus(id: String, status: PaperStatus) {
         let sql = """
         INSERT INTO paper_states (paper_id, status, changed_at)
@@ -354,7 +356,7 @@ class PaperStore: ObservableObject {
             status = excluded.status,
             changed_at = datetime('now')
         """
-        
+
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
@@ -364,6 +366,7 @@ class PaperStore: ObservableObject {
                     papers[idx].status = status
                     papers[idx].changedAt = Date()
                 }
+                paperVersion += 1
             }
             sqlite3_finalize(stmt)
         }
@@ -377,7 +380,7 @@ class PaperStore: ObservableObject {
             note = excluded.note,
             updated_at = datetime('now')
         """
-        
+
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
@@ -386,11 +389,12 @@ class PaperStore: ObservableObject {
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].note = note
                 }
+                paperVersion += 1
             }
             sqlite3_finalize(stmt)
         }
     }
-    
+
     func setPaperTranslation(id: String, titleZh: String, abstractZh: String) {
         let sql = """
         INSERT INTO paper_translations (paper_id, title_zh, abstract_zh, updated_at)
@@ -400,7 +404,7 @@ class PaperStore: ObservableObject {
             abstract_zh = excluded.abstract_zh,
             updated_at = datetime('now')
         """
-        
+
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
@@ -411,6 +415,7 @@ class PaperStore: ObservableObject {
                     papers[idx].titleZh = titleZh
                     papers[idx].abstractZh = abstractZh
                 }
+                paperVersion += 1
             }
             sqlite3_finalize(stmt)
         }
@@ -425,7 +430,7 @@ class PaperStore: ObservableObject {
             pdf_source = excluded.pdf_source,
             resolved_at = datetime('now')
         """
-        
+
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
@@ -435,6 +440,7 @@ class PaperStore: ObservableObject {
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].pdfUrl = pdfUrl
                 }
+                paperVersion += 1
             }
             sqlite3_finalize(stmt)
         }

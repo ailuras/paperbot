@@ -2,17 +2,17 @@ import Foundation
 
 class VenueScorer {
     let config: AppConfig?
-    
+
     // Pre-built caches for O(1) exact-match and O(k) substring-match lookups.
     private let exactMatches: [String: (tier: Int, abbr: String)]
     private let substringMatches: [(phrase: String, tier: Int, abbr: String)]
-    
+
     init(config: AppConfig?, venues: [VenuePref] = []) {
         self.config = config
-        
+
         var exact: [String: (tier: Int, abbr: String)] = [:]
         var substring: [(phrase: String, tier: Int, abbr: String)] = []
-        
+
         for v in venues where !v.phrase.isEmpty {
             let key = v.phrase.lowercased()
             if v.exact == true {
@@ -28,10 +28,10 @@ class VenueScorer {
                 substring.append((key, v.tier, v.abbr))
             }
         }
-        
+
         // Longer phrases first = more specific matches take priority.
         substring.sort { $0.phrase.count > $1.phrase.count }
-        
+
         self.exactMatches = exact
         self.substringMatches = substring
     }
@@ -51,7 +51,7 @@ class VenueScorer {
         if let match = exactMatches[venueLower] {
             return match.tier
         }
-        
+
         // 2. Substring-match cache (O(k), k = number of substring rules)
         var best: (tier: Int, len: Int)?
         for rule in substringMatches {
@@ -124,7 +124,7 @@ class VenueScorer {
         if let match = exactMatches[venueLower] {
             return match.abbr
         }
-        
+
         // 2. Substring-match cache (O(k))
         for rule in substringMatches {
             if venueLower.contains(rule.phrase) {

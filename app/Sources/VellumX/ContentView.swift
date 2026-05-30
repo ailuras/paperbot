@@ -16,27 +16,29 @@ struct ContentView: View {
     @State private var selectedFields: Set<String> = []
     @State private var selectedTiers: Set<Int> = []
     @State private var showFilters = false
-    
+
     // Selection state
     @State private var selectedPaperId: String?
     /// Last paper actually opened; retained when the list selection clears.
     @State private var lastViewedPaperId: String?
-    
+
     // Async execution states
     @State private var isFetching: Bool = false
     @State private var isRecommending: Bool = false
     @State private var isTranslating: Bool = false
     @State private var isResolvingPdf: Bool = false
     @State private var statusMessage: String = ""
-    
+
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
-    
+
     /// Aggregates all filter inputs into a single hashable value so `.onChange`
     /// can watch one expression instead of chaining many.
     private var filterInputs: FilterInputs {
         FilterInputs(
             paperCount: store.papers.count,
+            paperVersion: store.paperVersion,
+            settingsVersion: settings.configVersion,
             sidebarItem: selectedSidebarItem,
             topic: selectedTopic,
             fields: selectedFields,
@@ -45,9 +47,11 @@ struct ContentView: View {
             sortByScore: sortByScore
         )
     }
-    
+
     private struct FilterInputs: Equatable {
         var paperCount: Int
+        var paperVersion: Int
+        var settingsVersion: Int
         var sidebarItem: SidebarItem?
         var topic: String?
         var fields: Set<String>
@@ -55,7 +59,7 @@ struct ContentView: View {
         var search: String
         var sortByScore: Bool
     }
-    
+
     /// The paper whose details are shown. Driven by `lastViewedPaperId` (not the
     /// live list selection) so clicking empty space in the list — which clears
     /// the selection — keeps the last opened paper's details visible.
@@ -63,7 +67,7 @@ struct ContentView: View {
         guard let id = lastViewedPaperId else { return nil }
         return store.papers.first(where: { $0.id == id })
     }
-    
+
     var body: some View {
         NavigationSplitView {
             SidebarView(
@@ -105,12 +109,12 @@ struct ContentView: View {
         .onAppear { applyFilters() }
         .onChange(of: filterInputs) { applyFilters() }
     }
-    
+
     // MARK: - Filtering
-    
+
     private func applyFilters() {
         var result = store.papers
-        
+
         // 1. Filter by Sidebar selection
         if let selected = selectedSidebarItem {
             switch selected {
@@ -157,7 +161,7 @@ struct ContentView: View {
                 $0.authors.joined(separator: " ").lowercased().contains(kw)
             }
         }
-        
+
         // 3. Sort
         if sortByScore {
             result.sort {
@@ -169,12 +173,12 @@ struct ContentView: View {
         } else {
             result.sort { $0.publicationDate > $1.publicationDate }
         }
-        
+
         filteredPapers = result
     }
-    
+
     // MARK: - Actions
-    
+
     private func fetchPapers() {
         let config = ConfigManager.shared.effectiveConfig
         guard !config.tracks.isEmpty else {
@@ -183,7 +187,7 @@ struct ContentView: View {
         }
         isFetching = true
         statusMessage = "Fetching OpenAlex papers..."
-        
+
         Task {
             do {
                 let fetcher = OpenAlexFetcher(config: config, venues: settings.venues)
@@ -196,12 +200,12 @@ struct ContentView: View {
             isFetching = false
         }
     }
-    
+
     private func recommendPapers() {
         let config = ConfigManager.shared.effectiveConfig
         isRecommending = true
         statusMessage = "Running recommendation engine..."
-        
+
         Task {
             let engine = RecommendEngine(config: config)
             let (selected, resetIds) = engine.recommend(papers: store.papers)
@@ -215,12 +219,12 @@ struct ContentView: View {
             isRecommending = false
         }
     }
-    
+
     private func translate(paper: Paper) {
         isTranslating = true
         statusMessage = "Translating with DeepSeek..."
         let config = ConfigManager.shared.effectiveConfig
-        
+
         Task {
             do {
                 let apiKey = settings.deepSeekAPIKey.isEmpty
@@ -228,7 +232,11 @@ struct ContentView: View {
                     : settings.deepSeekAPIKey
                 let translator = DeepSeekTranslator(config: config, apiKey: apiKey)
                 let (titleZh, abstractZh) = try await translator.translate(
-                    id: paper.id, title: paper.title, abstract: paper.abstract, cachedTitleZh: paper.titleZh
+                    id: paper.id,
+                    title: paper.title,
+                    abstract: paper.abstract,
+                    cachedTitleZh: paper.titleZh,
+                    cachedAbstractZh: paper.abstractZh
                 )
                 paper.titleZh = titleZh
                 paper.abstractZh = abstractZh
@@ -240,17 +248,17 @@ struct ContentView: View {
             isTranslating = false
         }
     }
-    
+
     private func resolvePdf(for paper: Paper) {
         if let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty, let url = URL(string: pdfUrl) {
             NSWorkspace.shared.open(url)
             return
         }
-        
+
         isResolvingPdf = true
         statusMessage = "Resolving OpenAccess PDF..."
         let config = ConfigManager.shared.effectiveConfig
-        
+
         Task {
             let resolver = PdfResolver(config: config)
             if let result = await resolver.resolve(id: paper.id, title: paper.title, doi: paper.doi, currentPdfUrl: paper.pdfUrl),

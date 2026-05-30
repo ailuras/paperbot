@@ -23,15 +23,16 @@ final class MenuBarController {
 
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(
-            rootView: MenuBarContentView(closePopover: { [weak self] in self?.popover.performClose(nil) })
-                .environmentObject(store)
-                .environmentObject(settings)
+            rootView: MenuBarContentView(
+                store: store,
+                closePopover: { [weak self] in self?.popover.performClose(nil) }
+            )
         )
 
         // Show/hide the status item in step with the setting (default on).
         observeMenuBarEnabled()
     }
-    
+
     private func observeMenuBarEnabled() {
         withObservationTracking {
             apply(enabled: settings.menuBarEnabled)
@@ -89,7 +90,7 @@ final class MenuBarController {
 /// The popover content: today's recommendations + quick actions. Plain SwiftUI,
 /// hosted in an NSPopover (not MenuBarExtra).
 struct MenuBarContentView: View {
-    @EnvironmentObject private var store: PaperStore
+    var store: PaperStore
     let closePopover: () -> Void
 
     private var recommendedPapers: [Paper] {

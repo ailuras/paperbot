@@ -62,7 +62,7 @@ final class Paper: Identifiable {
     var note: String
     var titleZh: String
     var abstractZh: String
-    
+
     init(
         id: String, doi: String? = nil, title: String,
         authors: [String] = [], publicationDate: String = "",
@@ -95,6 +95,6 @@ final class Paper: Identifiable {
         self.titleZh = titleZh
         self.abstractZh = abstractZh
     }
-    
+
 
 }

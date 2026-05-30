@@ -8,21 +8,21 @@ struct PaperListView: View {
     @Binding var selectedFields: Set<String>
     @Binding var selectedTiers: Set<Int>
     var settings: AppSettings
-    
+
     let isFetching: Bool
     let isRecommending: Bool
     let onFetch: () -> Void
     let onRecommend: () -> Void
     let onSelectPaper: (String) -> Void
-    
+
     @Binding var sortByScore: Bool
-    
+
     private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
         if set.contains(value) { set.remove(value) } else { set.insert(value) }
     }
-    
+
     private var filtersActive: Bool { !selectedFields.isEmpty || !selectedTiers.isEmpty }
-    
+
     private func tierDefaultColor(_ tier: Int) -> LabelColor {
         switch tier {
         case 1: return .red
@@ -31,7 +31,7 @@ struct PaperListView: View {
         default: return .gray
         }
     }
-    
+
     private var filterPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -70,7 +70,7 @@ struct PaperListView: View {
         .padding(14)
         .frame(width: 230)
     }
-    
+
     var body: some View {
         List(selection: $selectedPaperId) {
             ForEach(papers) { paper in
@@ -80,26 +80,26 @@ struct PaperListView: View {
                             .font(.headline)
                             .lineLimit(2)
                             .foregroundColor(.primary)
-                        
+
                         Spacer()
-                        
+
                         ScoreBadgeView(score: paper.score)
                     }
-                    
+
                     HStack {
                         Text(paper.venueAbbr)
                             .font(.caption.bold())
                             .foregroundColor(.orange)
-                        
+
                         Text("•")
                             .foregroundColor(.secondary)
-                        
+
                         Text(paper.publicationDate)
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
+
                         Spacer()
-                        
+
                         Text(paper.track)
                             .font(.system(size: 9, weight: .bold))
                             .padding(.horizontal, 5)
@@ -127,7 +127,7 @@ struct PaperListView: View {
                 }
                 .disabled(isFetching || isRecommending)
                 .help("Fetch new papers from OpenAlex")
-                
+
                 Button(action: onRecommend) {
                     if isRecommending {
                         ProgressView().controlSize(.small)
@@ -138,7 +138,7 @@ struct PaperListView: View {
                 }
                 .disabled(isFetching || isRecommending)
                 .help("Generate daily paper recommendations")
-                
+
                 Button { showFilters.toggle() } label: {
                     Label("Filter", systemImage: filtersActive
                           ? "line.3.horizontal.decrease.circle.fill"
@@ -146,7 +146,7 @@ struct PaperListView: View {
                 }
                 .help("Filter by field and tier")
                 .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
-                
+
                 Menu {
                     Picker("Sort", selection: $sortByScore) {
                         Label("Score", systemImage: "number").tag(true)
