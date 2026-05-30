@@ -241,7 +241,7 @@ struct ContentView: View {
                     cachedAbstractZh: paper.abstractZh
                 )
                 paper.abstractZh = abstractZh
-                PaperStore.shared.setPaperTranslation(id: paper.id, titleZh: paper.titleZh, abstractZh: abstractZh)
+                PaperStore.shared.setPaperTranslation(id: paper.id, abstractZh: abstractZh)
                 statusMessage = "Abstract translated successfully!"
             } catch {
                 statusMessage = "Translation failed: \(error.localizedDescription)"

@@ -93,14 +93,6 @@ struct PaperDetailView: View {
                 .lineSpacing(3)
                 .foregroundColor(.primary)
 
-            // Translated title
-            if !paper.titleZh.isEmpty {
-                Text(paper.titleZh)
-                    .font(.system(size: 18, weight: .semibold, design: .serif))
-                    .foregroundColor(.secondary)
-                    .lineSpacing(2)
-            }
-
             // Authors
             if !paper.authors.isEmpty {
                 Text(paper.authors.joined(separator: ", "))

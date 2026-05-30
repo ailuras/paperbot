@@ -149,7 +149,6 @@ class PaperStore: ObservableObject {
 
         CREATE TABLE IF NOT EXISTS paper_translations (
             paper_id TEXT PRIMARY KEY,
-            title_zh TEXT,
             abstract_zh TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
         );
@@ -175,7 +174,7 @@ class PaperStore: ObservableObject {
         SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue, p.venue_abbr,
                p.cited_by_count, p.abstract, p.landing_page_url, COALESCE(f.pdf_url, p.pdf_url) as pdf_url,
                p.track, p.score, p.tier, COALESCE(ps.status, 'pending') as status,
-               COALESCE(pn.note, '') as note, COALESCE(pt.title_zh, '') as title_zh, COALESCE(pt.abstract_zh, '') as abstract_zh
+               COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
         FROM papers p
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
         LEFT JOIN paper_notes pn ON p.id = pn.paper_id
@@ -223,8 +222,7 @@ class PaperStore: ObservableObject {
             let statusRaw = String(cString: sqlite3_column_text(stmt, 14))
             let status = PaperStatus(rawValue: statusRaw) ?? .pending
             let note = String(cString: sqlite3_column_text(stmt, 15))
-            let titleZh = String(cString: sqlite3_column_text(stmt, 16))
-            let abstractZh = String(cString: sqlite3_column_text(stmt, 17))
+            let abstractZh = String(cString: sqlite3_column_text(stmt, 16))
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -249,7 +247,6 @@ class PaperStore: ObservableObject {
                 tier: tier,
                 status: status,
                 note: note,
-                titleZh: titleZh,
                 abstractZh: abstractZh
             )
             loadedPapers.append(paper)
@@ -395,12 +392,11 @@ class PaperStore: ObservableObject {
         }
     }
 
-    func setPaperTranslation(id: String, titleZh: String, abstractZh: String) {
+    func setPaperTranslation(id: String, abstractZh: String) {
         let sql = """
-        INSERT INTO paper_translations (paper_id, title_zh, abstract_zh, updated_at)
-        VALUES (?, ?, ?, datetime('now'))
+        INSERT INTO paper_translations (paper_id, abstract_zh, updated_at)
+        VALUES (?, ?, datetime('now'))
         ON CONFLICT(paper_id) DO UPDATE SET
-            title_zh = excluded.title_zh,
             abstract_zh = excluded.abstract_zh,
             updated_at = datetime('now')
         """
@@ -408,11 +404,9 @@ class PaperStore: ObservableObject {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, titleZh, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 3, abstractZh, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, abstractZh, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
-                    papers[idx].titleZh = titleZh
                     papers[idx].abstractZh = abstractZh
                 }
                 paperVersion += 1

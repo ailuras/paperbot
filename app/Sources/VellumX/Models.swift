@@ -60,7 +60,6 @@ final class Paper: Identifiable {
     var status: PaperStatus
     var changedAt: Date
     var note: String
-    var titleZh: String
     var abstractZh: String
 
     init(
@@ -72,7 +71,7 @@ final class Paper: Identifiable {
         pdfUrl: String? = nil, track: String = "",
         score: Double = 0.0, tier: Int = 0,
         status: PaperStatus = .pending, changedAt: Date = Date(),
-        note: String = "", titleZh: String = "", abstractZh: String = ""
+        note: String = "", abstractZh: String = ""
     ) {
         self.id = id
         self.doi = doi
@@ -92,7 +91,6 @@ final class Paper: Identifiable {
         self.status = status
         self.changedAt = changedAt
         self.note = note
-        self.titleZh = titleZh
         self.abstractZh = abstractZh
     }
 
