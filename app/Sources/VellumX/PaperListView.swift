@@ -99,9 +99,9 @@ struct PaperListView: View {
         .frame(width: 170)
     }
 
-    private func toolbarIcon(_ systemName: String) -> some View {
+    private func toolbarIcon(_ systemName: String, size: CGFloat = 15) -> some View {
         Image(systemName: systemName)
-            .font(.system(size: 18, weight: .semibold))
+            .font(.system(size: size, weight: .semibold))
             .frame(width: 22, height: 22)
     }
 
@@ -158,7 +158,7 @@ struct PaperListView: View {
                                 .controlSize(.small)
                                 .frame(width: 22, height: 22)
                         } else {
-                            toolbarIcon("arrow.clockwise.circle.fill")
+                            toolbarIcon("arrow.clockwise.circle.fill", size: 18)
                         }
                     }
                     .disabled(isFetching || isRecommending)
