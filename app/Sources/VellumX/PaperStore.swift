@@ -352,7 +352,7 @@ class PaperStore: ObservableObject {
     func refreshVenueMetadata() -> Int {
         let scorer = VenueScorer(
             config: ConfigManager.shared.effectiveConfig,
-            venues: AppSettings.shared.venues
+            venues: MetadataStore.shared.venues
         )
         let updateSql = """
         UPDATE papers

@@ -7,7 +7,7 @@ struct PaperListView: View {
     @Binding var showFilters: Bool
     @Binding var selectedFields: Set<String>
     @Binding var selectedTiers: Set<Int>
-    var settings: AppSettings
+    var metadata: MetadataStore
 
     let isFetching: Bool
     let isRecommending: Bool
@@ -43,10 +43,10 @@ struct PaperListView: View {
                     .controlSize(.small)
                     .disabled(!filtersActive)
             }
-            if !settings.allFields.isEmpty {
+            if !metadata.allFields.isEmpty {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("FIELDS").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                    ForEach(settings.allFields, id: \.self) { field in
+                    ForEach(metadata.allFields, id: \.self) { field in
                         FilterRow(title: field, colorKey: "field:\(field)",
                                   defaultColor: .teal,
                                   isSelected: selectedFields.contains(field)) {
@@ -55,11 +55,11 @@ struct PaperListView: View {
                     }
                 }
             }
-            if !settings.allTiers.isEmpty {
+            if !metadata.allTiers.isEmpty {
                 Divider()
                 VStack(alignment: .leading, spacing: 3) {
                     Text("TIER").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                    ForEach(settings.allTiers, id: \.self) { tier in
+                    ForEach(metadata.allTiers, id: \.self) { tier in
                         FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
                                   defaultColor: tierDefaultColor(tier),
                                   isSelected: selectedTiers.contains(tier)) {
@@ -124,7 +124,7 @@ struct PaperListView: View {
             ForEach(papers) { paper in
                 PaperRowView(
                     paper: paper,
-                    settings: settings,
+                    metadata: metadata,
                     isDailyRecommendation: highlightsDailyRecommendations
                 )
                 .tag(paper.id)
@@ -188,7 +188,7 @@ struct PaperListView: View {
 
 private struct PaperRowView: View {
     let paper: Paper
-    var settings: AppSettings
+    var metadata: MetadataStore
     let isDailyRecommendation: Bool
 
     private var topics: [String] {
@@ -198,7 +198,7 @@ private struct PaperRowView: View {
     }
 
     private var venueColor: Color {
-        settings.fieldColor(settings.field(forAbbr: paper.venueAbbr))
+        metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr))
     }
 
     var body: some View {
@@ -211,7 +211,7 @@ private struct PaperRowView: View {
 
                 Spacer()
 
-                ScoreBadgeView(score: paper.score, color: settings.tierColor(paper.tier))
+                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
             }
 
             HStack {
@@ -228,7 +228,7 @@ private struct PaperRowView: View {
 
                 HStack(spacing: 4) {
                     ForEach(topics, id: \.self) { topic in
-                        PaperTagView(title: topic, color: settings.topicColor(topic))
+                        PaperTagView(title: topic, color: metadata.topicColor(topic))
                     }
                 }
             }

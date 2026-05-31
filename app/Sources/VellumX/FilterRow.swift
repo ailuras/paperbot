@@ -3,7 +3,7 @@ import SwiftUI
 /// A multi-select sidebar filter row (Topics / Fields / Tier). Shows a colored
 /// dot icon (the color lives on the icon, not the text), the label, and a
 /// checkmark when selected. Tapping toggles selection; right-click sets the
-/// color, persisted in AppSettings.labelColors under `colorKey`.
+/// color, persisted in the metadata tables under `colorKey`.
 struct FilterRow: View {
     let title: String
     let colorKey: String
@@ -11,7 +11,7 @@ struct FilterRow: View {
     let isSelected: Bool
     let onToggle: () -> Void
 
-    private var settings: AppSettings = .shared
+    private var metadata: MetadataStore = .shared
 
     init(title: String, colorKey: String, defaultColor: LabelColor, isSelected: Bool, onToggle: @escaping () -> Void) {
         self.title = title
@@ -22,7 +22,7 @@ struct FilterRow: View {
     }
 
     private var color: Color {
-        LabelColor.color(named: settings.labelColors[colorKey]) ?? defaultColor.color
+        metadata.color(forKey: colorKey, default: defaultColor)
     }
 
     var body: some View {
@@ -46,10 +46,10 @@ struct FilterRow: View {
         .contextMenu {
             Menu("Color") {
                 ForEach(LabelColor.allCases) { c in
-                    Button(c.title) { settings.setLabelColor(key: colorKey, colorName: c.rawValue) }
+                    Button(c.title) { metadata.setLabelColor(key: colorKey, colorName: c.rawValue) }
                 }
                 Divider()
-                Button("Default") { settings.setLabelColor(key: colorKey, colorName: nil) }
+                Button("Default") { metadata.setLabelColor(key: colorKey, colorName: nil) }
             }
         }
     }

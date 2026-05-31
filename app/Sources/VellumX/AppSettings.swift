@@ -9,6 +9,7 @@ struct TrackPref: Codable, Identifiable, Equatable {
     var name: String
     var query: String
     var keywords: [String]
+    var color: String? = nil
 }
 
 /// One venue rating used for scoring. `phrase` is matched (case-insensitive)

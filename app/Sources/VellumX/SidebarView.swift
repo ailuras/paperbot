@@ -3,7 +3,7 @@ import SwiftUI
 struct SidebarView: View {
     @Binding var selectedItem: SidebarItem?
     @Binding var selectedTopic: String?
-    var settings: AppSettings
+    var metadata: MetadataStore
     let statusMessage: String
 
     var body: some View {
@@ -21,9 +21,9 @@ struct SidebarView: View {
                 }
             }
 
-            if !settings.tracks.isEmpty {
+            if !metadata.topics.isEmpty {
                 Section("Topics") {
-                    ForEach(settings.tracks.map(\.name), id: \.self) { name in
+                    ForEach(metadata.topics.map(\.name), id: \.self) { name in
                         FilterRow(title: name, colorKey: "topic:\(name)",
                                   defaultColor: .purple,
                                   isSelected: selectedTopic == name) {

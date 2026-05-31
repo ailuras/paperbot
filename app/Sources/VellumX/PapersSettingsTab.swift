@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PapersSettingsTab: View {
     @State private var settings = AppSettings.shared
+    @State private var metadata = MetadataStore.shared
     @State private var venueRefreshMessage = ""
 
     var body: some View {
@@ -29,13 +30,13 @@ struct PapersSettingsTab: View {
                 }
 
                 GroupBox(L10n.t(.interestsTracks)) {
-                    TracksEditor(tracks: $settings.tracks)
+                    TracksEditor(tracks: $metadata.topics)
                         .padding(6)
                 }
 
                 GroupBox(L10n.t(.venueRatings)) {
                     VStack(alignment: .leading, spacing: 10) {
-                        VenuesEditor(venues: $settings.venues)
+                        VenuesEditor(venues: $metadata.venues)
 
                         Divider()
 

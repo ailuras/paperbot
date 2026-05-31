@@ -3,6 +3,7 @@ import AppKit
 
 struct ContentView: View {
     @State private var store = PaperStore.shared
+    @State private var metadata = MetadataStore.shared
     private var settings = AppSettings.shared
 
     // Filter and Sort states
@@ -39,6 +40,7 @@ struct ContentView: View {
             paperCount: store.papers.count,
             paperVersion: store.paperVersion,
             settingsVersion: settings.configVersion,
+            metadataVersion: metadata.metadataVersion,
             sidebarItem: selectedSidebarItem,
             topic: selectedTopic,
             fields: selectedFields,
@@ -52,6 +54,7 @@ struct ContentView: View {
         var paperCount: Int
         var paperVersion: Int
         var settingsVersion: Int
+        var metadataVersion: Int
         var sidebarItem: SidebarItem?
         var topic: String?
         var fields: Set<String>
@@ -73,7 +76,7 @@ struct ContentView: View {
             SidebarView(
                 selectedItem: $selectedSidebarItem,
                 selectedTopic: $selectedTopic,
-                settings: settings,
+                metadata: metadata,
                 statusMessage: statusMessage
             )
         } content: {
@@ -84,7 +87,7 @@ struct ContentView: View {
                 showFilters: $showFilters,
                 selectedFields: $selectedFields,
                 selectedTiers: $selectedTiers,
-                settings: settings,
+                metadata: metadata,
                 isFetching: isFetching,
                 isRecommending: isRecommending,
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended,
@@ -145,8 +148,7 @@ struct ContentView: View {
         }
         if !selectedFields.isEmpty {
             result = result.filter { paper in
-                guard let f = settings.field(forAbbr: paper.venueAbbr) else { return false }
-                return selectedFields.contains(f)
+                selectedFields.contains(metadata.field(forAbbr: paper.venueAbbr))
             }
         }
         if !selectedTiers.isEmpty {
@@ -191,7 +193,7 @@ struct ContentView: View {
 
         Task {
             do {
-                let fetcher = OpenAlexFetcher(config: config, venues: settings.venues)
+                let fetcher = OpenAlexFetcher(config: config, venues: metadata.venues)
                 let result = try await fetcher.fetch()
                 let stats = store.addOrUpdate(papers: result.papers)
                 statusMessage = "Fetched! Added \(stats.inserted) | Updated \(stats.updated)"

@@ -103,7 +103,7 @@ class ConfigManager {
     /// The merged config. Build order: built-in defaults → advanced file
     /// overrides (scoring/filters) → visual personalization (wins).
     var effectiveConfig: AppConfig {
-        let version = AppSettings.shared.configVersion
+        let version = AppSettings.shared.configVersion * 1_000_000 + MetadataStore.shared.metadataVersion
         if let cached, cachedVersion == version { return cached }
         let cfg = buildConfig()
         cached = cfg
@@ -117,16 +117,20 @@ class ConfigManager {
 
         // Venue ratings from the visual settings build the scoring tiers,
         // overriding the built-in default set. Single-pass grouping.
-        if !s.venues.isEmpty {
+        let metadata = MetadataStore.shared
+
+        if !metadata.venues.isEmpty {
             var venuesByTier: [String: [String: [String]]] = [:]
-            for p in s.venues {
+            for p in metadata.venues {
                 let tierKey = String(p.tier)
                 venuesByTier[tierKey, default: [:]][p.abbr, default: []].append(p.phrase)
             }
             var tiers: [String: ScoringTier] = [:]
             for (tierKey, venues) in venuesByTier {
                 if let tier = Int(tierKey) {
-                    let points = AppSettings.tierPoints[tier] ?? max(1, 12 - 2 * tier)
+                    let points = metadata.tiers.first(where: { $0.rank == tier })?.points
+                        ?? AppSettings.tierPoints[tier]
+                        ?? max(1, 12 - 2 * tier)
                     tiers[tierKey] = ScoringTier(points: points, venues: venues)
                 }
             }
@@ -162,8 +166,8 @@ class ConfigManager {
         if !s.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             cfg.translate.target_language = s.targetLanguage
         }
-        if !s.tracks.isEmpty {
-            cfg.tracks = Dictionary(uniqueKeysWithValues: s.tracks.map {
+        if !metadata.topics.isEmpty {
+            cfg.tracks = Dictionary(uniqueKeysWithValues: metadata.topics.map {
                 ($0.name, TrackConfig(query: $0.query, keywords: $0.keywords, color: nil))
             })
         }

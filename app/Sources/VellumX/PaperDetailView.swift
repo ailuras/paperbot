@@ -5,7 +5,7 @@ import AppKit
 
 struct PaperDetailView: View {
     let paper: Paper
-    private var settings: AppSettings { .shared }
+    private var metadata: MetadataStore { .shared }
     @Binding var isTranslating: Bool
     @Binding var isResolvingPdf: Bool
     @Binding var statusMessage: String
@@ -61,10 +61,10 @@ struct PaperDetailView: View {
             HStack(spacing: 8) {
                 Text(paper.venueAbbr)
                     .font(.caption.bold())
-                    .foregroundColor(settings.fieldColor(settings.field(forAbbr: paper.venueAbbr)))
+                    .foregroundColor(metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(settings.fieldColor(settings.field(forAbbr: paper.venueAbbr)).opacity(0.12))
+                    .background(metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)).opacity(0.12))
                     .cornerRadius(4)
 
                 if !paper.publicationDate.isEmpty {
@@ -82,14 +82,14 @@ struct PaperDetailView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .padding(.horizontal, 7)
                                 .padding(.vertical, 3)
-                                .background(settings.topicColor(topic).opacity(0.12))
-                                .foregroundColor(settings.topicColor(topic))
+                                .background(metadata.topicColor(topic).opacity(0.12))
+                                .foregroundColor(metadata.topicColor(topic))
                                 .cornerRadius(4)
                         }
                     }
                 }
 
-                ScoreBadgeView(score: paper.score, color: settings.tierColor(paper.tier))
+                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
             }
 
             // Title
