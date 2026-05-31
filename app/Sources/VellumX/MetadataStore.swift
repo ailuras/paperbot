@@ -146,7 +146,27 @@ final class MetadataStore {
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if sqlite3_open(url.path, &db) != SQLITE_OK {
             print("Error: Could not open metadata database at \(url.path)")
+        } else {
+            sqlite3_busy_timeout(db, 5000)
         }
+    }
+
+    private func closeDatabase() {
+        if db != nil {
+            sqlite3_close(db)
+            db = nil
+        }
+    }
+
+    /// Re-point this store at whatever `PaperStore.shared.dbURL` now resolves to.
+    /// Called after the storage location changes (see `PaperStore.relocate`) so
+    /// metadata and papers never end up split across two database files.
+    func reopen() {
+        closeDatabase()
+        openDatabase()
+        createTablesIfNeeded()
+        seedFromSettingsIfNeeded()
+        load()
     }
 
     private func createTablesIfNeeded() {

@@ -111,6 +111,9 @@ class PaperStore: ObservableObject {
         openDatabase()
         createTablesIfNeeded()
         loadPapers()
+        // Repoint the metadata store at the new file too, otherwise its open
+        // connection keeps writing the old database and the two diverge.
+        MetadataStore.shared.reopen()
         return .ok(destDb)
     }
 
