@@ -102,14 +102,20 @@ struct PaperListView: View {
     private func toolbarIcon(_ systemName: String, isActive: Bool = false) -> some View {
         ZStack {
             Circle()
-                .fill(isActive ? Color.accentColor : Color.primary.opacity(0.78))
-                .frame(width: 19, height: 19)
+                .fill(isActive ? Color.accentColor.opacity(0.92) : Color.primary.opacity(0.13))
+                .frame(width: 20, height: 20)
+                .overlay {
+                    Circle()
+                        .stroke(Color.primary.opacity(isActive ? 0 : 0.08), lineWidth: 0.5)
+                }
 
             Image(systemName: systemName)
-                .font(.system(size: 10.5, weight: .bold))
-                .foregroundStyle(Color(NSColor.windowBackgroundColor))
+                .font(.system(size: 10.8, weight: .semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(isActive ? Color.white : Color.primary.opacity(0.72))
         }
-            .frame(width: 22, height: 22)
+        .frame(width: 23, height: 23)
+        .contentShape(Circle())
     }
 
     var body: some View {
