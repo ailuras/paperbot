@@ -300,8 +300,8 @@ class PaperStore: ObservableObject {
                     let updateSql = """
                     UPDATE papers SET
                         doi = ?, title = ?, authors = ?, publication_date = ?, venue = ?,
-                        cited_by_count = ?, abstract = ?, landing_page_url = ?, pdf_url = ?,
-                        track = ?, updated_at = datetime('now')
+                        venue_abbr = ?, cited_by_count = ?, abstract = ?, landing_page_url = ?,
+                        pdf_url = ?, track = ?, score = ?, tier = ?, updated_at = datetime('now')
                     WHERE id = ?
                     """
                     var updateStmt: OpaquePointer?
@@ -311,12 +311,15 @@ class PaperStore: ObservableObject {
                         sqlite3_bind_text(updateStmt, 3, authorsJson, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(updateStmt, 4, paper.publicationDate, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(updateStmt, 5, paper.venue, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_int(updateStmt, 6, Int32(paper.citedByCount))
-                        sqlite3_bind_text(updateStmt, 7, paper.abstract, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 8, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 9, paper.pdfUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 10, paper.track, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 11, paper.id, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 6, paper.venueAbbr, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_int(updateStmt, 7, Int32(paper.citedByCount))
+                        sqlite3_bind_text(updateStmt, 8, paper.abstract, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 9, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 10, paper.pdfUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 11, paper.track, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_double(updateStmt, 12, paper.score)
+                        sqlite3_bind_text(updateStmt, 13, String(paper.tier), -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 14, paper.id, -1, SQLITE_TRANSIENT)
 
                         if sqlite3_step(updateStmt) == SQLITE_DONE {
                             updated += 1
