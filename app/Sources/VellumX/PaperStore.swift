@@ -63,6 +63,11 @@ class PaperStore: ObservableObject {
             print("Error: Could not open database at \(url.path)")
         } else {
             print("Database opened at \(url.path)")
+            // WAL lets the papers and metadata connections read/write the same
+            // file concurrently; the busy timeout makes a blocked connection
+            // wait-and-retry instead of failing immediately with SQLITE_BUSY.
+            sqlite3_exec(db, "PRAGMA journal_mode=WAL;", nil, nil, nil)
+            sqlite3_busy_timeout(db, 5000)
         }
     }
 
