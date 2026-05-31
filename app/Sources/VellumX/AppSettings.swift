@@ -150,8 +150,12 @@ final class AppSettings: ObservableObject {
         // defaults: when the bundled version is newer than what's stored, the
         // defaults are refreshed once. Below that, the user's edits are kept.
         if (stored?.seedVersion ?? 0) >= AppSettings.currentSeedVersion {
+            let storedVenues = stored?.venues ?? []
             tracks = stored?.tracks ?? []
-            venues = stored?.venues ?? []
+            venues = Self.normalizedVenues(storedVenues)
+            if venues != storedVenues {
+                save()
+            }
         } else {
             tracks = AppSettings.defaultTracks
             venues = AppSettings.defaultVenues
@@ -169,8 +173,11 @@ final class AppSettings: ObservableObject {
     var allFields: [String] {
         var seen = Set<String>(); var ordered: [String] = []
         for v in venues {
-            guard let f = v.field, !f.isEmpty, !seen.contains(f) else { continue }
+            guard let f = normalizedField(v.field), !seen.contains(f) else { continue }
             seen.insert(f); ordered.append(f)
+        }
+        if !seen.contains(Self.othersField) {
+            ordered.append(Self.othersField)
         }
         return ordered.sorted()
     }
@@ -180,7 +187,10 @@ final class AppSettings: ObservableObject {
 
     /// The field a venue abbreviation belongs to (used to bucket a paper).
     func field(forAbbr abbr: String) -> String? {
-        venues.first(where: { $0.abbr.caseInsensitiveCompare(abbr) == .orderedSame })?.field
+        guard let venue = venues.first(where: { $0.abbr.caseInsensitiveCompare(abbr) == .orderedSame }) else {
+            return Self.othersField
+        }
+        return normalizedField(venue.field) ?? Self.othersField
     }
 
     func color(forKey key: String, default defaultColor: LabelColor) -> Color {
@@ -192,6 +202,7 @@ final class AppSettings: ObservableObject {
     }
 
     func fieldColor(_ field: String?) -> Color {
+        if field == Self.othersField { return LabelColor.gray.color }
         guard let field, !field.isEmpty else { return LabelColor.orange.color }
         return color(forKey: "field:\(field)", default: .teal)
     }
@@ -300,8 +311,29 @@ final class AppSettings: ObservableObject {
         VenuePref(abbr: "EPTCS", phrase: "electronic proceedings in theoretical computer science", tier: 3, field: "FM"),
 
         // ── Tier 4: preprints ──
-        VenuePref(abbr: "arXiv", phrase: "arxiv", tier: 4, field: "Preprint")
+        VenuePref(abbr: "arXiv", phrase: "arxiv", tier: 4, field: "OT")
     ]
+
+    private static let othersField = "Others"
+
+    private func normalizedField(_ field: String?) -> String? {
+        Self.normalizedField(field)
+    }
+
+    private static func normalizedField(_ field: String?) -> String? {
+        guard let value = field?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        return value.caseInsensitiveCompare("Preprint") == .orderedSame ? "OT" : value
+    }
+
+    private static func normalizedVenues(_ venues: [VenuePref]) -> [VenuePref] {
+        venues.map { venue in
+            var normalized = venue
+            normalized.field = normalizedField(venue.field)
+            return normalized
+        }
+    }
 
     private struct Stored: Codable {
         var storageDirectory: String?

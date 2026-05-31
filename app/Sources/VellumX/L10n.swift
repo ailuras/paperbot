@@ -23,6 +23,7 @@ enum L10n {
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
         case noVenues, abbr, matchPhrase, tier, addVenue, field
+        case applyVenueChanges, venueChangesApplied, venueChangesHint
         // Config file
         case notSet, advancedConfigFile, path, open, revealInFinder, clear, advancedConfigHint
         // Menu bar
@@ -106,6 +107,10 @@ enum L10n {
         case .tier:               return ("Tier", "评级")
         case .addVenue:           return ("Add Venue", "添加会议")
         case .field:              return ("Field", "领域")
+        case .applyVenueChanges:  return ("Apply Venue Changes", "应用会议变更")
+        case .venueChangesApplied:return ("Updated paper metadata:", "已更新论文元数据：")
+        case .venueChangesHint:   return ("Recomputes cached venue abbreviation, tier, and score for the current library.",
+                                          "重新计算当前论文库缓存的会议缩写、评级和分数。")
 
         case .notSet:             return ("(not set)", "（未设置）")
         case .advancedConfigFile: return ("Advanced Config File", "高级配置文件")

@@ -349,6 +349,53 @@ class PaperStore: ObservableObject {
         return (inserted, updated)
     }
 
+    func refreshVenueMetadata() -> Int {
+        let scorer = VenueScorer(
+            config: ConfigManager.shared.effectiveConfig,
+            venues: AppSettings.shared.venues
+        )
+        let updateSql = """
+        UPDATE papers
+        SET venue_abbr = ?, score = ?, tier = ?, updated_at = datetime('now')
+        WHERE id = ?
+        """
+
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, updateSql, -1, &stmt, nil) != SQLITE_OK {
+            print("Failed to prepare venue metadata refresh")
+            return 0
+        }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
+        var changed = 0
+
+        for paper in papers {
+            let venueAbbr = scorer.computeVenueAbbr(venue: paper.venue)
+            let tier = scorer.getTier(venue: paper.venue)
+            let score = scorer.calculateScore(venue: paper.venue, citations: paper.citedByCount)
+
+            guard venueAbbr != paper.venueAbbr || tier != paper.tier || abs(score - paper.score) > 0.0001 else {
+                continue
+            }
+
+            sqlite3_reset(stmt)
+            sqlite3_clear_bindings(stmt)
+            sqlite3_bind_text(stmt, 1, venueAbbr, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_double(stmt, 2, score)
+            sqlite3_bind_text(stmt, 3, String(tier), -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 4, paper.id, -1, SQLITE_TRANSIENT)
+
+            if sqlite3_step(stmt) == SQLITE_DONE {
+                changed += 1
+            }
+        }
+
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+        loadPapers()
+        return changed
+    }
+
     private static func parseSQLiteDate(_ value: String) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
