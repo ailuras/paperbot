@@ -36,6 +36,26 @@ class VenueScorer {
         self.substringMatches = substring
     }
 
+    /// Single source of truth for venue matching, shared by `getTier` and
+    /// `computeVenueAbbr` so the tier and abbreviation always come from the same
+    /// rule. Priority: exact match, then the longest matching substring phrase
+    /// (most specific), breaking ties by the stronger tier (lower number).
+    private func matchVenue(_ venueLower: String) -> (tier: Int, abbr: String)? {
+        if let match = exactMatches[venueLower] {
+            return (match.tier, match.abbr)
+        }
+
+        var best: (tier: Int, abbr: String, len: Int)?
+        for rule in substringMatches where venueLower.contains(rule.phrase) {
+            let len = rule.phrase.count
+            if best == nil || len > best!.len || (len == best!.len && rule.tier < best!.tier) {
+                best = (rule.tier, rule.abbr, len)
+            }
+        }
+        guard let best else { return nil }
+        return (best.tier, best.abbr)
+    }
+
     func getTier(venue: String) -> Int {
         if venue.isEmpty { return 0 }
         let venueLower = venue.lowercased()
@@ -47,22 +67,9 @@ class VenueScorer {
             }
         }
 
-        // 1. Exact-match cache (O(1))
-        if let match = exactMatches[venueLower] {
+        if let match = matchVenue(venueLower) {
             return match.tier
         }
-
-        // 2. Substring-match cache (O(k), k = number of substring rules)
-        var best: (tier: Int, len: Int)?
-        for rule in substringMatches {
-            if venueLower.contains(rule.phrase) {
-                let len = rule.phrase.count
-                if best == nil || rule.tier < best!.tier || (rule.tier == best!.tier && len > best!.len) {
-                    best = (rule.tier, len)
-                }
-            }
-        }
-        if let best { return best.tier }
 
         // Fallback: advanced-config scoring tiers (when no visual venues set).
         guard let config = config else { return 0 }
@@ -120,16 +127,8 @@ class VenueScorer {
         let venueLower = venue.lowercased()
         if venueLower.contains("arxiv") { return "arXiv" }
 
-        // 1. Exact-match cache (O(1))
-        if let match = exactMatches[venueLower] {
+        if let match = matchVenue(venueLower) {
             return match.abbr
-        }
-
-        // 2. Substring-match cache (O(k))
-        for rule in substringMatches {
-            if venueLower.contains(rule.phrase) {
-                return rule.abbr
-            }
         }
 
         // Fallback: advanced-config scoring tiers.
