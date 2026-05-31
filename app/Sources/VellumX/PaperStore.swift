@@ -113,6 +113,11 @@ class PaperStore: ObservableObject {
         }
 
         AppSettings.shared.storageDirectory = newDir.path
+        // Close any still-open handle before reopening. The migrate/switch
+        // branches above already closed in their cases, but the
+        // migrate-to-same-path case did not — without this, openDatabase would
+        // overwrite a live connection pointer and leak it.
+        closeDatabase()
         openDatabase()
         createTablesIfNeeded()
         loadPapers()
