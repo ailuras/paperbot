@@ -15,6 +15,9 @@ final class MainWindowOpener {
         if let window = NSApp.windows.first(where: {
             $0.canBecomeMain && $0.styleMask.contains(.titled) && $0.frame.width >= 900
         }) {
+            if window.isMiniaturized {
+                window.deminiaturize(nil)
+            }
             window.makeKeyAndOrderFront(nil)
         } else {
             openAction?()   // WindowGroup window was closed — recreate it
