@@ -159,6 +159,12 @@ class PaperStore: ObservableObject {
             pdf_source TEXT,
             resolved_at TEXT DEFAULT (datetime('now'))
         );
+
+        CREATE TABLE IF NOT EXISTS paper_topics (
+            paper_id TEXT NOT NULL,
+            topic_name TEXT NOT NULL,
+            PRIMARY KEY (paper_id, topic_name)
+        );
         """
 
         var errorMsg: UnsafeMutablePointer<Int8>?
@@ -167,13 +173,23 @@ class PaperStore: ObservableObject {
             print("Error creating tables: \(error)")
             sqlite3_free(errorMsg)
         }
+        migratePaperTopicsIfNeeded()
     }
 
     func loadPapers() {
         let query = """
         SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue, p.venue_abbr,
                p.cited_by_count, p.abstract, p.landing_page_url, COALESCE(f.pdf_url, p.pdf_url) as pdf_url,
-               p.track, p.score, p.tier, COALESCE(ps.status, 'pending') as status,
+               COALESCE(NULLIF((
+                   SELECT group_concat(topic_name, ', ')
+                   FROM (
+                       SELECT topic_name
+                       FROM paper_topics
+                       WHERE paper_id = p.id
+                       ORDER BY topic_name
+                   )
+               ), ''), p.track) as track,
+               p.score, p.tier, COALESCE(ps.status, 'pending') as status,
                COALESCE(ps.changed_at, datetime('now')) as changed_at,
                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
         FROM papers p
@@ -301,6 +317,7 @@ class PaperStore: ObservableObject {
 
                         if sqlite3_step(updateStmt) == SQLITE_DONE {
                             updated += 1
+                            replaceTopics(for: paper.id, track: paper.track)
                         }
                         sqlite3_finalize(updateStmt)
                     }
@@ -330,6 +347,7 @@ class PaperStore: ObservableObject {
 
                         if sqlite3_step(insertStmt) == SQLITE_DONE {
                             inserted += 1
+                            replaceTopics(for: paper.id, track: paper.track)
 
                             let stateSql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
                             var stateStmt: OpaquePointer?
@@ -394,6 +412,67 @@ class PaperStore: ObservableObject {
         sqlite3_exec(db, "COMMIT", nil, nil, nil)
         loadPapers()
         return changed
+    }
+
+    private func migratePaperTopicsIfNeeded() {
+        guard tableIsEmpty("paper_topics") else { return }
+
+        let query = "SELECT id, COALESCE(track, '') FROM papers WHERE COALESCE(track, '') != ''"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+
+        sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let paperId = String(cString: sqlite3_column_text(stmt, 0))
+            let track = String(cString: sqlite3_column_text(stmt, 1))
+            insertTopics(for: paperId, topics: Self.splitTopics(track))
+        }
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
+    }
+
+    private func tableIsEmpty(_ table: String) -> Bool {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT 1 FROM \(table) LIMIT 1", -1, &stmt, nil) == SQLITE_OK else {
+            return true
+        }
+        defer { sqlite3_finalize(stmt) }
+        return sqlite3_step(stmt) != SQLITE_ROW
+    }
+
+    private func replaceTopics(for paperId: String, track: String) {
+        let topics = Self.splitTopics(track)
+
+        let deleteSql = "DELETE FROM paper_topics WHERE paper_id = ?"
+        var deleteStmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, deleteSql, -1, &deleteStmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(deleteStmt, 1, paperId, -1, SQLITE_TRANSIENT)
+            sqlite3_step(deleteStmt)
+            sqlite3_finalize(deleteStmt)
+        }
+
+        insertTopics(for: paperId, topics: topics)
+    }
+
+    private func insertTopics(for paperId: String, topics: [String]) {
+        let insertSql = "INSERT OR IGNORE INTO paper_topics (paper_id, topic_name) VALUES (?, ?)"
+        var insertStmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, insertSql, -1, &insertStmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(insertStmt) }
+
+        for topic in topics {
+            sqlite3_reset(insertStmt)
+            sqlite3_clear_bindings(insertStmt)
+            sqlite3_bind_text(insertStmt, 1, paperId, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(insertStmt, 2, topic, -1, SQLITE_TRANSIENT)
+            sqlite3_step(insertStmt)
+        }
+    }
+
+    private static func splitTopics(_ track: String) -> [String] {
+        track.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private static func parseSQLiteDate(_ value: String) -> Date? {
