@@ -67,7 +67,6 @@ struct OpenAlexConfig: Codable {
 }
 
 struct AppConfig: Codable {
-    var data_dir: String?
     var openalex: OpenAlexConfig
     var tracks: [String: TrackConfig]
     var filters: FiltersConfig?

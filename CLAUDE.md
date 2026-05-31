@@ -39,14 +39,17 @@ in this order:
 Needs `DEEPSEEK_API_KEY` (translation), academic `tracks` + `keywords`, and the
 scoring/recommendation knobs decoded into `AppConfig`.
 
-## Data & legacy migration
+## Data
 
 [PaperStore.swift](app/Sources/VellumX/PaperStore.swift) is a `@MainActor`
-`ObservableObject` backed by **SQLite3** (system `import SQLite3`, no ORM). The
-DB lives at `~/Documents/06-文献/VellumX/vellumx.db` (iCloud-syncable). On first
-run, if that file is absent it auto-migrates from, in order:
-`~/Documents/06-文献/PaperBot/paperbot.db`, then `~/.paperbot/paperbot.db` (or
-`config.data_dir`). Preserve this migration chain when touching `dbURL`.
+`ObservableObject` backed by **SQLite3** (system `import SQLite3`, no ORM), in
+WAL mode. The DB lives at
+`~/Library/Application Support/VellumX/vellumx.db` by default (kept local, not
+iCloud Drive, so the WAL sidecar files can't desync). The folder is
+user-relocatable via Settings ▸ General (`AppSettings.storageDirectory`);
+`PaperStore.relocate` moves the file and repoints `MetadataStore` at it.
+[MetadataStore.swift](app/Sources/VellumX/MetadataStore.swift) opens a second
+connection to the *same* file for the paper taxonomy tables.
 
 ## Architecture
 

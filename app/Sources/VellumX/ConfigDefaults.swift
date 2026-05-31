@@ -10,7 +10,6 @@ import Foundation
 extension AppConfig {
     static var builtin: AppConfig {
         AppConfig(
-            data_dir: nil,
             openalex: OpenAlexConfig(
                 base_url: "https://api.openalex.org/works",
                 mailto: "",

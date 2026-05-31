@@ -103,11 +103,13 @@ final class AppSettings: ObservableObject {
         return AppSettings.defaultStorageDirectory
     }
 
-    /// Distribution-friendly default: a visible, iCloud-syncable folder in the
-    /// user's Documents that doesn't assume any personal directory layout.
+    /// Default home for the database: the conventional macOS application-data
+    /// location. Kept local (not iCloud Drive) on purpose — the WAL-mode SQLite
+    /// store has `-wal`/`-shm` sidecar files that iCloud would sync out of step
+    /// with the main file and corrupt. Users can still point elsewhere.
     static var defaultStorageDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Documents/VellumX")
+            .appendingPathComponent("Library/Application Support/VellumX")
     }
 
     init(filename: String = "settings.json") {

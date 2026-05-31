@@ -20,35 +20,9 @@ class PaperStore: ObservableObject {
     private var db: OpaquePointer?
 
     var dbURL: URL {
-        let fileManager = FileManager.default
-        let home = fileManager.homeDirectoryForCurrentUser
-
         let targetDir = AppSettings.shared.resolvedStorageDirectory
-        let targetDb = targetDir.appendingPathComponent("vellumx.db")
-
-        try? fileManager.createDirectory(at: targetDir, withIntermediateDirectories: true)
-
-        if !fileManager.fileExists(atPath: targetDb.path) {
-            let oldDefaultDb = home.appendingPathComponent("Documents/06-文献/VellumX/vellumx.db")
-            let paperBotDb = home.appendingPathComponent("Documents/06-文献/PaperBot/paperbot.db")
-            if fileManager.fileExists(atPath: oldDefaultDb.path) {
-                try? fileManager.copyItem(at: oldDefaultDb, to: targetDb)
-            } else if fileManager.fileExists(atPath: paperBotDb.path) {
-                try? fileManager.copyItem(at: paperBotDb, to: targetDb)
-            } else {
-                var legacyDir = home.appendingPathComponent(".paperbot")
-                if let configDir = ConfigManager.shared.effectiveConfig.data_dir {
-                    let expanded = (configDir as NSString).expandingTildeInPath
-                    legacyDir = URL(fileURLWithPath: expanded)
-                }
-                let legacyDb = legacyDir.appendingPathComponent("paperbot.db")
-                if fileManager.fileExists(atPath: legacyDb.path) {
-                    try? fileManager.copyItem(at: legacyDb, to: targetDb)
-                }
-            }
-        }
-
-        return targetDb
+        try? FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        return targetDir.appendingPathComponent("vellumx.db")
     }
 
     private init() {

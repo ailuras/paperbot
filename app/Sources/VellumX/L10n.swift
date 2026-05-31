@@ -47,8 +47,8 @@ enum L10n {
         case .currentLocation:    return ("Current location", "当前位置")
         case .change:             return ("Change…", "更改…")
         case .restoreDefault:     return ("Restore Default", "恢复默认")
-        case .storageHint:        return ("Folder holding vellumx.db. Put it in iCloud Drive to sync.",
-                                          "数据库 vellumx.db 所在的文件夹。可放到 iCloud Drive 内以便同步。")
+        case .storageHint:        return ("Folder holding vellumx.db. Defaults to Application Support; pick another folder to relocate it.",
+                                          "数据库 vellumx.db 所在的文件夹。默认位于 Application Support，可另选文件夹迁移。")
         case .interface:          return ("Interface", "界面")
         case .showInMenuBar:      return ("Show in Menu Bar", "在菜单栏显示")
         case .language:           return ("Language", "语言")
