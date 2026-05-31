@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// A small palette of named colors used for sidebar filter labels. Stored by
-/// name (in AppSettings.labelColors) so persistence stays human-readable and
-/// dependency-free.
+/// name (in the metadata tables, e.g. `metadata_topics.color`) so persistence
+/// stays human-readable and dependency-free.
 enum LabelColor: String, CaseIterable, Identifiable {
     case red, orange, yellow, green, mint, teal, blue, indigo, purple, pink, gray
 

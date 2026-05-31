@@ -128,7 +128,7 @@ class ConfigManager {
             for (tierKey, venues) in venuesByTier {
                 if let tier = Int(tierKey) {
                     let points = metadata.tiers.first(where: { $0.rank == tier })?.points
-                        ?? AppSettings.tierPoints[tier]
+                        ?? MetadataStore.tierPoints[tier]
                         ?? max(1, 12 - 2 * tier)
                     tiers[tierKey] = ScoringTier(points: points, venues: venues)
                 }

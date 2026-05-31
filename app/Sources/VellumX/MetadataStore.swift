@@ -38,7 +38,7 @@ final class MetadataStore {
     private init() {
         openDatabase()
         createTablesIfNeeded()
-        seedFromSettingsIfNeeded()
+        seedDefaultsIfNeeded()
         load()
     }
 
@@ -165,7 +165,7 @@ final class MetadataStore {
         closeDatabase()
         openDatabase()
         createTablesIfNeeded()
-        seedFromSettingsIfNeeded()
+        seedDefaultsIfNeeded()
         load()
     }
 
@@ -214,7 +214,10 @@ final class MetadataStore {
         }
     }
 
-    private func seedFromSettingsIfNeeded() {
+    /// Populate the taxonomy with the built-in defaults the first time the
+    /// database is empty. Once seeded, this store is the sole source of truth
+    /// and the user edits it directly.
+    private func seedDefaultsIfNeeded() {
         guard countRows("metadata_topics") == 0,
               countRows("metadata_venue_rules") == 0,
               countRows("metadata_fields") == 0,
@@ -222,15 +225,11 @@ final class MetadataStore {
             return
         }
 
-        let settings = AppSettings.shared
         isLoading = true
-        topics = settings.tracks.isEmpty ? AppSettings.defaultTracks : settings.tracks
-        venues = settings.venues.isEmpty ? AppSettings.defaultVenues : settings.venues
-        fields = makeFields(from: venues, colors: settings.labelColors)
-        tiers = makeTiers(from: venues, colors: settings.labelColors)
-        for index in topics.indices {
-            topics[index].color = settings.labelColors["topic:\(topics[index].name)"]
-        }
+        topics = Self.defaultTracks
+        venues = Self.defaultVenues
+        fields = makeFields(from: venues)
+        tiers = makeTiers(from: venues)
         isLoading = false
 
         saveTopics()
@@ -444,28 +443,28 @@ final class MetadataStore {
         return value.isEmpty ? nil : value
     }
 
-    private func makeFields(from venues: [VenuePref], colors: [String: String]) -> [FieldPref] {
+    private func makeFields(from venues: [VenuePref]) -> [FieldPref] {
         let names = Set(venues.compactMap { Self.normalizedField($0.field) } + [Self.othersField])
         return names.sorted().enumerated().map { index, name in
-            FieldPref(id: UUID().uuidString, name: name, color: colors["field:\(name)"], sortOrder: index)
+            FieldPref(id: UUID().uuidString, name: name, color: nil, sortOrder: index)
         }
     }
 
-    private func makeTiers(from venues: [VenuePref], colors: [String: String]) -> [TierPref] {
+    private func makeTiers(from venues: [VenuePref]) -> [TierPref] {
         let ranks = Set(venues.map(\.tier))
         return ranks.sorted().enumerated().map { index, rank in
             TierPref(
                 rank: rank,
                 name: "Tier \(rank)",
                 points: Self.defaultPoints(for: rank),
-                color: colors["tier:\(rank)"],
+                color: nil,
                 sortOrder: index
             )
         }
     }
 
     private static func defaultPoints(for rank: Int) -> Int {
-        AppSettings.tierPoints[rank] ?? max(1, 12 - 2 * rank)
+        tierPoints[rank] ?? max(1, 12 - 2 * rank)
     }
 
     private static let othersField = "Others"
@@ -476,4 +475,92 @@ final class MetadataStore {
         }
         return value.caseInsensitiveCompare("Preprint") == .orderedSame ? "OT" : value
     }
+
+    // MARK: - Built-in default taxonomy (seeded once into an empty database)
+
+    /// Points awarded for each rating tier (1 = strongest), used when deriving
+    /// the scoring config from `venues`.
+    static let tierPoints: [Int: Int] = [1: 10, 2: 7, 3: 5, 4: 2, 5: 1]
+
+    /// Interests are the three solving paradigms (SAT / SMT / CP). Their papers
+    /// can come from any field — AI, software engineering, formal methods — so
+    /// the queries/keywords target the technique, while the venue ratings (which
+    /// span all those fields) handle scoring.
+    static let defaultTracks: [TrackPref] = [
+        TrackPref(name: "SAT", query: "SAT solver boolean satisfiability",
+                  keywords: ["sat solver", "boolean satisfiability", "propositional satisfiability",
+                             "cdcl", "conflict-driven clause learning", "maxsat", "sat solving"]),
+        TrackPref(name: "SMT", query: "satisfiability modulo theories SMT solver",
+                  keywords: ["smt solver", "satisfiability modulo theories", "smt",
+                             "z3", "cvc5", "theory solver", "bit-vector"]),
+        TrackPref(name: "CP", query: "constraint programming constraint satisfaction",
+                  keywords: ["constraint programming", "constraint satisfaction", "constraint solver",
+                             "constraint propagation", "global constraint", "csp"])
+    ]
+
+    /// Default venue ratings for a software-engineering + automated-reasoning
+    /// researcher. Tier 1 = strongest. `phrase` is matched case-insensitively
+    /// against the OpenAlex venue display name, so phrases are chosen to be
+    /// substrings of how OpenAlex actually labels each venue. The user can edit
+    /// all of this in Settings ▸ Papers.
+    static let defaultVenues: [VenuePref] = [
+        // ── Tier 1 ──
+        // Software engineering
+        VenuePref(abbr: "ICSE",  phrase: "international conference on software engineering", tier: 1, field: "SE"),
+        VenuePref(abbr: "FSE",   phrase: "acm on software engineering", tier: 1, field: "SE"),
+        VenuePref(abbr: "ASE",   phrase: "automated software engineering", tier: 1, field: "SE"),
+        VenuePref(abbr: "ISSTA", phrase: "software testing and analysis", tier: 1, field: "SE"),
+        VenuePref(abbr: "TSE",   phrase: "transactions on software engineering", tier: 1, field: "SE"),
+        VenuePref(abbr: "TOSEM", phrase: "software engineering and methodology", tier: 1, field: "SE"),
+        // Programming languages (PACMPL covers POPL/PLDI/OOPSLA/ICFP)
+        VenuePref(abbr: "PACMPL", phrase: "acm on programming languages", tier: 1, field: "PL"),
+        VenuePref(abbr: "TOPLAS", phrase: "transactions on programming languages and systems", tier: 1, field: "PL"),
+        // Formal methods / automated reasoning (top)
+        VenuePref(abbr: "CAV",   phrase: "computer aided verification", tier: 1, field: "FM"),
+        VenuePref(abbr: "CP",    phrase: "constraint programming", tier: 1, field: "AR"),
+        VenuePref(abbr: "SAT",   phrase: "satisfiability testing", tier: 1, field: "AR"),
+        VenuePref(abbr: "JAR",   phrase: "journal of automated reasoning", tier: 1, field: "AR"),
+        // AI
+        VenuePref(abbr: "AIJ",   phrase: "artificial intelligence", tier: 1, field: "AI", exact: true),
+        VenuePref(abbr: "JAIR",  phrase: "journal of artificial intelligence research", tier: 1, field: "AI"),
+        VenuePref(abbr: "AAAI",  phrase: "aaai conference on artificial intelligence", tier: 1, field: "AI"),
+        VenuePref(abbr: "IJCAI", phrase: "international joint conference on artificial intelligence", tier: 1, field: "AI"),
+        VenuePref(abbr: "NeurIPS", phrase: "neural information processing systems", tier: 1, field: "AI"),
+        VenuePref(abbr: "ICLR",  phrase: "learning representations", tier: 1, field: "AI"),
+        VenuePref(abbr: "ICML",  phrase: "international conference on machine learning", tier: 1, field: "AI"),
+
+        // ── Tier 2 ──
+        VenuePref(abbr: "TACAS", phrase: "tools and algorithms for the construction", tier: 2, field: "FM"),
+        VenuePref(abbr: "CADE",  phrase: "automated deduction", tier: 2, field: "AR"),
+        VenuePref(abbr: "IJCAR", phrase: "joint conference on automated reasoning", tier: 2, field: "AR"),
+        VenuePref(abbr: "LICS",  phrase: "logic in computer science", tier: 2, field: "FM"),
+        VenuePref(abbr: "FMCAD", phrase: "formal methods in computer-aided design", tier: 2, field: "FM"),
+        VenuePref(abbr: "CONCUR", phrase: "concurrency theory", tier: 2, field: "FM"),
+        VenuePref(abbr: "ESOP",  phrase: "european symposium on programming", tier: 2, field: "PL"),
+        VenuePref(abbr: "ECOOP", phrase: "object-oriented programming", tier: 2, field: "PL"),
+        VenuePref(abbr: "ICAPS", phrase: "automated planning and scheduling", tier: 2, field: "AI"),
+        VenuePref(abbr: "FM",    phrase: "international symposium on formal methods", tier: 2, field: "FM"),
+        VenuePref(abbr: "VMCAI", phrase: "verification, model checking", tier: 2, field: "FM"),
+        VenuePref(abbr: "ITP",   phrase: "interactive theorem proving", tier: 2, field: "FM"),
+        VenuePref(abbr: "EMSE",  phrase: "empirical software engineering", tier: 2, field: "SE"),
+        VenuePref(abbr: "TOCL",  phrase: "transactions on computational logic", tier: 2, field: "FM"),
+        VenuePref(abbr: "FMSD",  phrase: "formal methods in system design", tier: 2, field: "FM"),
+        VenuePref(abbr: "STTT",  phrase: "software tools for technology transfer", tier: 2, field: "FM"),
+        VenuePref(abbr: "FAoC",  phrase: "formal aspects of computing", tier: 2, field: "FM"),
+        VenuePref(abbr: "SCP",   phrase: "science of computer programming", tier: 2, field: "PL"),
+
+        // ── Tier 3 ──
+        VenuePref(abbr: "ICST",  phrase: "software testing, verification and validation", tier: 3, field: "SE"),
+        VenuePref(abbr: "SANER", phrase: "software analysis, evolution and reengineering", tier: 3, field: "SE"),
+        VenuePref(abbr: "ICSME", phrase: "software maintenance and evolution", tier: 3, field: "SE"),
+        VenuePref(abbr: "MSR",   phrase: "mining software repositories", tier: 3, field: "SE"),
+        VenuePref(abbr: "SEFM",  phrase: "software engineering and formal methods", tier: 3, field: "FM"),
+        VenuePref(abbr: "ICLP",  phrase: "logic programming", tier: 3, field: "AR"),
+        VenuePref(abbr: "TABLEAUX", phrase: "analytic tableaux", tier: 3, field: "AR"),
+        VenuePref(abbr: "SOCS",  phrase: "combinatorial search", tier: 3, field: "AI"),
+        VenuePref(abbr: "EPTCS", phrase: "electronic proceedings in theoretical computer science", tier: 3, field: "FM"),
+
+        // ── Tier 4: preprints ──
+        VenuePref(abbr: "arXiv", phrase: "arxiv", tier: 4, field: "OT")
+    ]
 }
