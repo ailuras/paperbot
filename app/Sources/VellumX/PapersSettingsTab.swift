@@ -2,8 +2,6 @@ import SwiftUI
 
 struct PapersSettingsTab: View {
     @State private var settings = AppSettings.shared
-    @State private var metadata = MetadataStore.shared
-    @State private var venueRefreshMessage = ""
 
     var body: some View {
         ScrollView {
@@ -25,47 +23,6 @@ struct PapersSettingsTab: View {
                         labeledNumber(L10n.t(.fetchDays), value: $settings.defaultDays)
                         labeledNumber(L10n.t(.maxResults), value: $settings.defaultMaxResults)
                         labeledField(L10n.t(.topicFilter), text: $settings.topicFilter)
-                    }
-                    .padding(6)
-                }
-
-                GroupBox(L10n.t(.interestsTracks)) {
-                    TracksEditor(tracks: $metadata.topics)
-                        .padding(6)
-                }
-
-                GroupBox(L10n.t(.venueRatings)) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        VenuesEditor(venues: $metadata.venues)
-
-                        Divider()
-
-                        HStack(alignment: .center, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t(.applyVenueChanges))
-                                    .font(.subheadline.weight(.semibold))
-                                Text(L10n.t(.venueChangesHint))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            if !venueRefreshMessage.isEmpty {
-                                Text(venueRefreshMessage)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Button {
-                                let changed = PaperStore.shared.refreshVenueMetadata()
-                                venueRefreshMessage = "\(L10n.t(.venueChangesApplied)) \(changed)"
-                            } label: {
-                                Label(L10n.t(.applyVenueChanges), systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
-                        }
                     }
                     .padding(6)
                 }
@@ -109,6 +66,7 @@ struct PapersSettingsTab: View {
         }
     }
 }
+
 
 // MARK: - TracksEditor
 

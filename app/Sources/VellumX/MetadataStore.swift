@@ -30,6 +30,8 @@ final class MetadataStore {
     var fields: [FieldPref] = [] { didSet { persistIfReady(saveFields) } }
     var tiers: [TierPref] = [] { didSet { persistIfReady(saveTiers) } }
     var venues: [VenuePref] = [] { didSet { persistIfReady(saveVenues) } }
+    var citationBreakpoints: [CitationBreakpoint] = [] { didSet { persistIfReady(saveScoring) } }
+    var maxCitationPoints: Int = 0 { didSet { persistIfReady(saveScoring) } }
     var metadataVersion: Int = 0
 
     private var db: OpaquePointer?
@@ -204,6 +206,12 @@ final class MetadataStore {
             tier_rank INTEGER NOT NULL DEFAULT 0,
             sort_order INTEGER NOT NULL DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS metadata_scoring (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            citation_breakpoints_json TEXT NOT NULL DEFAULT '[]',
+            max_citation_points INTEGER NOT NULL DEFAULT 0
+        );
         """
 
         var errorMsg: UnsafeMutablePointer<Int8>?
@@ -221,7 +229,8 @@ final class MetadataStore {
         guard countRows("metadata_topics") == 0,
               countRows("metadata_venue_rules") == 0,
               countRows("metadata_fields") == 0,
-              countRows("metadata_tiers") == 0 else {
+              countRows("metadata_tiers") == 0,
+              countRows("metadata_scoring") == 0 else {
             return
         }
 
@@ -230,12 +239,15 @@ final class MetadataStore {
         venues = Self.defaultVenues
         fields = makeFields(from: venues)
         tiers = makeTiers(from: venues)
+        citationBreakpoints = Self.defaultCitationBreakpoints
+        maxCitationPoints = Self.defaultMaxCitationPoints
         isLoading = false
 
         saveTopics()
         saveFields()
         saveTiers()
         saveVenues()
+        saveScoring()
     }
 
     private func load() {
@@ -244,6 +256,7 @@ final class MetadataStore {
         fields = loadFields()
         tiers = loadTiers()
         venues = loadVenues()
+        loadScoring()
         isLoading = false
         metadataVersion += 1
     }
@@ -311,6 +324,20 @@ final class MetadataStore {
                 )
             }
         }
+    }
+
+    private func saveScoring() {
+        let bpData = (try? JSONEncoder().encode(citationBreakpoints)) ?? Data("[]".utf8)
+        let bpJson = String(data: bpData, encoding: .utf8) ?? "[]"
+
+        let sql = """
+        INSERT INTO metadata_scoring (id, citation_breakpoints_json, max_citation_points)
+        VALUES (1, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            citation_breakpoints_json = excluded.citation_breakpoints_json,
+            max_citation_points = excluded.max_citation_points
+        """
+        execute(sql, bindings: [bpJson, maxCitationPoints])
     }
 
     private func replace(table: String, body: () -> Void) {
@@ -433,6 +460,20 @@ final class MetadataStore {
         return rows
     }
 
+    private func loadScoring() {
+        let sql = "SELECT citation_breakpoints_json, max_citation_points FROM metadata_scoring WHERE id = 1"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+
+        if sqlite3_step(stmt) == SQLITE_ROW {
+            let bpJson = columnString(stmt, 0)
+            let bpData = bpJson.data(using: .utf8) ?? Data("[]".utf8)
+            citationBreakpoints = (try? JSONDecoder().decode([CitationBreakpoint].self, from: bpData)) ?? []
+            maxCitationPoints = Int(sqlite3_column_int(stmt, 1))
+        }
+    }
+
     private func columnString(_ stmt: OpaquePointer?, _ index: Int32) -> String {
         sqlite3_column_text(stmt, index).map { String(cString: $0) } ?? ""
     }
@@ -476,11 +517,117 @@ final class MetadataStore {
         return value.caseInsensitiveCompare("Preprint") == .orderedSame ? "OT" : value
     }
 
+    // MARK: - Import / Export / Preset
+
+    struct MetadataExport: Codable {
+        struct TopicExport: Codable {
+            var name: String
+            var query: String
+            var keywords: [String]
+            var color: String?
+        }
+        struct VenueExport: Codable {
+            var abbr: String
+            var phrase: String
+            var tier: Int
+            var field: String?
+            var exact: Bool?
+        }
+        struct TierExport: Codable {
+            var rank: Int
+            var name: String
+            var points: Int
+            var color: String?
+        }
+        struct FieldExport: Codable {
+            var name: String
+            var color: String?
+        }
+        struct ScoringExport: Codable {
+            var citation_breakpoints: [CitationBreakpoint]
+            var max_citation_points: Int
+        }
+
+        var topics: [TopicExport]
+        var venues: [VenueExport]
+        var tiers: [TierExport]
+        var fields: [FieldExport]
+        var scoring: ScoringExport
+    }
+
+    func exportMetadata() throws -> Data {
+        let export = MetadataExport(
+            topics: topics.map { .init(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color) },
+            venues: venues.map { .init(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: $0.field, exact: $0.exact) },
+            tiers: tiers.map { .init(rank: $0.rank, name: $0.name, points: $0.points, color: $0.color) },
+            fields: fields.map { .init(name: $0.name, color: $0.color) },
+            scoring: .init(citation_breakpoints: citationBreakpoints, max_citation_points: maxCitationPoints)
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(export)
+    }
+
+    func importMetadata(from data: Data) throws {
+        let decoded = try JSONDecoder().decode(MetadataExport.self, from: data)
+
+        isLoading = true
+
+        topics = decoded.topics.map {
+            TrackPref(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color)
+        }
+        venues = decoded.venues.map {
+            VenuePref(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: $0.field, exact: $0.exact)
+        }
+        tiers = decoded.tiers.map {
+            TierPref(rank: $0.rank, name: $0.name, points: $0.points, color: $0.color, sortOrder: 0)
+        }
+        fields = decoded.fields.enumerated().map {
+            FieldPref(id: UUID().uuidString, name: $1.name, color: $1.color, sortOrder: $0)
+        }
+        citationBreakpoints = decoded.scoring.citation_breakpoints
+        maxCitationPoints = decoded.scoring.max_citation_points
+
+        isLoading = false
+
+        saveTopics()
+        saveFields()
+        saveTiers()
+        saveVenues()
+        saveScoring()
+        metadataVersion += 1
+    }
+
+    func resetToPreset() {
+        isLoading = true
+        topics = Self.defaultTracks
+        venues = Self.defaultVenues
+        fields = makeFields(from: venues)
+        tiers = makeTiers(from: venues)
+        citationBreakpoints = Self.defaultCitationBreakpoints
+        maxCitationPoints = Self.defaultMaxCitationPoints
+        isLoading = false
+
+        saveTopics()
+        saveFields()
+        saveTiers()
+        saveVenues()
+        saveScoring()
+        metadataVersion += 1
+    }
+
     // MARK: - Built-in default taxonomy (seeded once into an empty database)
 
     /// Points awarded for each rating tier (1 = strongest), used when deriving
     /// the scoring config from `venues`.
     static let tierPoints: [Int: Int] = [1: 10, 2: 7, 3: 5, 4: 2, 5: 1]
+
+    static let defaultCitationBreakpoints: [CitationBreakpoint] = [
+        CitationBreakpoint(up_to: 10, points_per_citation: 0.5),
+        CitationBreakpoint(up_to: 50, points_per_citation: 0.2),
+        CitationBreakpoint(up_to: nil, points_per_citation: 0.05)
+    ]
+    static let defaultMaxCitationPoints: Int = 40
 
     /// Interests are the three solving paradigms (SAT / SMT / CP). Their papers
     /// can come from any field — AI, software engineering, formal methods — so

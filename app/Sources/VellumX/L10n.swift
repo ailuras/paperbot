@@ -6,7 +6,7 @@ import Foundation
 enum L10n {
     enum Key {
         // Tabs
-        case general, api, papers, configFile
+        case general, api, papers, rules, configFile
         // General
         case storageLocation, currentLocation, change, restoreDefault, storageHint
         case interface, showInMenuBar, language, menuBarHint
@@ -20,10 +20,18 @@ enum L10n {
         // Papers
         case dailyRecommendations, dailyCount, qualitySlots, highScoreThreshold, recentWindow
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
+        // Rules
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
         case noVenues, abbr, matchPhrase, tier, addVenue, field
         case applyVenueChanges, venueChangesApplied, venueChangesHint
+        case tierSettings, tierRank, tierPointsValue, addTier
+        case citationScoring, citationScoringHint
+        case breakpointUpTo, pointsPerCitation, maxCitationPointsLabel
+        case addBreakpoint, noBreakpoints, noCap
+        case importRules, exportRules, usePreset
+        case usePresetTitle, usePresetMessage, confirm
+        case importSuccess, importFailed
         // Settings file
         case path, open, revealInFinder, settingsFile, settingsFileHint
         // Menu bar
@@ -41,6 +49,7 @@ enum L10n {
         case .general:            return ("General", "通用")
         case .api:                return ("API", "API")
         case .papers:             return ("Papers", "论文")
+        case .rules:              return ("Rules", "学术规则")
         case .configFile:         return ("Settings File", "设置文件")
 
         case .storageLocation:    return ("Storage Location", "存储位置")
@@ -111,6 +120,29 @@ enum L10n {
         case .venueChangesApplied:return ("Updated paper metadata:", "已更新论文元数据：")
         case .venueChangesHint:   return ("Recomputes cached venue abbreviation, tier, and score for the current library.",
                                           "重新计算当前论文库缓存的会议缩写、评级和分数。")
+
+        case .tierSettings:       return ("Tier Settings", "等级设置")
+        case .tierRank:           return ("Rank", "等级")
+        case .tierPointsValue:    return ("Points", "积分")
+        case .addTier:            return ("Add Tier", "添加等级")
+        case .citationScoring:    return ("Citation Scoring", "引用评分")
+        case .citationScoringHint:return ("Configure how citations contribute to paper scores. Leave empty to disable citation scoring.",
+                                          "配置引用数如何影响论文分数。留空则不启用引用评分。")
+        case .breakpointUpTo:     return ("Up to", "上限")
+        case .pointsPerCitation:  return ("Pts/cite", "分/引用")
+        case .maxCitationPointsLabel: return ("Max citation points", "引用得分上限")
+        case .addBreakpoint:      return ("Add Segment", "添加区间")
+        case .noBreakpoints:      return ("Citation scoring disabled. Add a segment to enable.", "引用评分未启用。添加区间以启用。")
+        case .noCap:              return ("No cap", "不封顶")
+        case .importRules:        return ("Import…", "导入…")
+        case .exportRules:        return ("Export…", "导出…")
+        case .usePreset:          return ("Use Preset", "使用预设")
+        case .usePresetTitle:     return ("Reset to Preset?", "恢复预设配置？")
+        case .usePresetMessage:   return ("This will replace all current rules (tracks, venues, tiers, scoring) with the built-in defaults. This cannot be undone.",
+                                          "此操作将用内置默认值替换当前的所有规则（研究方向、会议评级、等级、评分）。此操作不可撤销。")
+        case .confirm:            return ("Confirm", "确认")
+        case .importSuccess:      return ("Rules imported successfully.", "规则导入成功。")
+        case .importFailed:       return ("Import failed:", "导入失败：")
 
         case .path:               return ("Path", "路径")
         case .open:               return ("Open", "打开")

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// The standard macOS Settings window (⌘,), organized into tabs:
 /// General (storage, menu bar, language), API (DeepSeek), Papers
-/// (recommendation + OpenAlex + tracks + venue ratings), and Config File.
+/// (recommendation + OpenAlex params), Rules (tracks, venues, tiers,
+/// citation scoring – all DB-persisted), and Config File.
 struct SettingsRootView: View {
     var body: some View {
         TabView {
@@ -12,9 +13,12 @@ struct SettingsRootView: View {
                 .tabItem { Label(L10n.t(.api), systemImage: "key") }
             PapersSettingsTab()
                 .tabItem { Label(L10n.t(.papers), systemImage: "doc.text.magnifyingglass") }
+            RulesSettingsTab()
+                .tabItem { Label(L10n.t(.rules), systemImage: "list.bullet.rectangle") }
             ConfigFileTab()
                 .tabItem { Label(L10n.t(.configFile), systemImage: "doc.badge.gearshape") }
         }
-        .frame(width: 580, height: 520)
+        .frame(width: 620, height: 560)
     }
 }
+

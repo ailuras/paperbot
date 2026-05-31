@@ -110,6 +110,10 @@ class ConfigManager {
             cfg.scoring.tiers = tiers
         }
 
+        // Citation scoring from the metadata store.
+        cfg.scoring.citation_breakpoints = metadata.citationBreakpoints
+        cfg.scoring.max_citation_points = metadata.maxCitationPoints
+
         // Personalization from the visual settings.
         cfg.recommendation = RecommendationConfig(
             daily_count: s.dailyCount,
