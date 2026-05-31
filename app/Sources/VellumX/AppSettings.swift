@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 /// One academic track: an OpenAlex search query plus the keywords used to keep
 /// only relevant results. Editable in Settings.
@@ -179,7 +180,31 @@ final class AppSettings: ObservableObject {
 
     /// The field a venue abbreviation belongs to (used to bucket a paper).
     func field(forAbbr abbr: String) -> String? {
-        venues.first(where: { $0.abbr == abbr })?.field
+        venues.first(where: { $0.abbr.caseInsensitiveCompare(abbr) == .orderedSame })?.field
+    }
+
+    func color(forKey key: String, default defaultColor: LabelColor) -> Color {
+        LabelColor.color(named: labelColors[key]) ?? defaultColor.color
+    }
+
+    func topicColor(_ topic: String) -> Color {
+        color(forKey: "topic:\(topic)", default: .purple)
+    }
+
+    func fieldColor(_ field: String?) -> Color {
+        guard let field, !field.isEmpty else { return LabelColor.orange.color }
+        return color(forKey: "field:\(field)", default: .teal)
+    }
+
+    func tierColor(_ tier: Int) -> Color {
+        let fallback: LabelColor
+        switch tier {
+        case 1: fallback = .red
+        case 2: fallback = .orange
+        case 3: fallback = .yellow
+        default: fallback = .gray
+        }
+        return color(forKey: "tier:\(tier)", default: fallback)
     }
 
     /// Set or remove a custom label color. Must go through a copy-then-replace

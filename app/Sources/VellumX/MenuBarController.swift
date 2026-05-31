@@ -94,7 +94,7 @@ struct MenuBarContentView: View {
     let closePopover: () -> Void
 
     private var recommendedPapers: [Paper] {
-        store.papers.filter { $0.status == .recommended }
+        store.papers.filter { $0.status == .recommended && Calendar.current.isDateInToday($0.changedAt) }
     }
 
     var body: some View {

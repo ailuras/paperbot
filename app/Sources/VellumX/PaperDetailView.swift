@@ -5,6 +5,7 @@ import AppKit
 
 struct PaperDetailView: View {
     let paper: Paper
+    private var settings: AppSettings { .shared }
     @Binding var isTranslating: Bool
     @Binding var isResolvingPdf: Bool
     @Binding var statusMessage: String
@@ -60,10 +61,10 @@ struct PaperDetailView: View {
             HStack(spacing: 8) {
                 Text(paper.venueAbbr)
                     .font(.caption.bold())
-                    .foregroundColor(.orange)
+                    .foregroundColor(settings.fieldColor(settings.field(forAbbr: paper.venueAbbr)))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Color.orange.opacity(0.12))
+                    .background(settings.fieldColor(settings.field(forAbbr: paper.venueAbbr)).opacity(0.12))
                     .cornerRadius(4)
 
                 if !paper.publicationDate.isEmpty {
@@ -75,16 +76,20 @@ struct PaperDetailView: View {
                 Spacer()
 
                 if !paper.track.isEmpty {
-                    Text(paper.track)
-                        .font(.system(size: 10, weight: .bold))
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(Color.purple.opacity(0.12))
-                        .foregroundColor(.purple)
-                        .cornerRadius(4)
+                    HStack(spacing: 4) {
+                        ForEach(topics, id: \.self) { topic in
+                            Text(topic)
+                                .font(.system(size: 10, weight: .bold))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(settings.topicColor(topic).opacity(0.12))
+                                .foregroundColor(settings.topicColor(topic))
+                                .cornerRadius(4)
+                        }
+                    }
                 }
 
-                ScoreBadgeView(score: paper.score)
+                ScoreBadgeView(score: paper.score, color: settings.tierColor(paper.tier))
             }
 
             // Title
@@ -103,6 +108,12 @@ struct PaperDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+    }
+
+    private var topics: [String] {
+        paper.track.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     // MARK: - Status Bar

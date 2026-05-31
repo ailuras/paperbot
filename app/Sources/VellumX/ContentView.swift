@@ -87,6 +87,7 @@ struct ContentView: View {
                 settings: settings,
                 isFetching: isFetching,
                 isRecommending: isRecommending,
+                highlightsDailyRecommendations: selectedSidebarItem == .recommended,
                 onFetch: fetchPapers,
                 onRecommend: recommendPapers,
                 onSelectPaper: { lastViewedPaperId = $0 },
@@ -121,7 +122,7 @@ struct ContentView: View {
             case .all:
                 break
             case .recommended:
-                result = result.filter { $0.status == .recommended }
+                result = result.filter { $0.status == .recommended && Calendar.current.isDateInToday($0.changedAt) }
             case .pending:
                 result = result.filter { $0.status == .pending }
             case .starred:
@@ -280,12 +281,7 @@ struct ContentView: View {
 
 struct ScoreBadgeView: View {
     let score: Double
-
-    private var color: Color {
-        if score >= 20.0 { return .red }
-        if score >= 10.0 { return .orange }
-        return .green
-    }
+    let color: Color
 
     var body: some View {
         Text(String(format: "%.1f", score))

@@ -174,6 +174,7 @@ class PaperStore: ObservableObject {
         SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue, p.venue_abbr,
                p.cited_by_count, p.abstract, p.landing_page_url, COALESCE(f.pdf_url, p.pdf_url) as pdf_url,
                p.track, p.score, p.tier, COALESCE(ps.status, 'pending') as status,
+               COALESCE(ps.changed_at, datetime('now')) as changed_at,
                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
         FROM papers p
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
@@ -221,8 +222,10 @@ class PaperStore: ObservableObject {
 
             let statusRaw = String(cString: sqlite3_column_text(stmt, 14))
             let status = PaperStatus(rawValue: statusRaw) ?? .pending
-            let note = String(cString: sqlite3_column_text(stmt, 15))
-            let abstractZh = String(cString: sqlite3_column_text(stmt, 16))
+            let changedAtRaw = String(cString: sqlite3_column_text(stmt, 15))
+            let changedAt = Self.parseSQLiteDate(changedAtRaw) ?? Date()
+            let note = String(cString: sqlite3_column_text(stmt, 16))
+            let abstractZh = String(cString: sqlite3_column_text(stmt, 17))
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -246,6 +249,7 @@ class PaperStore: ObservableObject {
                 score: score,
                 tier: tier,
                 status: status,
+                changedAt: changedAt,
                 note: note,
                 abstractZh: abstractZh
             )
@@ -343,6 +347,14 @@ class PaperStore: ObservableObject {
 
         loadPapers()
         return (inserted, updated)
+    }
+
+    private static func parseSQLiteDate(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.date(from: value)
     }
 
     func setPaperStatus(id: String, status: PaperStatus) {

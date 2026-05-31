@@ -11,6 +11,7 @@ struct PaperListView: View {
 
     let isFetching: Bool
     let isRecommending: Bool
+    let highlightsDailyRecommendations: Bool
     let onFetch: () -> Void
     let onRecommend: () -> Void
     let onSelectPaper: (String) -> Void
@@ -121,42 +122,11 @@ struct PaperListView: View {
     var body: some View {
         List(selection: $selectedPaperId) {
             ForEach(papers) { paper in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .top) {
-                        Text(paper.title)
-                            .font(.headline)
-                            .lineLimit(2)
-                            .foregroundColor(.primary)
-
-                        Spacer()
-
-                        ScoreBadgeView(score: paper.score)
-                    }
-
-                    HStack {
-                        Text(paper.venueAbbr)
-                            .font(.caption.bold())
-                            .foregroundColor(.orange)
-
-                        Text("•")
-                            .foregroundColor(.secondary)
-
-                        Text(paper.publicationDate)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        Spacer()
-
-                        Text(paper.track)
-                            .font(.system(size: 9, weight: .bold))
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Color.purple.opacity(0.12))
-                            .foregroundColor(.purple)
-                            .cornerRadius(3)
-                    }
-                }
-                .padding(.vertical, 4)
+                PaperRowView(
+                    paper: paper,
+                    settings: settings,
+                    isDailyRecommendation: highlightsDailyRecommendations
+                )
                 .tag(paper.id)
             }
         }
@@ -213,5 +183,78 @@ struct PaperListView: View {
         .onChange(of: selectedPaperId) { _, newValue in
             if let newValue { onSelectPaper(newValue) }
         }
+    }
+}
+
+private struct PaperRowView: View {
+    let paper: Paper
+    var settings: AppSettings
+    let isDailyRecommendation: Bool
+
+    private var topics: [String] {
+        paper.track.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private var venueColor: Color {
+        settings.fieldColor(settings.field(forAbbr: paper.venueAbbr))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top) {
+                Text(paper.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                ScoreBadgeView(score: paper.score, color: settings.tierColor(paper.tier))
+            }
+
+            HStack {
+                PaperTagView(title: paper.venueAbbr, color: venueColor)
+
+                Text("•")
+                    .foregroundColor(.secondary)
+
+                Text(paper.publicationDate)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    ForEach(topics, id: \.self) { topic in
+                        PaperTagView(title: topic, color: settings.topicColor(topic))
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, isDailyRecommendation ? 8 : 0)
+        .background {
+            if isDailyRecommendation {
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.accentColor.opacity(0.06))
+            }
+        }
+    }
+}
+
+private struct PaperTagView: View {
+    let title: String
+    let color: Color
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 9, weight: .bold))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.12))
+            .foregroundStyle(color)
+            .cornerRadius(3)
     }
 }
