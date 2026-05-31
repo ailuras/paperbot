@@ -224,6 +224,10 @@ struct ContentView: View {
     }
 
     private func translate(paper: Paper) {
+        guard settings.translateEnabled else {
+            statusMessage = "Translation is disabled — enable it in Settings ▸ API"
+            return
+        }
         guard !paper.abstract.isEmpty else {
             statusMessage = "No abstract available to translate"
             return
