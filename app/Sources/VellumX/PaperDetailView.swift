@@ -173,8 +173,8 @@ struct PaperDetailView: View {
                     action: { onTranslate(paper) }
                 )
 
-                if let doi = paper.doi, !doi.isEmpty {
-                    Link(destination: URL(string: doi)!) {
+                if let doi = paper.doi, !doi.isEmpty, let doiURL = URL(string: doi) {
+                    Link(destination: doiURL) {
                         DetailActionButtonContent(icon: "link", label: "DOI Link", isLoading: false)
                     }
                     .buttonStyle(.plain)
