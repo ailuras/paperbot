@@ -14,7 +14,7 @@ enum L10n {
         case choose, storageUpdated
         // API
         case deepseekSection, enableTranslation, apiKeyHint, model, targetLanguage
-        case testConnection, testingConnection, connectionOK, connectionFailed
+        case testConnection, testingConnection, connectionOK, connectionFailed, connectionUntested
         case refreshModels, loadingModels, modelsLoaded, modelsUnavailable
         case apiConnection, modelSelection, apiKey, baseURL
         // Papers
@@ -82,6 +82,7 @@ enum L10n {
         case .testingConnection:  return ("Testing connection…", "正在测试连接…")
         case .connectionOK:       return ("Connection OK", "连接正常")
         case .connectionFailed:   return ("Connection failed", "连接失败")
+        case .connectionUntested: return ("Untested", "未测试")
         case .refreshModels:      return ("Refresh Models", "刷新模型")
         case .loadingModels:      return ("Loading models…", "正在加载模型…")
         case .modelsLoaded:       return ("Models loaded", "模型已加载")

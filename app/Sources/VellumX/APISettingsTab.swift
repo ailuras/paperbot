@@ -10,6 +10,16 @@ struct APISettingsTab: View {
     @State private var modelMessage: String?
     @State private var modelIsError = false
 
+    enum ConnectionStatus: Equatable {
+        case untested
+        case testing
+        case connected(modelCount: Int)
+        case failed(String)
+    }
+
+    @State private var connectionStatus: ConnectionStatus = .untested
+    @State private var isPulseAnimating = false
+
     var body: some View {
         Form {
             Section(L10n.t(.deepseekSection)) {
@@ -17,7 +27,7 @@ struct APISettingsTab: View {
                 TextField(L10n.t(.targetLanguage), text: $settings.targetLanguage)
             }
 
-            Section(L10n.t(.apiConnection)) {
+            Section {
                 LabeledContent(L10n.t(.apiKey)) {
                     HStack(spacing: 8) {
                         SecureField("", text: $settings.deepSeekAPIKey)
@@ -51,6 +61,12 @@ struct APISettingsTab: View {
                 Text(L10n.t(.apiKeyHint))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            } header: {
+                HStack {
+                    Text(L10n.t(.apiConnection))
+                    Spacer()
+                    statusIndicator
+                }
             }
 
             Section(L10n.t(.modelSelection)) {
@@ -93,8 +109,58 @@ struct APISettingsTab: View {
         }
         .formStyle(.grouped)
         .onAppear {
-            if availableModels.isEmpty, !settings.deepSeekAPIKey.isEmpty {
+            isPulseAnimating = true
+            if !availableModels.isEmpty {
+                connectionStatus = .connected(modelCount: availableModels.count)
+            } else if !settings.deepSeekAPIKey.isEmpty {
                 loadModels()
+            }
+        }
+        .onChange(of: settings.deepSeekAPIKey) { _, _ in
+            connectionStatus = .untested
+        }
+        .onChange(of: settings.deepSeekBaseURL) { _, _ in
+            connectionStatus = .untested
+        }
+    }
+
+    private var statusIndicator: some View {
+        HStack(spacing: 5) {
+            switch connectionStatus {
+            case .untested:
+                Circle()
+                    .fill(.secondary.opacity(0.5))
+                    .frame(width: 7, height: 7)
+                Text(L10n.t(.connectionUntested))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            case .testing:
+                Circle()
+                    .fill(.orange)
+                    .frame(width: 7, height: 7)
+                Text(L10n.t(.testingConnection))
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            case .connected(let count):
+                Circle()
+                    .fill(.green)
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(isPulseAnimating ? 1.3 : 1.0)
+                    .opacity(isPulseAnimating ? 0.6 : 1.0)
+                    .animation(
+                        isPulseAnimating ? .easeInOut(duration: 1.2).repeatForever(autoreverses: true) : .default,
+                        value: isPulseAnimating
+                    )
+                Text("\(L10n.t(.connectionOK)) (\(count))")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            case .failed:
+                Circle()
+                    .fill(.red)
+                    .frame(width: 7, height: 7)
+                Text(L10n.t(.connectionFailed))
+                    .font(.caption2)
+                    .foregroundStyle(.red)
             }
         }
     }
@@ -112,6 +178,7 @@ struct APISettingsTab: View {
 
     private func testConnection() {
         isTestingConnection = true
+        connectionStatus = .testing
         connectionIsError = false
         connectionMessage = L10n.t(.testingConnection)
 
@@ -121,9 +188,11 @@ struct APISettingsTab: View {
                 apply(models: models)
                 connectionIsError = false
                 connectionMessage = "\(L10n.t(.connectionOK)) · \(models.count) models"
+                connectionStatus = .connected(modelCount: models.count)
             } catch {
                 connectionIsError = true
                 connectionMessage = "\(L10n.t(.connectionFailed)): \(error.localizedDescription)"
+                connectionStatus = .failed(error.localizedDescription)
             }
             isTestingConnection = false
         }
@@ -134,6 +203,7 @@ struct APISettingsTab: View {
         isLoadingModels = true
         modelIsError = false
         modelMessage = L10n.t(.loadingModels)
+        connectionStatus = .testing
 
         Task {
             do {
@@ -141,9 +211,11 @@ struct APISettingsTab: View {
                 apply(models: models)
                 modelIsError = false
                 modelMessage = "\(L10n.t(.modelsLoaded)) · \(models.count)"
+                connectionStatus = .connected(modelCount: models.count)
             } catch {
                 modelIsError = true
                 modelMessage = error.localizedDescription
+                connectionStatus = .failed(error.localizedDescription)
             }
             isLoadingModels = false
         }
