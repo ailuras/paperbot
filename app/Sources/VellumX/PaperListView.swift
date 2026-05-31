@@ -99,9 +99,16 @@ struct PaperListView: View {
         .frame(width: 170)
     }
 
-    private func toolbarIcon(_ systemName: String, size: CGFloat = 15) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: size, weight: .semibold))
+    private func toolbarIcon(_ systemName: String, isActive: Bool = false) -> some View {
+        ZStack {
+            Circle()
+                .fill(isActive ? Color.accentColor : Color.primary.opacity(0.78))
+                .frame(width: 19, height: 19)
+
+            Image(systemName: systemName)
+                .font(.system(size: 10.5, weight: .bold))
+                .foregroundStyle(Color(NSColor.windowBackgroundColor))
+        }
             .frame(width: 22, height: 22)
     }
 
@@ -158,7 +165,7 @@ struct PaperListView: View {
                                 .controlSize(.small)
                                 .frame(width: 22, height: 22)
                         } else {
-                            toolbarIcon("arrow.clockwise.circle.fill", size: 18)
+                            toolbarIcon("arrow.clockwise")
                         }
                     }
                     .disabled(isFetching || isRecommending)
@@ -180,15 +187,16 @@ struct PaperListView: View {
 
                     Button { showFilters.toggle() } label: {
                         toolbarIcon(filtersActive
-                                    ? "line.3.horizontal.decrease.circle.fill"
-                                    : "line.3.horizontal.decrease.circle")
+                                    ? "line.3.horizontal.decrease"
+                                    : "line.3.horizontal.decrease",
+                                    isActive: filtersActive)
                     }
                     .accessibilityLabel("Filter papers")
                     .help("Filter by field and tier")
                     .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
 
                     Button { showSortOptions.toggle() } label: {
-                        toolbarIcon("arrow.up.arrow.down")
+                        toolbarIcon("arrow.up.arrow.down", isActive: showSortOptions)
                     }
                     .accessibilityLabel("Sort papers")
                     .help("Sort papers")
