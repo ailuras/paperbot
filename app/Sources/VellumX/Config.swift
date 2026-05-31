@@ -33,20 +33,7 @@ struct TranslateConfig: Codable {
     var enabled: Bool
     var target_language: String
     var model: String
-    var include_in_email: Bool
-    var api_key_env: String
     var base_url: String
-}
-
-struct MailConfig: Codable {
-    var smtp_host: String
-    var smtp_port: Int
-    var smtp_user: String
-    var smtp_password: String
-    var from_addr: String
-    var to_addrs: [String]
-    var use_tls: Bool
-    var dashboard_url: String
 }
 
 struct FiltersConfig: Codable {
@@ -58,8 +45,6 @@ struct FiltersConfig: Codable {
 struct OpenAlexConfig: Codable {
     var base_url: String
     var mailto: String
-    var api_key_env: String
-    var timeout_seconds: Int
     var per_page: Int
     var default_days: Int
     var default_max_results: Int
@@ -73,22 +58,11 @@ struct AppConfig: Codable {
     var scoring: ScoringConfig
     var recommendation: RecommendationConfig
     var translate: TranslateConfig
-    var mail: MailConfig
-    var semantic_scholar_key: String?
-}
-
-/// Optional advanced-config file format. Everything is optional: a user only
-/// needs to override the rarely-changed bits (scoring tiers, filters). The
-/// legacy full `config.json` also decodes into these fields, so an old PaperBot
-/// config still supplies its venue tiers.
-struct AdvancedConfig: Codable {
-    var scoring: ScoringConfig?
-    var filters: FiltersConfig?
 }
 
 /// Produces the effective `AppConfig` consumed by the engines. It is always
-/// available (never nil): personalization comes from `AppSettings`, advanced
-/// overrides from an optional external file, and everything else from
+/// available (never nil): the taxonomy comes from `MetadataStore`,
+/// personalization from `AppSettings`, and everything else from
 /// `AppConfig.builtin`.
 @MainActor
 class ConfigManager {
@@ -99,8 +73,8 @@ class ConfigManager {
 
     private init() {}
 
-    /// The merged config. Build order: built-in defaults → advanced file
-    /// overrides (scoring/filters) → visual personalization (wins).
+    /// The merged config. Build order: built-in defaults → database taxonomy
+    /// (venue tiers) → visual personalization (wins).
     var effectiveConfig: AppConfig {
         let version = AppSettings.shared.configVersion * 1_000_000 + MetadataStore.shared.metadataVersion
         if let cached, cachedVersion == version { return cached }
@@ -136,13 +110,6 @@ class ConfigManager {
             cfg.scoring.tiers = tiers
         }
 
-        // Advanced file (optional): override scoring/filters only. Loaded after
-        // venues so an explicit advanced file always wins.
-        if let adv = loadAdvanced() {
-            if let scoring = adv.scoring { cfg.scoring = scoring }
-            if let filters = adv.filters { cfg.filters = filters }
-        }
-
         // Personalization from the visual settings.
         cfg.recommendation = RecommendationConfig(
             daily_count: s.dailyCount,
@@ -171,31 +138,5 @@ class ConfigManager {
             })
         }
         return cfg
-    }
-
-    /// Resolved path of the advanced config file, honoring an explicit setting,
-    /// then `$PAPERBOT_CONFIG`, then the legacy `~/.vellumx/config.json` /
-    /// `~/.paperbot/config.json` locations.
-    var advancedConfigURL: URL? {
-        let s = AppSettings.shared
-        if !s.advancedConfigPath.isEmpty {
-            return URL(fileURLWithPath: (s.advancedConfigPath as NSString).expandingTildeInPath)
-        }
-        if let env = ProcessInfo.processInfo.environment["PAPERBOT_CONFIG"] {
-            return URL(fileURLWithPath: env)
-        }
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        for p in [".vellumx/config.json", ".paperbot/config.json"] {
-            let u = home.appendingPathComponent(p)
-            if FileManager.default.fileExists(atPath: u.path) { return u }
-        }
-        return nil
-    }
-
-    private func loadAdvanced() -> AdvancedConfig? {
-        guard let url = advancedConfigURL,
-              FileManager.default.fileExists(atPath: url.path),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode(AdvancedConfig.self, from: data)
     }
 }

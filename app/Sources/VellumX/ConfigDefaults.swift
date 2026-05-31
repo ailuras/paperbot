@@ -13,8 +13,6 @@ extension AppConfig {
             openalex: OpenAlexConfig(
                 base_url: "https://api.openalex.org/works",
                 mailto: "",
-                api_key_env: "OPENALEX_API_KEY",
-                timeout_seconds: 20,
                 per_page: 100,
                 default_days: 45,
                 default_max_results: 1000,
@@ -45,15 +43,8 @@ extension AppConfig {
                 enabled: true,
                 target_language: "中文",
                 model: "deepseek-chat",
-                include_in_email: false,
-                api_key_env: "DEEPSEEK_API_KEY",
                 base_url: "https://api.deepseek.com"
-            ),
-            mail: MailConfig(
-                smtp_host: "", smtp_port: 0, smtp_user: "", smtp_password: "",
-                from_addr: "", to_addrs: [], use_tls: false, dashboard_url: ""
-            ),
-            semantic_scholar_key: nil
+            )
         )
     }
 

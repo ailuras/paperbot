@@ -79,18 +79,13 @@ class PdfResolver {
     }
     
     private func fetchSemanticScholar(doi: String) async -> String? {
-        let key = config.semantic_scholar_key ?? ""
         var components = URLComponents(string: "https://api.semanticscholar.org/graph/v1/paper/DOI:\(doi)")
         components?.queryItems = [URLQueryItem(name: "fields", value: "openAccessPdf")]
-        
+
         guard let url = components?.url else { return nil }
-        var request = URLRequest(url: url)
-        if !key.isEmpty {
-            request.setValue(key, forHTTPHeaderField: "x-api-key")
-        }
-        
+
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(from: url)
             guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
                 return nil
             }

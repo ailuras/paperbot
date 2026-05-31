@@ -151,10 +151,7 @@ struct APISettingsTab: View {
 
     private func fetchModels() async throws -> [String] {
         let config = ConfigManager.shared.effectiveConfig
-        let apiKey = settings.deepSeekAPIKey.isEmpty
-            ? (ProcessInfo.processInfo.environment[config.translate.api_key_env] ?? "")
-            : settings.deepSeekAPIKey
-        let translator = DeepSeekTranslator(config: config, apiKey: apiKey)
+        let translator = DeepSeekTranslator(config: config, apiKey: settings.deepSeekAPIKey)
         return try await translator.fetchModels()
     }
 

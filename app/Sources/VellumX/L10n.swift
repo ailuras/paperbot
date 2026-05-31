@@ -24,8 +24,8 @@ enum L10n {
         case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
         case noVenues, abbr, matchPhrase, tier, addVenue, field
         case applyVenueChanges, venueChangesApplied, venueChangesHint
-        // Config file
-        case notSet, advancedConfigFile, path, open, revealInFinder, clear, advancedConfigHint
+        // Settings file
+        case path, open, revealInFinder, settingsFile, settingsFileHint
         // Menu bar
         case noRecommendations, runRecommendEngine, todaysTopPicks
         case openPDF, markRead, markStarred, openVellumX, quit
@@ -41,7 +41,7 @@ enum L10n {
         case .general:            return ("General", "通用")
         case .api:                return ("API", "API")
         case .papers:             return ("Papers", "论文")
-        case .configFile:         return ("Config File", "配置文件")
+        case .configFile:         return ("Settings File", "设置文件")
 
         case .storageLocation:    return ("Storage Location", "存储位置")
         case .currentLocation:    return ("Current location", "当前位置")
@@ -112,14 +112,12 @@ enum L10n {
         case .venueChangesHint:   return ("Recomputes cached venue abbreviation, tier, and score for the current library.",
                                           "重新计算当前论文库缓存的会议缩写、评级和分数。")
 
-        case .notSet:             return ("(not set)", "（未设置）")
-        case .advancedConfigFile: return ("Advanced Config File", "高级配置文件")
         case .path:               return ("Path", "路径")
         case .open:               return ("Open", "打开")
         case .revealInFinder:     return ("Reveal in Finder", "在访达中显示")
-        case .clear:              return ("Clear", "清除")
-        case .advancedConfigHint: return ("Optional. A JSON file overriding the built-in scoring/filters (e.g. a full venue tier table). Configure day-to-day settings in the other tabs — visual settings take precedence.",
-                                          "可选。一个 JSON 文件，用于覆盖内置的评分规则与过滤器。日常设置请在其他标签页中配置——可视化设置优先级更高。")
+        case .settingsFile:       return ("Settings File", "设置文件")
+        case .settingsFileHint:   return ("All preferences are stored in this JSON file. It is generated on first launch and can be edited by hand; relaunch VellumX to apply changes.",
+                                          "所有偏好设置都存储在这个 JSON 文件里。它在首次启动时生成，可手动编辑；改完后重启 VellumX 生效。")
 
         case .noRecommendations:  return ("No recommendations for today.", "今天还没有推荐。")
         case .runRecommendEngine: return ("Run Recommend Engine", "运行推荐引擎")

@@ -238,10 +238,7 @@ struct ContentView: View {
 
         Task {
             do {
-                let apiKey = settings.deepSeekAPIKey.isEmpty
-                    ? (ProcessInfo.processInfo.environment[config.translate.api_key_env] ?? "")
-                    : settings.deepSeekAPIKey
-                let translator = DeepSeekTranslator(config: config, apiKey: apiKey)
+                let translator = DeepSeekTranslator(config: config, apiKey: settings.deepSeekAPIKey)
                 let abstractZh = try await translator.translateAbstract(
                     id: paper.id,
                     abstract: paper.abstract,

@@ -35,8 +35,7 @@ struct VenuePref: Codable, Identifiable, Equatable {
 /// config file: only global preferences and tuning knobs live here. The paper
 /// taxonomy (tracks, venues, fields, tiers, label colors) is owned by
 /// `MetadataStore` in the database; rarely-changed values (citation curve, base
-/// URLs) come from `AppConfig.builtin`; advanced overrides can come from an
-/// external config file (see `advancedConfigPath`).
+/// URLs) come from `AppConfig.builtin`.
 ///
 /// The DeepSeek API key is sensitive and stored in the Keychain, not here.
 @MainActor
@@ -74,15 +73,14 @@ final class AppSettings: ObservableObject {
     var defaultMaxResults: Int { didSet { save() } }
     var topicFilter: String { didSet { save() } }
 
-    // ── Advanced ─────────────────────────────────────────────────────────
-    /// Optional path to an external advanced config file. Empty = none.
-    var advancedConfigPath: String { didSet { save() } }
-
     /// Bumped on every `save()` so `ConfigManager` can cache `effectiveConfig`.
     private(set) var configVersion: Int = 0
 
     private let url: URL
     private static let apiKeyAccount = "deepseek-api-key"
+
+    /// On-disk location of settings.json (the editable developer config).
+    var settingsFileURL: URL { url }
 
     var resolvedStorageDirectory: URL {
         if !storageDirectory.isEmpty {
@@ -133,8 +131,13 @@ final class AppSettings: ObservableObject {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        advancedConfigPath = stored?.advancedConfigPath ?? ""
         deepSeekAPIKey     = Keychain.get(Self.apiKeyAccount) ?? ""
+
+        // settings.json is the editable developer config: materialize it with
+        // defaults the first time so every knob is visible and hand-editable.
+        if !FileManager.default.fileExists(atPath: url.path) {
+            save()
+        }
     }
 
     private struct Stored: Codable {
@@ -154,7 +157,6 @@ final class AppSettings: ObservableObject {
         var defaultDays: Int?
         var defaultMaxResults: Int?
         var topicFilter: String?
-        var advancedConfigPath: String?
     }
 
     private func save() {
@@ -175,8 +177,7 @@ final class AppSettings: ObservableObject {
             perPage: perPage,
             defaultDays: defaultDays,
             defaultMaxResults: defaultMaxResults,
-            topicFilter: topicFilter,
-            advancedConfigPath: advancedConfigPath
+            topicFilter: topicFilter
         )
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try? enc.encode(stored).write(to: url, options: .atomic)

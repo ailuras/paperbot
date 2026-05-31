@@ -156,9 +156,8 @@ class OpenAlexFetcher {
         let baseUrl = config.openalex.base_url
         let perPage = config.openalex.per_page
         let topicFilter = config.openalex.topic_filter
-        let mailto = ProcessInfo.processInfo.environment["OPENALEX_MAILTO"] ?? config.openalex.mailto
-        let apiKey = ProcessInfo.processInfo.environment[config.openalex.api_key_env] ?? ""
-        
+        let mailto = config.openalex.mailto
+
         let session = URLSession.shared
         
         while collectedWorks.count < maxResults {
@@ -184,10 +183,7 @@ class OpenAlexFetcher {
             if !mailto.isEmpty {
                 queryItems.append(URLQueryItem(name: "mailto", value: mailto))
             }
-            if !apiKey.isEmpty {
-                queryItems.append(URLQueryItem(name: "api_key", value: apiKey))
-            }
-            
+
             components?.queryItems = queryItems
             
             guard let url = components?.url else {
