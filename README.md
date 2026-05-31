@@ -1,51 +1,57 @@
-# 📰 VellumX
+# 📚 VellumX
 
 VellumX is a native macOS Menubar academic literature assistant and smart reading workflow client.
 
-Migrated, upgraded, and refactored from the original `PaperBot`, it focuses on providing you with a minimalist, focused, and efficient daily academic paper recommendation, translation, web PDF analysis, and personal note asset management experience.
+Migrated, upgraded, and refactored from the original Python-based `PaperBot`, VellumX focuses on providing you with a minimalist, focused, and efficient daily academic paper recommendation, translation, web PDF analysis, and personal note asset management experience.
 
 ---
 
 ## ✨ Key Features
 
-- **Menubar Integration**: Click the status bar icon to view 3 carefully selected recommended papers for the day.
-- **macOS Native Two-Column Interface**: The left column handles category filtering (To Read, Favorites, Read, Track Categories), while the right column displays paper details and bilingual (Chinese/English) abstracts.
-- **Smart Recommendation & Scoring**: Recommends the highest-quality academic achievements based on venue ratings and a custom scoring algorithm with citation breakpoints.
-- **AI Translation**: Integrates the DeepSeek API for bilingual abstract translation, featuring high-speed local caching.
-- **Multi-tiered Fallback PDF Parsing**: Intelligently detects Open Access PDFs (OpenAlex -> Unpaywall -> arXiv -> Semantic Scholar).
-- **iCloud Sync & Automatic Database Migration**:
-  - Data is stored by default at `~/Documents/06-文献/VellumX/vellumx.db`, fully supporting iCloud sync.
-  - **Seamless Migration**: On first run, VellumX automatically detects and migrates your legacy `PaperBot` data (including historical notes, starred status, and translation caches).
+- **📬 Menubar Integration**: Click the status bar icon to view carefully selected recommended papers for the day and perform quick actions (open PDF, mark read, star) without opening the main window.
+- **💻 macOS Native Two-Column Interface**: A native SwiftUI interface. The left sidebar handles category filtering (Recommendations, Favorites, Read, Custom Tracks), while the right main view displays paper details, bilingual (English/Chinese) abstracts, and your personal reading notes.
+- **⚖️ Smart Recommendation & Scoring**: Recommends the highest-quality papers based on venue ratings, customized tier points, and an adjustable citation-scoring curve.
+- **📜 Academic Rules Editor**: Manage your academic taxonomy directly within the app settings. Customize search tracks (queries & keywords), venue ratings (tier categorization), tier point values, and multi-segment citation curves.
+- **⚡ AI Translation & Keychain Security**: Integrates the DeepSeek API for high-speed bilingual abstract translation with local SQLite caching. Your API key is stored securely in the system Keychain, and you can monitor real-time connection status with a pulsing breathing light indicator.
+- **🔍 Fallback PDF Resolver**: Intelligently resolves open-access PDF links across multiple stages (OpenAlex → Unpaywall → arXiv → Semantic Scholar).
+- **📂 User-Relocatable Database**: Stored by default in Application Support (`~/Library/Application Support/VellumX/vellumx.db`). You can easily relocate the database via the settings panel with automatic data migration.
+
+---
+
+## ⚙️ Configuration Architecture
+
+VellumX separates system preferences from academic data for clean data integrity:
+1. **App Preferences (`settings.json`)**: Configured automatically under `~/Library/Application Support/VellumX/settings.json` for UI preferences, recommendation counts, and OpenAlex fetch constraints.
+2. **Academic Taxonomy & Venue Rules (SQLite)**: Stored inside `vellumx.db` (accessible via the "Rules" tab) for tracks, venues, scoring curves, and fields.
+3. **DeepSeek API Key (macOS Keychain)**: Stored securely in the system Keychain (under account name `deepseek-api-key`).
 
 ---
 
 ## 🛠️ Build & Run
 
-This project is built purely using SwiftPM (Swift Package Manager) and **can be compiled in the terminal without Xcode**.
+VellumX is built purely using SwiftPM (Swift Package Manager) with **zero external dependencies** and can be compiled in the terminal without Xcode.
 
 ### 1. Compile & Build
-The Swift package lives under `app/`. Run from there:
+The Swift package lives under `app/`. Run the following from the root directory or `app/` folder:
 ```bash
 cd app
 ./build-app.sh release
 ```
-This will generate a signed `VellumX.app` application bundle inside `app/`.
+This will compile the Swift binary and assemble it into a signed `VellumX.app` bundle.
 
 ### 2. Launch the App
 ```bash
-open ./VellumX.app          # from inside app/
+open ./VellumX.app          # from inside the app/ directory
 ```
 
-### 3. (Optional) Package a DMG
+### 3. Package as a DMG
+To package `VellumX.app` into a distributable DMG image:
 ```bash
-./make-dmg.sh               # from inside app/, after building
+./make-dmg.sh               # from inside the app/ directory
 ```
-Once launched, you will see a `📚` icon in the macOS status bar (top-right corner). Click it to unfold today's academic dashboard.
 
 ---
 
-## ⚙️ Configuration Notes
-
-The configuration file is located at `~/.vellumx/config.json` (or compatibly read from the legacy path `~/.paperbot/config.json`). Please ensure the configuration file contains your:
-- `DEEPSEEK_API_KEY` (or as an environment variable) for abstract translation.
-- Academic tracks (`tracks`) and corresponding keywords (`keywords`) for fine-grained filtering.
+## 🖥️ Requirements
+- macOS 14.0+
+- Swift 5.9+ (Command Line Tools are sufficient)
