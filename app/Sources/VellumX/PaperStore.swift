@@ -334,98 +334,113 @@ class PaperStore {
         var updated = 0
 
         for paper in newPapers {
-            var existsStmt: OpaquePointer?
-            let checkQuery = "SELECT 1 FROM papers WHERE id = ?"
-            if sqlite3_prepare_v2(db, checkQuery, -1, &existsStmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(existsStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
-                var exists = sqlite3_step(existsStmt) == SQLITE_ROW
-                sqlite3_finalize(existsStmt)
+            let paperId = existingPaperId(for: paper) ?? paper.id
+            var authorsJson = ""
+            if let authorsData = try? JSONEncoder().encode(paper.authors) {
+                authorsJson = String(data: authorsData, encoding: .utf8) ?? "[]"
+            }
 
-                // Also check by DOI to avoid duplicate preprint vs. published versions
-                if !exists, let doi = paper.doi, !doi.isEmpty {
-                    let doiQuery = "SELECT 1 FROM papers WHERE doi = ?"
-                    var doiStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, doiQuery, -1, &doiStmt, nil) == SQLITE_OK {
-                        sqlite3_bind_text(doiStmt, 1, doi, -1, SQLITE_TRANSIENT)
-                        exists = sqlite3_step(doiStmt) == SQLITE_ROW
-                        sqlite3_finalize(doiStmt)
-                    }
+            if paperId == paper.id, existingPaperId(matchingId: paper.id) == nil {
+                if insertPaper(paper, authorsJson: authorsJson) {
+                    inserted += 1
+                    upsertPaperCache(paperId: paper.id, paper: paper)
+                    replaceTopics(for: paper.id, track: paper.track)
+                    upsertPaperPdfCache(paperId: paper.id, paper: paper)
+                    insertPendingStateIfNeeded(paperId: paper.id)
                 }
-
-                var authorsJson = ""
-                if let authorsData = try? JSONEncoder().encode(paper.authors) {
-                    authorsJson = String(data: authorsData, encoding: .utf8) ?? "[]"
-                }
-
-                if exists {
-                    let updateSql = """
-                    UPDATE papers SET
-                        doi = ?, title = ?, authors = ?, publication_date = ?, venue = ?,
-                        cited_by_count = ?, abstract = ?, landing_page_url = ?,
-                        updated_at = datetime('now')
-                    WHERE id = ?
-                    """
-                    var updateStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, updateSql, -1, &updateStmt, nil) == SQLITE_OK {
-                        sqlite3_bind_text(updateStmt, 1, paper.doi, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 2, paper.title, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 3, authorsJson, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 4, paper.publicationDate, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 5, paper.venue, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_int(updateStmt, 6, Int32(paper.citedByCount))
-                        sqlite3_bind_text(updateStmt, 7, paper.abstract, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 8, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 9, paper.id, -1, SQLITE_TRANSIENT)
-
-                        if sqlite3_step(updateStmt) == SQLITE_DONE {
-                            updated += 1
-                            upsertPaperCache(paper)
-                            replaceTopics(for: paper.id, track: paper.track)
-                            upsertPaperPdfCache(paper)
-                        }
-                        sqlite3_finalize(updateStmt)
-                    }
-                } else {
-                    let insertSql = """
-                    INSERT INTO papers (
-                        id, doi, title, authors, publication_date, venue,
-                        cited_by_count, abstract, landing_page_url
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """
-                    var insertStmt: OpaquePointer?
-                    if sqlite3_prepare_v2(db, insertSql, -1, &insertStmt, nil) == SQLITE_OK {
-                        sqlite3_bind_text(insertStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 2, paper.doi, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 3, paper.title, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 4, authorsJson, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 5, paper.publicationDate, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 6, paper.venue, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_int(insertStmt, 7, Int32(paper.citedByCount))
-                        sqlite3_bind_text(insertStmt, 8, paper.abstract, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 9, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
-
-                        if sqlite3_step(insertStmt) == SQLITE_DONE {
-                            inserted += 1
-                            upsertPaperCache(paper)
-                            replaceTopics(for: paper.id, track: paper.track)
-                            upsertPaperPdfCache(paper)
-
-                            let stateSql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
-                            var stateStmt: OpaquePointer?
-                            if sqlite3_prepare_v2(db, stateSql, -1, &stateStmt, nil) == SQLITE_OK {
-                                sqlite3_bind_text(stateStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
-                                sqlite3_step(stateStmt)
-                                sqlite3_finalize(stateStmt)
-                            }
-                        }
-                        sqlite3_finalize(insertStmt)
-                    }
-                }
+            } else if updatePaper(id: paperId, with: paper, authorsJson: authorsJson) {
+                updated += 1
+                upsertPaperCache(paperId: paperId, paper: paper)
+                replaceTopics(for: paperId, track: paper.track)
+                upsertPaperPdfCache(paperId: paperId, paper: paper)
             }
         }
 
         loadPapers()
         return (inserted, updated)
+    }
+
+    private func existingPaperId(for paper: Paper) -> String? {
+        if let id = existingPaperId(matchingId: paper.id) {
+            return id
+        }
+        guard let doi = paper.doi?.trimmingCharacters(in: .whitespacesAndNewlines), !doi.isEmpty else {
+            return nil
+        }
+        return existingPaperId(matchingDoi: doi)
+    }
+
+    private func existingPaperId(matchingId id: String) -> String? {
+        queryPaperId(sql: "SELECT id FROM papers WHERE id = ? LIMIT 1", value: id)
+    }
+
+    private func existingPaperId(matchingDoi doi: String) -> String? {
+        queryPaperId(sql: "SELECT id FROM papers WHERE doi = ? LIMIT 1", value: doi)
+    }
+
+    private func queryPaperId(sql: String, value: String) -> String? {
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, value, -1, SQLITE_TRANSIENT)
+        guard sqlite3_step(stmt) == SQLITE_ROW, let raw = sqlite3_column_text(stmt, 0) else {
+            return nil
+        }
+        return String(cString: raw)
+    }
+
+    private func updatePaper(id: String, with paper: Paper, authorsJson: String) -> Bool {
+        let sql = """
+        UPDATE papers SET
+            doi = ?, title = ?, authors = ?, publication_date = ?, venue = ?,
+            cited_by_count = ?, abstract = ?, landing_page_url = ?,
+            updated_at = datetime('now')
+        WHERE id = ?
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, paper.doi, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, paper.title, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, authorsJson, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 4, paper.publicationDate, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 5, paper.venue, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int(stmt, 6, Int32(paper.citedByCount))
+        sqlite3_bind_text(stmt, 7, paper.abstract, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 8, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 9, id, -1, SQLITE_TRANSIENT)
+        return sqlite3_step(stmt) == SQLITE_DONE && sqlite3_changes(db) > 0
+    }
+
+    private func insertPaper(_ paper: Paper, authorsJson: String) -> Bool {
+        let sql = """
+        INSERT INTO papers (
+            id, doi, title, authors, publication_date, venue,
+            cited_by_count, abstract, landing_page_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, paper.doi, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 3, paper.title, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 4, authorsJson, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 5, paper.publicationDate, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 6, paper.venue, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_int(stmt, 7, Int32(paper.citedByCount))
+        sqlite3_bind_text(stmt, 8, paper.abstract, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 9, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
+        return sqlite3_step(stmt) == SQLITE_DONE
+    }
+
+    private func insertPendingStateIfNeeded(paperId: String) {
+        let sql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, paperId, -1, SQLITE_TRANSIENT)
+        sqlite3_step(stmt)
     }
 
     func refreshVenueMetadata() -> Int {
@@ -491,7 +506,7 @@ class PaperStore {
         insertTopics(for: paperId, topics: topics)
     }
 
-    private func upsertPaperCache(_ paper: Paper) {
+    private func upsertPaperCache(paperId: String, paper: Paper) {
         let sql = """
         INSERT INTO paper_cache (paper_id, venue_abbr, score, tier, updated_at)
         VALUES (?, ?, ?, ?, datetime('now'))
@@ -504,14 +519,14 @@ class PaperStore {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 1, paperId, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, paper.venueAbbr, -1, SQLITE_TRANSIENT)
         sqlite3_bind_double(stmt, 3, paper.score)
         sqlite3_bind_int(stmt, 4, Int32(paper.tier))
         sqlite3_step(stmt)
     }
 
-    private func upsertPaperPdfCache(_ paper: Paper) {
+    private func upsertPaperPdfCache(paperId: String, paper: Paper) {
         guard let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty else { return }
         let sql = """
         INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
@@ -521,7 +536,7 @@ class PaperStore {
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         defer { sqlite3_finalize(stmt) }
-        sqlite3_bind_text(stmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 1, paperId, -1, SQLITE_TRANSIENT)
         sqlite3_bind_text(stmt, 2, pdfUrl, -1, SQLITE_TRANSIENT)
         sqlite3_step(stmt)
     }
