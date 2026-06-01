@@ -85,6 +85,23 @@ struct OpenAlexResponse: Decodable {
 class OpenAlexFetcher {
     let config: AppConfig
     let scorer: VenueScorer
+
+    struct FetchFailure {
+        var trackName: String
+        var error: Error
+    }
+
+    enum FetchError: LocalizedError {
+        case allTracksFailed([FetchFailure])
+
+        var errorDescription: String? {
+            switch self {
+            case .allTracksFailed(let failures):
+                let names = failures.map(\.trackName).joined(separator: ", ")
+                return "All OpenAlex track fetches failed: \(names)"
+            }
+        }
+    }
     
     init(config: AppConfig, venues: [VenuePref] = []) {
         self.config = config
@@ -270,7 +287,7 @@ class OpenAlexFetcher {
         return Array(byId.values)
     }
     
-    func fetch(days: Int? = nil, maxResults: Int? = nil) async throws -> (papers: [Paper], totalRaw: Int, totalFiltered: Int) {
+    func fetch(days: Int? = nil, maxResults: Int? = nil) async throws -> (papers: [Paper], totalRaw: Int, totalFiltered: Int, failedTracks: [String]) {
         let daysToFetch = days ?? config.openalex.default_days
         let resultsCap = maxResults ?? config.openalex.default_max_results
         
@@ -287,6 +304,7 @@ class OpenAlexFetcher {
         
         var allPapers: [Paper] = []
         var totalRaw = 0
+        var failures: [FetchFailure] = []
         
         for (trackName, trackConfig) in config.tracks {
             print("Fetching OpenAlex works for track [\(trackName)]...")
@@ -306,11 +324,15 @@ class OpenAlexFetcher {
                 allPapers.append(contentsOf: relevant)
             } catch {
                 print("Error searching papers for track \(trackName): \(error)")
+                failures.append(FetchFailure(trackName: trackName, error: error))
             }
+        }
+
+        if failures.count == config.tracks.count {
+            throw FetchError.allTracksFailed(failures)
         }
         
         let merged = dedupeAndMergeTracks(papers: allPapers)
-        return (merged, totalRaw, merged.count)
+        return (merged, totalRaw, merged.count, failures.map(\.trackName))
     }
 }
-

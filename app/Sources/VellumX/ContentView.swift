@@ -380,12 +380,22 @@ struct ContentView: View {
                 let fetcher = OpenAlexFetcher(config: config, venues: metadata.venues)
                 let result = try await fetcher.fetch()
                 let stats = store.addOrUpdate(papers: result.papers)
-                statusMessage = "Fetched! Added \(stats.inserted) | Updated \(stats.updated)"
+                statusMessage = fetchStatusMessage(
+                    inserted: stats.inserted,
+                    updated: stats.updated,
+                    failedTracks: result.failedTracks
+                )
             } catch {
                 statusMessage = "Fetch failed: \(error.localizedDescription)"
             }
             isFetching = false
         }
+    }
+
+    private func fetchStatusMessage(inserted: Int, updated: Int, failedTracks: [String]) -> String {
+        let base = "Fetched! Added \(inserted) | Updated \(updated)"
+        guard !failedTracks.isEmpty else { return base }
+        return "\(base) | Failed: \(failedTracks.joined(separator: ", "))"
     }
 
     private func recommendPapers() {
