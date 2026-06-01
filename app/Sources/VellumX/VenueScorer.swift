@@ -112,8 +112,6 @@ class VenueScorer {
     func computeVenueAbbr(venue: String) -> String {
         if venue.isEmpty { return "Others" }
         let venueLower = venue.lowercased()
-        if venueLower.contains("arxiv") { return "arXiv" }
-
         if let match = matchVenue(venueLower) {
             return match.abbr
         }
