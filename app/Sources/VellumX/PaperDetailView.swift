@@ -15,6 +15,8 @@ struct PaperDetailView: View {
     let onStatusChange: (Paper, PaperStatus) -> Void
     let onAddTag: (Paper, String) -> Void
     let onRemoveTag: (Paper, String) -> Void
+    let onAddToCollection: (Paper, String) -> Void
+    let onRemoveFromCollection: (Paper, String) -> Void
     let canGoPrevious: Bool
     let canGoNext: Bool
     let onPrevious: () -> Void
@@ -229,6 +231,39 @@ struct PaperDetailView: View {
 
     // MARK: - Action Bar
 
+    private var collectionMenu: some View {
+        let allCollections = PaperStore.shared.allCollections
+        let isInAny = !paper.collections.isEmpty
+
+        return Menu {
+            if allCollections.isEmpty {
+                Text("No collections yet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(allCollections) { collection in
+                    let isMember = paper.collections.contains(collection.id)
+                    Button {
+                        if isMember {
+                            onRemoveFromCollection(paper, collection.id)
+                        } else {
+                            onAddToCollection(paper, collection.id)
+                        }
+                    } label: {
+                        Label(collection.name, systemImage: isMember ? "checkmark" : "folder")
+                    }
+                }
+            }
+        } label: {
+            DetailActionButtonContent(
+                icon: isInAny ? "folder.fill" : "folder",
+                label: "Collections",
+                isLoading: false
+            )
+        }
+        .menuStyle(.borderlessButton)
+    }
+
     private var actionBar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -257,6 +292,8 @@ struct PaperDetailView: View {
                     }
                     .buttonStyle(.plain)
                 }
+
+                collectionMenu
 
                 Spacer()
             }

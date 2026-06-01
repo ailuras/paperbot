@@ -9,6 +9,7 @@ struct ContentView: View {
 
     // Filter and Sort states
     @State private var selectedSidebarItem: SidebarItem? = .recommended
+    @State private var selectedCollectionId: String? = nil
     @State private var searchKeyword: String = ""
     @State private var sortByScore: Bool = true
 
@@ -45,6 +46,7 @@ struct ContentView: View {
             settingsVersion: settings.configVersion,
             metadataVersion: metadata.metadataVersion,
             sidebarItem: selectedSidebarItem,
+            collectionId: selectedCollectionId,
             topic: selectedTopic,
             includedTags: includedTags,
             excludedTags: excludedTags,
@@ -61,6 +63,7 @@ struct ContentView: View {
         var settingsVersion: Int
         var metadataVersion: Int
         var sidebarItem: SidebarItem?
+        var collectionId: String?
         var topic: String?
         var includedTags: Set<String>
         var excludedTags: Set<String>
@@ -87,10 +90,12 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(
                 selectedItem: $selectedSidebarItem,
+                selectedCollectionId: $selectedCollectionId,
                 selectedTopic: $selectedTopic,
                 includedTags: $includedTags,
                 excludedTags: $excludedTags,
                 tags: store.allTags,
+                collections: store.allCollections,
                 metadata: metadata,
                 statusMessage: statusMessage
             )
@@ -105,7 +110,7 @@ struct ContentView: View {
                 metadata: metadata,
                 isFetching: isFetching,
                 isRecommending: isRecommending,
-                highlightsDailyRecommendations: selectedSidebarItem == .recommended,
+                highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
                 onFetch: fetchPapers,
                 onRecommend: recommendPapers,
                 onCancelRecommendation: cancelRecommendation,
@@ -124,6 +129,8 @@ struct ContentView: View {
                     onStatusChange: updatePaperStatus,
                     onAddTag: addPaperTag,
                     onRemoveTag: removePaperTag,
+                    onAddToCollection: addPaperToCollection,
+                    onRemoveFromCollection: removePaperFromCollection,
                     canGoPrevious: selectedPaperIndex.map { $0 > 0 } ?? false,
                     canGoNext: selectedPaperIndex.map { $0 < filteredPapers.count - 1 } ?? false,
                     onPrevious: selectPreviousPaper,
@@ -139,6 +146,9 @@ struct ContentView: View {
         }
         .onChange(of: filterInputs) { applyFilters() }
         .onChange(of: windowOpener.requestedPaperId) { focusRequestedPaper() }
+        .onChange(of: selectedSidebarItem) { _, new in
+            if new != nil { selectedCollectionId = nil }
+        }
     }
 
     /// Reveal and select a paper requested from outside the window (e.g. the
@@ -148,15 +158,22 @@ struct ContentView: View {
         guard let id = windowOpener.requestedPaperId,
               let paper = store.papers.first(where: { $0.id == id }) else { return }
 
-        // Point the sidebar at the bucket that holds this paper's status so it
-        // shows up in the list; fall back to "All".
-        selectedSidebarItem = sidebarItem(for: paper)
         selectedTopic = nil
         selectedFields = []
         selectedTiers = []
         searchKeyword = ""
-        applyFilters()
 
+        // If the paper belongs to any collection, switch to the first one.
+        if let firstCollectionId = paper.collections.first,
+           store.allCollections.contains(where: { $0.id == firstCollectionId }) {
+            selectedCollectionId = firstCollectionId
+            selectedSidebarItem = nil
+        } else {
+            selectedCollectionId = nil
+            selectedSidebarItem = sidebarItem(for: paper)
+        }
+
+        applyFilters()
         selectedPaperId = id
         lastViewedPaperId = id
         windowOpener.requestedPaperId = nil
@@ -182,8 +199,13 @@ struct ContentView: View {
     private func applyFilters() {
         var result = store.papers
 
+        // 0. Collection view takes priority over sidebar status
+        if let collectionId = selectedCollectionId {
+            result = result.filter { $0.collections.contains(collectionId) }
+        }
+
         // 1. Filter by Sidebar selection
-        if let selected = selectedSidebarItem {
+        else if let selected = selectedSidebarItem {
             switch selected {
             case .all:
                 break
@@ -323,6 +345,16 @@ struct ContentView: View {
 
     private func removePaperTag(_ paper: Paper, tag: String) {
         store.removePaperTag(id: paper.id, tag: tag)
+        applyFilters()
+    }
+
+    private func addPaperToCollection(_ paper: Paper, collectionId: String) {
+        store.addPaperToCollection(paperId: paper.id, collectionId: collectionId)
+        applyFilters()
+    }
+
+    private func removePaperFromCollection(_ paper: Paper, collectionId: String) {
+        store.removePaperFromCollection(paperId: paper.id, collectionId: collectionId)
         applyFilters()
     }
 

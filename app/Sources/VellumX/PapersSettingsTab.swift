@@ -1,7 +1,9 @@
 import SwiftUI
 
 struct PapersSettingsTab: View {
+    @State private var store = PaperStore.shared
     @State private var settings = AppSettings.shared
+    @State private var newCollectionName = ""
 
     var body: some View {
         Form {
@@ -40,8 +42,52 @@ struct PapersSettingsTab: View {
                 TextField(L10n.t(.topicFilter), text: $settings.topicFilter)
                     .textFieldStyle(.roundedBorder)
             }
+
+            Section("Collections") {
+                if store.allCollections.isEmpty {
+                    Text("No collections yet.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(store.allCollections) { collection in
+                        HStack {
+                            Image(systemName: "folder")
+                                .foregroundStyle(collectionColor(collection))
+                            Text(collection.name)
+                            Spacer()
+                            Button(role: .destructive) {
+                                store.deleteCollection(id: collection.id)
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
+
+                HStack {
+                    TextField("New collection name", text: $newCollectionName)
+                        .textFieldStyle(.roundedBorder)
+                    Button {
+                        guard !newCollectionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+                        _ = store.createCollection(name: newCollectionName.trimmingCharacters(in: .whitespacesAndNewlines))
+                        newCollectionName = ""
+                    } label: {
+                        Label("Add", systemImage: "plus")
+                    }
+                    .disabled(newCollectionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
         .formStyle(.grouped)
+    }
+
+    private func collectionColor(_ collection: PaperCollection) -> Color {
+        if let colorName = collection.color, let labelColor = LabelColor(rawValue: colorName) {
+            return labelColor.color
+        }
+        return .accentColor
     }
 
     private func stepperRow(_ label: String, value: Binding<Int>, in range: ClosedRange<Int>) -> some View {

@@ -2,10 +2,12 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selectedItem: SidebarItem?
+    @Binding var selectedCollectionId: String?
     @Binding var selectedTopic: String?
     @Binding var includedTags: Set<String>
     @Binding var excludedTags: Set<String>
     let tags: [String]
+    let collections: [PaperCollection]
     var metadata: MetadataStore
     let statusMessage: String
 
@@ -54,6 +56,22 @@ struct SidebarView: View {
                         }
                     }
                     .padding(.vertical, 3)
+                }
+            }
+
+            if !collections.isEmpty {
+                Section("Collections") {
+                    ForEach(collections) { collection in
+                        CollectionSidebarRow(
+                            collection: collection,
+                            isSelected: selectedCollectionId == collection.id
+                        ) {
+                            selectedCollectionId = (selectedCollectionId == collection.id) ? nil : collection.id
+                            if selectedCollectionId != nil {
+                                selectedItem = nil
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -145,5 +163,37 @@ private struct TagFilterChip: View {
         case .include: return Color.accentColor.opacity(0.45)
         case .exclude: return Color.red.opacity(0.35)
         }
+    }
+}
+
+private struct CollectionSidebarRow: View {
+    let collection: PaperCollection
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "folder")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(collectionColor)
+                Text(collection.name)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                Spacer()
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(isSelected ? .primary : .secondary)
+        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
+        .cornerRadius(5)
+    }
+
+    private var collectionColor: Color {
+        if let colorName = collection.color, let labelColor = LabelColor(rawValue: colorName) {
+            return labelColor.color
+        }
+        return .accentColor
     }
 }
