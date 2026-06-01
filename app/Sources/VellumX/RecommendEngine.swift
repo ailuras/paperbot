@@ -42,11 +42,16 @@ class RecommendEngine {
             return (selected: [], resetIds: [])
         }
 
-        // Pools. Prior recommendations are treated as candidates because
-        // callers apply `resetIds` after selection.
-        let candidatePapers = papers.filter { $0.status == .pending || $0.isRecommended }
-        let recentPool = candidatePapers.filter { isRecent(paper: $0, cutoff: cutoffDate) }
-        let highScorePool = candidatePapers.filter { $0.score >= highThreshold }
+        // Candidate priority: never pick an already-active recommendation;
+        // exhaust pending papers first, then fill from the remaining statuses.
+        let unrecommended = papers.filter { !$0.isRecommended }
+        let pendingPool = unrecommended.filter { $0.status == .pending }
+        let fallbackPool = unrecommended.filter { $0.status != .pending }
+
+        let recentPendingPool = pendingPool.filter { isRecent(paper: $0, cutoff: cutoffDate) }
+        let highPendingPool = pendingPool.filter { $0.score >= highThreshold }
+        let recentFallbackPool = fallbackPool.filter { isRecent(paper: $0, cutoff: cutoffDate) }
+        let highFallbackPool = fallbackPool.filter { $0.score >= highThreshold }
 
         var excludeIds = Set<String>()
         var selected: [RecommendationResult] = []
@@ -60,16 +65,28 @@ class RecommendEngine {
 
         // 1. Quality priority slots
         for i in 0..<qualitySlots {
-            var reason = "Quality Pick (score >= \(Int(highThreshold)))"
-            var px = popRandom(from: highScorePool)
+            var reason = "Pending Quality Pick (score >= \(Int(highThreshold)))"
+            var px = popRandom(from: highPendingPool)
 
             if px == nil {
-                px = popRandom(from: recentPool)
-                reason = "Recent Pick (last \(recentDays)d)"
+                px = popRandom(from: recentPendingPool)
+                reason = "Pending Recent Pick (last \(recentDays)d)"
             }
             if px == nil {
-                px = popRandom(from: candidatePapers)
-                reason = "Exploration Pick"
+                px = popRandom(from: pendingPool)
+                reason = "Pending Exploration Pick"
+            }
+            if px == nil {
+                px = popRandom(from: highFallbackPool)
+                reason = "Backfill Quality Pick (score >= \(Int(highThreshold)))"
+            }
+            if px == nil {
+                px = popRandom(from: recentFallbackPool)
+                reason = "Backfill Recent Pick (last \(recentDays)d)"
+            }
+            if px == nil {
+                px = popRandom(from: fallbackPool)
+                reason = "Backfill Exploration Pick"
             }
 
             if let chosen = px {
@@ -79,12 +96,20 @@ class RecommendEngine {
 
         // 2. Recency priority slots
         for i in qualitySlots..<dailyCount {
-            var reason = "Recent Pick (last \(recentDays)d)"
-            var px = popRandom(from: recentPool)
+            var reason = "Pending Recent Pick (last \(recentDays)d)"
+            var px = popRandom(from: recentPendingPool)
 
             if px == nil {
-                px = popRandom(from: candidatePapers)
-                reason = "Exploration Pick"
+                px = popRandom(from: pendingPool)
+                reason = "Pending Exploration Pick"
+            }
+            if px == nil {
+                px = popRandom(from: recentFallbackPool)
+                reason = "Backfill Recent Pick (last \(recentDays)d)"
+            }
+            if px == nil {
+                px = popRandom(from: fallbackPool)
+                reason = "Backfill Exploration Pick"
             }
 
             if let chosen = px {
