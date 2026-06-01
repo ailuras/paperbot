@@ -8,7 +8,6 @@ struct TrackConfig: Codable {
 
 struct ScoringTier: Codable {
     var points: Int
-    var venues: [String: [String]]?
 }
 
 struct CitationBreakpoint: Codable {
@@ -88,24 +87,19 @@ class ConfigManager {
         var cfg = AppConfig.builtin
         let s = AppSettings.shared
 
-        // Venue ratings from the visual settings build the scoring tiers,
-        // overriding the built-in default set. Single-pass grouping.
+        // Map each tier rank used by the venue rules to its point value.
+        // Venue→tier matching itself is done by `VenueScorer` straight from
+        // `MetadataStore.venues`; `scoring.tiers` only needs the points so
+        // `calculateScore` can turn a tier into a base score.
         let metadata = MetadataStore.shared
 
         if !metadata.venues.isEmpty {
-            var venuesByTier: [String: [String: [String]]] = [:]
-            for p in metadata.venues {
-                let tierKey = String(p.tier)
-                venuesByTier[tierKey, default: [:]][p.abbr, default: []].append(p.phrase)
-            }
             var tiers: [String: ScoringTier] = [:]
-            for (tierKey, venues) in venuesByTier {
-                if let tier = Int(tierKey) {
-                    let points = metadata.tiers.first(where: { $0.rank == tier })?.points
-                        ?? MetadataStore.tierPoints[tier]
-                        ?? max(1, 12 - 2 * tier)
-                    tiers[tierKey] = ScoringTier(points: points, venues: venues)
-                }
+            for tier in Set(metadata.venues.map(\.tier)) {
+                let points = metadata.tiers.first(where: { $0.rank == tier })?.points
+                    ?? MetadataStore.tierPoints[tier]
+                    ?? max(1, 12 - 2 * tier)
+                tiers[String(tier)] = ScoringTier(points: points)
             }
             cfg.scoring.tiers = tiers
         }

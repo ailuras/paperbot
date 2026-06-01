@@ -29,15 +29,20 @@ then ad-hoc code-signs it. There is no test target.
 
 ## Configuration
 
-Config is JSON, resolved by `ConfigManager` ([Config.swift](app/Sources/VellumX/Config.swift))
-in this order:
+There is **no external config file**. `ConfigManager.effectiveConfig`
+([Config.swift](app/Sources/VellumX/Config.swift)) builds the `AppConfig`
+in-memory from three layers:
 
-1. `$PAPERBOT_CONFIG` env var
-2. `~/.vellumx/config.json`, falling back to legacy `~/.paperbot/config.json`
-3. `data/config.json` relative to the working directory
+1. `AppConfig.builtin` ([ConfigDefaults.swift](app/Sources/VellumX/ConfigDefaults.swift))
+   — API base URLs, the citation-score curve, OpenAlex query defaults.
+2. `MetadataStore` — the venue taxonomy (`venues`), tier point values
+   (`tiers`), tracks/keywords, and citation curve.
+3. `AppSettings` — personalization knobs (recommendation, OpenAlex params,
+   translation), which win.
 
-Needs `DEEPSEEK_API_KEY` (translation), academic `tracks` + `keywords`, and the
-scoring/recommendation knobs decoded into `AppConfig`.
+Venue→tier/abbreviation matching is done **solely** by `VenueScorer` from
+`MetadataStore.venues` — there are no hidden built-in venues. The DeepSeek API
+key for translation lives in the Keychain (set via Settings ▸ API), not config.
 
 ## Data
 

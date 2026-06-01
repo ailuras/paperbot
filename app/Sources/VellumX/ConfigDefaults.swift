@@ -2,11 +2,11 @@ import Foundation
 
 /// Built-in defaults for the parts of `AppConfig` that rarely change and are
 /// therefore baked into the app rather than surfaced in the visual settings:
-/// API base URLs, timeouts, the citation-score curve, and a modest set of
-/// well-known venue tiers. The advanced config file (see `ConfigManager`) can
-/// override `scoring`/`filters`; the visual settings (`AppSettings`) override
-/// the personalization fields (tracks, recommendation knobs, OpenAlex params,
-/// translation).
+/// API base URLs, the citation-score curve, and OpenAlex query defaults.
+/// `ConfigManager.buildConfig` then layers the user's data on top: the venue
+/// taxonomy and tier points come from `MetadataStore`, and the personalization
+/// fields (tracks, recommendation knobs, OpenAlex params, translation) come
+/// from `AppSettings`.
 extension AppConfig {
     static var builtin: AppConfig {
         AppConfig(
@@ -50,9 +50,8 @@ extension AppConfig {
 
     /// Venue tiers are intentionally empty by default. Paper abbreviations and
     /// tiers come solely from the user-editable venue rules (see
-    /// `MetadataStore`), which are pre-seeded on first launch — so there is a
-    /// single, visible source of truth. Advanced users can still supply a
-    /// config file with explicit `scoring.tiers`, which `VenueScorer` honors as
-    /// a fallback; we just no longer inject hidden built-in defaults.
+    /// `MetadataStore`), which are pre-seeded on first launch — a single,
+    /// visible source of truth. `ConfigManager.buildConfig` repopulates
+    /// `scoring.tiers` with the per-tier point values derived from those rules.
     private static var builtinTiers: [String: ScoringTier] { [:] }
 }

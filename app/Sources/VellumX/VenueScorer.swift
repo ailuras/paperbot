@@ -70,19 +70,6 @@ class VenueScorer {
         if let match = matchVenue(venueLower) {
             return match.tier
         }
-
-        // Fallback: advanced-config scoring tiers (when no visual venues set).
-        guard let config = config else { return 0 }
-        let tiers = config.scoring.tiers
-        let sortedTierNums = tiers.keys.compactMap { Int($0) }.sorted()
-        for tierNum in sortedTierNums {
-            guard let tierVenues = tiers[String(tierNum)]?.venues else { continue }
-            for (_, phrases) in tierVenues {
-                for phrase in phrases where venueLower.contains(phrase.lowercased()) {
-                    return tierNum
-                }
-            }
-        }
         return 0
     }
 
@@ -129,20 +116,6 @@ class VenueScorer {
 
         if let match = matchVenue(venueLower) {
             return match.abbr
-        }
-
-        // Fallback: advanced-config scoring tiers.
-        guard let config = config else { return "Others" }
-        var candidates: [(abbr: String, phrase: String)] = []
-        for tier in config.scoring.tiers.values {
-            guard let venues = tier.venues else { continue }
-            for (abbr, phrases) in venues {
-                for phrase in phrases { candidates.append((abbr, phrase)) }
-            }
-        }
-        candidates.sort { $0.phrase.count > $1.phrase.count }
-        for candidate in candidates where venueLower.contains(candidate.phrase.lowercased()) {
-            return candidate.abbr
         }
         return "Others"
     }
