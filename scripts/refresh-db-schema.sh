@@ -64,6 +64,13 @@ CREATE TABLE IF NOT EXISTS paper_pdfs (
     resolved_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS paper_tags (
+    paper_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (paper_id, tag)
+);
+
 INSERT OR IGNORE INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
 SELECT id, pdf_url, 'OpenAlex', COALESCE(updated_at, datetime('now'))
 FROM papers
