@@ -105,29 +105,20 @@ private struct TagFilterChip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
-                if state == .include {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 9, weight: .bold))
-                } else if state == .exclude {
-                    Image(systemName: "minus")
-                        .font(.system(size: 9, weight: .bold))
-                }
-
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .frame(maxWidth: .infinity)
-            .background(backgroundColor)
-            .foregroundStyle(foregroundColor)
-            .cornerRadius(9)
-            .overlay(
-                RoundedRectangle(cornerRadius: 9)
-                    .stroke(borderColor, lineWidth: state == .neutral ? 0.5 : 1)
-            )
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+                .strikethrough(state == .exclude)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity)
+                .background(backgroundColor)
+                .foregroundStyle(foregroundColor)
+                .cornerRadius(9)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9)
+                        .stroke(borderColor, lineWidth: state == .neutral ? 0.5 : 1)
+                )
         }
         .buttonStyle(.plain)
     }
