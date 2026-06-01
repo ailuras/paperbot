@@ -221,17 +221,14 @@ class OpenAlexFetcher {
     private func parseWork(_ work: OpenAlexWork, track: String) -> Paper {
         let venue = work.primaryLocation?.source?.displayName ?? ""
         let citations = work.citedByCount ?? 0
-        let tier = scorer.getTier(venue: venue)
-        let venueAbbr = scorer.computeVenueAbbr(venue: venue)
-        
+        let (tier, venueAbbr, score) = scorer.evaluate(venue: venue, citations: citations)
+
         let authors = work.authorships?.compactMap { $0.author?.displayName } ?? []
         let abstract = restoreAbstract(from: work.abstractInvertedIndex)
-        
+
         let landingPage = work.primaryLocation?.landingPageUrl ?? work.doi ?? work.id
         let pdf = work.primaryLocation?.pdfUrl ?? work.openAccess?.oaUrl
-        
-        let score = scorer.calculateScore(venue: venue, citations: citations)
-        
+
         return Paper(
             id: work.id,
             doi: work.doi,

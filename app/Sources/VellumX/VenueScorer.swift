@@ -56,24 +56,36 @@ class VenueScorer {
         return (best.tier, best.abbr)
     }
 
-    func getTier(venue: String) -> Int {
-        if venue.isEmpty { return 0 }
+    /// Resolve a venue's tier, abbreviation, and full score in a single pass —
+    /// `matchVenue` runs once instead of three times across separate calls.
+    /// A blacklisted venue is forced to tier 0 (and thus zero base points) but
+    /// keeps its matched abbreviation, preserving the previous behavior.
+    func evaluate(venue: String, citations: Int) -> (tier: Int, abbr: String, score: Double) {
+        let citation = citationScore(citations: citations)
+        guard !venue.isEmpty else { return (0, "Others", citation) }
+
         let venueLower = venue.lowercased()
+        let match = matchVenue(venueLower)
+        let abbr = match?.abbr ?? "Others"
 
-        // Blacklist check
-        if let blacklist = config?.filters?.venue_blacklist {
-            for blocked in blacklist where venueLower.contains(blocked.lowercased()) {
-                return 0
-            }
+        var tier = match?.tier ?? 0
+        if tier != 0, isBlacklisted(venueLower) {
+            tier = 0
         }
 
-        if let match = matchVenue(venueLower) {
-            return match.tier
+        var base = 0.0
+        if let config, let tierConfig = config.scoring.tiers[String(tier)] {
+            base = Double(tierConfig.points)
         }
-        return 0
+        return (tier, abbr, base + citation)
     }
 
-    func citationScore(citations: Int) -> Double {
+    private func isBlacklisted(_ venueLower: String) -> Bool {
+        guard let blacklist = config?.filters?.venue_blacklist else { return false }
+        return blacklist.contains { venueLower.contains($0.lowercased()) }
+    }
+
+    private func citationScore(citations: Int) -> Double {
         guard let config = config else { return 0.0 }
         var remaining = Double(citations)
         var previousLimit = 0.0
@@ -98,23 +110,5 @@ class VenueScorer {
         }
 
         return min(score, Double(config.scoring.max_citation_points))
-    }
-
-    func calculateScore(venue: String, citations: Int) -> Double {
-        let tier = getTier(venue: venue)
-        var base = 0.0
-        if let config = config, let tierConfig = config.scoring.tiers[String(tier)] {
-            base = Double(tierConfig.points)
-        }
-        return base + citationScore(citations: citations)
-    }
-
-    func computeVenueAbbr(venue: String) -> String {
-        if venue.isEmpty { return "Others" }
-        let venueLower = venue.lowercased()
-        if let match = matchVenue(venueLower) {
-            return match.abbr
-        }
-        return "Others"
     }
 }

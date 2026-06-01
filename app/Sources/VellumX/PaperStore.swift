@@ -379,9 +379,7 @@ class PaperStore: ObservableObject {
         var changed = 0
 
         for paper in papers {
-            let venueAbbr = scorer.computeVenueAbbr(venue: paper.venue)
-            let tier = scorer.getTier(venue: paper.venue)
-            let score = scorer.calculateScore(venue: paper.venue, citations: paper.citedByCount)
+            let (tier, venueAbbr, score) = scorer.evaluate(venue: paper.venue, citations: paper.citedByCount)
 
             guard venueAbbr != paper.venueAbbr || tier != paper.tier || abs(score - paper.score) > 0.0001 else {
                 continue
