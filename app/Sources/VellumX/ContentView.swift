@@ -10,7 +10,7 @@ struct ContentView: View {
     // Filter and Sort states
     @State private var selectedSidebarItem: SidebarItem? = .recommended
     @State private var searchKeyword: String = ""
-    @State private var sortByScore: Bool = true
+    @State private var sortByScore: Bool = false
 
     // Topic is single-select; Fields/Tier are multi-select (in the toolbar
     // filter popover). Union within a group, intersect across groups.
@@ -78,10 +78,7 @@ struct ContentView: View {
         return store.papers.first(where: { $0.id == id })
     }
 
-    private var selectedPaperIndex: Int? {
-        guard let id = lastViewedPaperId else { return nil }
-        return filteredPapers.firstIndex(where: { $0.id == id })
-    }
+    @State private var selectedPaperIndex: Int? = nil
 
     var body: some View {
         NavigationSplitView {
@@ -92,7 +89,8 @@ struct ContentView: View {
                 excludedTags: $excludedTags,
                 tags: store.allTags,
                 metadata: metadata,
-                statusMessage: statusMessage
+                statusMessage: statusMessage,
+                papers: store.papers
             )
         } content: {
             PaperListView(
@@ -159,6 +157,7 @@ struct ContentView: View {
 
         selectedPaperId = id
         lastViewedPaperId = id
+        selectedPaperIndex = filteredPapers.firstIndex(where: { $0.id == id })
         windowOpener.requestedPaperId = nil
     }
 
@@ -188,9 +187,7 @@ struct ContentView: View {
             case .all:
                 break
             case .recommended:
-                result = result.filter { paper in
-                    paper.isRecommended && paper.recommendedAt.map { Calendar.current.isDateInToday($0) } == true
-                }
+                result = result.filter { $0.isRecommended }
             case .pending:
                 result = result.filter { $0.status == .pending }
             case .starred:
@@ -248,11 +245,27 @@ struct ContentView: View {
                 }
                 return $0.score > $1.score
             }
+        } else if selectedSidebarItem == .recommended {
+            // Recommend: today first, then history by recommendation date (newest first)
+            result.sort {
+                let lhsToday = $0.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
+                let rhsToday = $1.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
+                if lhsToday && !rhsToday { return true }
+                if !lhsToday && rhsToday { return false }
+                return ($0.recommendedAt ?? Date.distantPast) > ($1.recommendedAt ?? Date.distantPast)
+            }
         } else {
             result.sort { $0.publicationDate > $1.publicationDate }
         }
 
         filteredPapers = result
+
+        // Cache selected index to avoid O(n) lookup on every body evaluation
+        if let id = lastViewedPaperId {
+            selectedPaperIndex = filteredPapers.firstIndex(where: { $0.id == id })
+        } else {
+            selectedPaperIndex = nil
+        }
     }
 
     private func selectPaper(at index: Int) {
@@ -260,6 +273,7 @@ struct ContentView: View {
         let id = filteredPapers[index].id
         selectedPaperId = id
         lastViewedPaperId = id
+        selectedPaperIndex = index
     }
 
     private func selectPreviousPaper() {
