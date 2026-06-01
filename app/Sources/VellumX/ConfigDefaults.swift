@@ -48,31 +48,11 @@ extension AppConfig {
         )
     }
 
-    /// A small default set of high-profile venues so freshly fetched papers get
-    /// a non-zero tier out of the box. Users who want the full PaperBot venue
-    /// list can supply an advanced config file. Keys are tier numbers (lower =
-    /// stronger); `points` is the base score for that tier.
-    private static var builtinTiers: [String: ScoringTier] {
-        [
-            "1": ScoringTier(points: 10, venues: [
-                "Nature": ["nature"],
-                "Science": ["science"],
-                "CVPR": ["computer vision and pattern recognition"],
-                "ICCV": ["international conference on computer vision"],
-                "NeurIPS": ["neural information processing systems"],
-                "ICML": ["international conference on machine learning"],
-                "ICLR": ["international conference on learning representations"]
-            ]),
-            "2": ScoringTier(points: 6, venues: [
-                "ECCV": ["european conference on computer vision"],
-                "AAAI": ["aaai conference on artificial intelligence"],
-                "ACL": ["annual meeting of the association for computational linguistics"],
-                "EMNLP": ["empirical methods in natural language processing"],
-                "SIGGRAPH": ["siggraph"]
-            ]),
-            "3": ScoringTier(points: 3, venues: [
-                "arXiv": ["arxiv"]
-            ])
-        ]
-    }
+    /// Venue tiers are intentionally empty by default. Paper abbreviations and
+    /// tiers come solely from the user-editable venue rules (see
+    /// `MetadataStore`), which are pre-seeded on first launch — so there is a
+    /// single, visible source of truth. Advanced users can still supply a
+    /// config file with explicit `scoring.tiers`, which `VenueScorer` honors as
+    /// a fallback; we just no longer inject hidden built-in defaults.
+    private static var builtinTiers: [String: ScoringTier] { [:] }
 }
