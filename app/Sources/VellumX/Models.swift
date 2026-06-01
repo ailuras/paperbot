@@ -71,7 +71,7 @@ final class Paper: Identifiable {
     var recommendedAt: Date?
     var recommendationReason: String
     var tags: [String]
-    var collections: [String]
+    var collectionIds: [String]
     var note: String
     var abstractZh: String
 
@@ -87,7 +87,7 @@ final class Paper: Identifiable {
         isRecommended: Bool = false, recommendedAt: Date? = nil,
         recommendationReason: String = "",
         tags: [String] = [],
-        collections: [String] = [],
+        collectionIds: [String] = [],
         note: String = "", abstractZh: String = ""
     ) {
         self.id = id
@@ -111,7 +111,7 @@ final class Paper: Identifiable {
         self.recommendedAt = recommendedAt
         self.recommendationReason = recommendationReason
         self.tags = tags
-        self.collections = collections
+        self.collectionIds = collectionIds
         self.note = note
         self.abstractZh = abstractZh
     }

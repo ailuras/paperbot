@@ -222,16 +222,15 @@ class PaperStore {
                        ORDER BY lower(tag), tag
                    )
                 ), ''), '') as tags,
-                COALESCE(NULLIF((
-                    SELECT group_concat(name, ', ')
-                    FROM (
-                        SELECT c2.name
-                        FROM collections c2
-                        JOIN collection_papers cp2 ON c2.id = cp2.collection_id
-                        WHERE cp2.paper_id = p.id
-                        ORDER BY lower(c2.name), c2.name
-                    )
-                ), ''), '') as collections,
+               COALESCE(NULLIF((
+                   SELECT group_concat(collection_id, ', ')
+                   FROM (
+                       SELECT cp2.collection_id
+                       FROM collection_papers cp2
+                       WHERE cp2.paper_id = p.id
+                       ORDER BY cp2.added_at, cp2.collection_id
+                   )
+               ), ''), '') as collections,
                 COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
          FROM papers p
         LEFT JOIN paper_cache pc ON p.id = pc.paper_id
@@ -288,7 +287,7 @@ class PaperStore {
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
             let recommendationReason = String(cString: sqlite3_column_text(stmt, 18))
             let tags = Self.splitTags(String(cString: sqlite3_column_text(stmt, 19)))
-            let collections = Self.splitTags(String(cString: sqlite3_column_text(stmt, 20)))
+            let collectionIds = Self.splitTags(String(cString: sqlite3_column_text(stmt, 20)))
             let note = String(cString: sqlite3_column_text(stmt, 21))
             let abstractZh = String(cString: sqlite3_column_text(stmt, 22))
 
@@ -319,7 +318,7 @@ class PaperStore {
                 recommendedAt: recommendedAt,
                 recommendationReason: recommendationReason,
                 tags: tags,
-                collections: collections,
+                collectionIds: collectionIds,
                 note: note,
                 abstractZh: abstractZh
             )
@@ -801,9 +800,9 @@ class PaperStore {
             sqlite3_bind_text(stmt, 2, paperId, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 if let idx = papers.firstIndex(where: { $0.id == paperId }),
-                   !papers[idx].collections.contains(collectionId) {
-                    papers[idx].collections.append(collectionId)
-                    papers[idx].collections.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+                   !papers[idx].collectionIds.contains(collectionId) {
+                    papers[idx].collectionIds.append(collectionId)
+                    papers[idx].collectionIds.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
                 }
                 paperVersion += 1
             }
@@ -819,7 +818,7 @@ class PaperStore {
             sqlite3_bind_text(stmt, 2, paperId, -1, SQLITE_TRANSIENT)
             if sqlite3_step(stmt) == SQLITE_DONE {
                 if let idx = papers.firstIndex(where: { $0.id == paperId }) {
-                    papers[idx].collections.removeAll { $0 == collectionId }
+                    papers[idx].collectionIds.removeAll { $0 == collectionId }
                 }
                 paperVersion += 1
             }

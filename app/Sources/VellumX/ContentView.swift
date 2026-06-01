@@ -165,7 +165,7 @@ struct ContentView: View {
         searchKeyword = ""
 
         // If the paper belongs to any collection, switch to the first one.
-        if let firstCollectionId = paper.collections.first,
+        if let firstCollectionId = paper.collectionIds.first,
            store.allCollections.contains(where: { $0.id == firstCollectionId }) {
             selectedCollectionId = firstCollectionId
             selectedSidebarItem = nil
@@ -202,7 +202,7 @@ struct ContentView: View {
 
         // 0. Collection view takes priority over sidebar status
         if let collectionId = selectedCollectionId {
-            result = result.filter { $0.collections.contains(collectionId) }
+            result = result.filter { $0.collectionIds.contains(collectionId) }
         }
 
         // 1. Filter by Sidebar selection

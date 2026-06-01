@@ -130,7 +130,7 @@ struct PaperDetailView: View {
 
     private var collectionMenu: some View {
         let allCollections = PaperStore.shared.allCollections
-        let isInAny = !paper.collections.isEmpty
+        let isInAny = !paper.collectionIds.isEmpty
 
         return Menu {
             if allCollections.isEmpty {
@@ -139,7 +139,7 @@ struct PaperDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(allCollections) { collection in
-                    let isMember = paper.collections.contains(collection.id)
+                    let isMember = paper.collectionIds.contains(collection.id)
                     Button {
                         if isMember {
                             onRemoveFromCollection(paper, collection.id)
