@@ -40,6 +40,7 @@ extension AppConfig {
                 recent_days: 30
             ),
             translate: TranslateConfig(
+                provider: .deepseek,
                 enabled: true,
                 target_language: "中文",
                 model: "deepseek-chat",
