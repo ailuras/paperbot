@@ -10,17 +10,30 @@ struct SidebarView: View {
     let collections: [PaperCollection]
     var metadata: MetadataStore
     let statusMessage: String
+    let papers: [Paper]
 
     var body: some View {
         List(selection: $selectedItem) {
             Section("Library") {
                 ForEach([SidebarItem.recommended, .pending, .starred, .read, .skipped, .all], id: \.self) { item in
                     NavigationLink(value: item) {
-                        Label {
-                            Text(item.displayName)
-                        } icon: {
-                            Image(systemName: item.iconName)
-                                .foregroundStyle(item.iconColor)
+                        HStack {
+                            Label {
+                                Text(item.displayName)
+                            } icon: {
+                                Image(systemName: item.iconName)
+                                    .foregroundStyle(item.iconColor)
+                            }
+                            Spacer()
+                            let count = paperCount(for: item)
+                            if count > 0 {
+                                Text("\(count)")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.secondary.opacity(0.12), in: Capsule())
+                            }
                         }
                     }
                 }
@@ -90,6 +103,17 @@ struct SidebarView: View {
                 }
                 .background(Color(NSColor.windowBackgroundColor))
             }
+        }
+    }
+
+    private func paperCount(for item: SidebarItem) -> Int {
+        switch item {
+        case .all: return papers.count
+        case .recommended: return papers.filter { $0.isRecommended }.count
+        case .pending: return papers.filter { $0.status == .pending }.count
+        case .starred: return papers.filter { $0.status == .starred }.count
+        case .read: return papers.filter { $0.status == .read }.count
+        case .skipped: return papers.filter { $0.status == .skip }.count
         }
     }
 

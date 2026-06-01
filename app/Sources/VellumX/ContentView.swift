@@ -11,7 +11,7 @@ struct ContentView: View {
     @State private var selectedSidebarItem: SidebarItem? = .recommended
     @State private var selectedCollectionId: String? = nil
     @State private var searchKeyword: String = ""
-    @State private var sortByScore: Bool = true
+    @State private var sortByScore: Bool = false
 
     // Topic is single-select; Fields/Tier are multi-select (in the toolbar
     // filter popover). Union within a group, intersect across groups.
@@ -97,7 +97,8 @@ struct ContentView: View {
                 tags: store.allTags,
                 collections: store.allCollections,
                 metadata: metadata,
-                statusMessage: statusMessage
+                statusMessage: statusMessage,
+                papers: store.papers
             )
         } content: {
             PaperListView(
@@ -210,9 +211,7 @@ struct ContentView: View {
             case .all:
                 break
             case .recommended:
-                result = result.filter { paper in
-                    paper.isRecommended && paper.recommendedAt.map { Calendar.current.isDateInToday($0) } == true
-                }
+                result = result.filter { $0.isRecommended }
             case .pending:
                 result = result.filter { $0.status == .pending }
             case .starred:
@@ -269,6 +268,15 @@ struct ContentView: View {
                     return $0.citedByCount > $1.citedByCount
                 }
                 return $0.score > $1.score
+            }
+        } else if selectedSidebarItem == .recommended {
+            // Recommend: today first, then history by recommendation date (newest first)
+            result.sort {
+                let lhsToday = $0.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
+                let rhsToday = $1.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
+                if lhsToday && !rhsToday { return true }
+                if !lhsToday && rhsToday { return false }
+                return ($0.recommendedAt ?? Date.distantPast) > ($1.recommendedAt ?? Date.distantPast)
             }
         } else {
             result.sort { $0.publicationDate > $1.publicationDate }
@@ -463,8 +471,8 @@ struct ScoreBadgeView: View {
     let color: Color
 
     var body: some View {
-        Text(String(format: "%.1f", score))
-            .font(.caption2.bold())
+        Text(String(format: "%.0f", score))
+            .font(.system(size: 9, weight: .bold))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(color.opacity(0.15))

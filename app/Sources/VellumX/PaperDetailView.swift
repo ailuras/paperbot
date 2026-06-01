@@ -105,8 +105,11 @@ struct PaperDetailView: View {
     }
 
     private var metaCard: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Row 1: Score | Venue | Date | Citations | Topics
+            HStack(spacing: 8) {
+                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+
                 if !paper.venueAbbr.isEmpty {
                     DetailTag(
                         title: paper.venueAbbr,
@@ -120,24 +123,32 @@ struct PaperDetailView: View {
                     DetailInlineMeta(icon: "calendar", value: paper.publicationDate)
                 }
 
+                if paper.citedByCount > 0 {
+                    DetailInlineMeta(
+                        icon: "quote.bubble",
+                        value: "\(paper.citedByCount) citation\(paper.citedByCount == 1 ? "" : "s")"
+                    )
+                }
+
                 if !topics.isEmpty {
-                    ForEach(topics, id: \.self) { topic in
-                        DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                    HStack(spacing: 6) {
+                        ForEach(topics, id: \.self) { topic in
+                            DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                        }
                     }
                 }
 
-                Spacer(minLength: 8)
-
-                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+                Spacer(minLength: 0)
             }
 
+            // Row 2: Full venue name
             if !venueDisplayName.isEmpty {
                 DetailVenueLine(value: venueDisplayName)
                     .help(venueDisplayName)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondary.opacity(0.06))
         .cornerRadius(8)
@@ -178,20 +189,7 @@ struct PaperDetailView: View {
     }
 
     private func navigationButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 28, height: 28)
-                .background(Color.secondary.opacity(enabled ? 0.10 : 0.04))
-                .foregroundColor(enabled ? .primary.opacity(0.75) : .secondary.opacity(0.45))
-                .cornerRadius(7)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
+        NavigationButton(systemName: systemName, enabled: enabled, action: action)
     }
 
     private var statusBar: some View {
@@ -219,6 +217,7 @@ struct PaperDetailView: View {
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(isActive ? color.opacity(0.4) : Color.gray.opacity(0.25), lineWidth: isActive ? 1.5 : 0.5)
                     )
+                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
                 }
                 .buttonStyle(.plain)
             }
@@ -459,7 +458,7 @@ struct PaperDetailView: View {
 
     private var scoreMemo: String {
         let citations = paper.citedByCount == 1 ? "1 citation" : "\(paper.citedByCount) citations"
-        return "Score \(String(format: "%.1f", paper.score)); tier \(paper.tier); \(citations)"
+        return "Score \(String(format: "%.0f", paper.score)); tier \(paper.tier); \(citations)"
     }
 
     private var matchedVenueRule: VenuePref? {
@@ -489,26 +488,65 @@ struct PaperDetailView: View {
 
 struct EmptyDetailView: View {
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 18) {
             Spacer()
 
             Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 48))
-                .foregroundColor(.secondary.opacity(0.4))
+                .font(.system(size: 56, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.secondary.opacity(0.45), .accentColor.opacity(0.25)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
 
             Text("Select a paper to view details")
-                .font(.title3)
-                .foregroundColor(.secondary)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.primary.opacity(0.85))
 
-            Text("Choose an item from the list to read its abstract,\nadd notes, or open the PDF.")
-                .font(.callout)
-                .foregroundColor(.secondary.opacity(0.7))
-                .multilineTextAlignment(.center)
+            VStack(spacing: 6) {
+                Text("Choose an item from the list to read its abstract,")
+                Text("add notes, or open the PDF.")
+            }
+            .font(.system(size: 13))
+            .foregroundColor(.secondary.opacity(0.75))
+            .multilineTextAlignment(.center)
+
+            HStack(spacing: 16) {
+                ShortcutHint(key: "⌘R", action: "Fetch")
+                ShortcutHint(key: "⌘T", action: "Recommend")
+            }
+            .padding(.top, 8)
 
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.textBackgroundColor))
+    }
+}
+
+private struct ShortcutHint: View {
+    let key: String
+    let action: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(key)
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.secondary.opacity(0.12))
+                .cornerRadius(4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.gray.opacity(0.18), lineWidth: 0.5)
+                )
+
+            Text(action)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+        }
     }
 }
 
@@ -731,5 +769,36 @@ private struct DetailActionButton: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
+    }
+}
+
+private struct NavigationButton: View {
+    let systemName: String
+    let enabled: Bool
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .background(Color.secondary.opacity(backgroundOpacity))
+                .foregroundColor(enabled ? .primary.opacity(0.75) : .secondary.opacity(0.45))
+                .cornerRadius(7)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .onHover { isHovering = $0 }
+    }
+
+    private var backgroundOpacity: Double {
+        if !enabled { return 0.04 }
+        return isHovering ? 0.16 : 0.10
     }
 }
