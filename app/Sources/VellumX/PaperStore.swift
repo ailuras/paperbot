@@ -169,6 +169,20 @@ class PaperStore: ObservableObject {
             topic_name TEXT NOT NULL,
             PRIMARY KEY (paper_id, topic_name)
         );
+
+        CREATE TABLE IF NOT EXISTS collections (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            color TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS collection_papers (
+            collection_id TEXT NOT NULL,
+            paper_id TEXT NOT NULL,
+            added_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (collection_id, paper_id)
+        );
         """
 
         var errorMsg: UnsafeMutablePointer<Int8>?
@@ -207,9 +221,19 @@ class PaperStore: ObservableObject {
                        WHERE paper_id = p.id
                        ORDER BY lower(tag), tag
                    )
-               ), ''), '') as tags,
-               COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
-        FROM papers p
+                ), ''), '') as tags,
+                COALESCE(NULLIF((
+                    SELECT group_concat(c.name, ', ')
+                    FROM (
+                        SELECT c2.name
+                        FROM collections c2
+                        JOIN collection_papers cp2 ON c2.id = cp2.collection_id
+                        WHERE cp2.paper_id = p.id
+                        ORDER BY lower(c2.name), c2.name
+                    )
+                ), ''), '') as collections,
+                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
+         FROM papers p
         LEFT JOIN paper_cache pc ON p.id = pc.paper_id
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
         LEFT JOIN paper_recommendations pr ON p.id = pr.paper_id
@@ -264,8 +288,9 @@ class PaperStore: ObservableObject {
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
             let recommendationReason = String(cString: sqlite3_column_text(stmt, 18))
             let tags = Self.splitTags(String(cString: sqlite3_column_text(stmt, 19)))
-            let note = String(cString: sqlite3_column_text(stmt, 20))
-            let abstractZh = String(cString: sqlite3_column_text(stmt, 21))
+            let collections = Self.splitTags(String(cString: sqlite3_column_text(stmt, 20)))
+            let note = String(cString: sqlite3_column_text(stmt, 21))
+            let abstractZh = String(cString: sqlite3_column_text(stmt, 22))
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -294,6 +319,7 @@ class PaperStore: ObservableObject {
                 recommendedAt: recommendedAt,
                 recommendationReason: recommendationReason,
                 tags: tags,
+                collections: collections,
                 note: note,
                 abstractZh: abstractZh
             )
