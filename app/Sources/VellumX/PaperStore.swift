@@ -11,7 +11,7 @@ private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.sel
 
 @MainActor
 @Observable
-class PaperStore: ObservableObject {
+class PaperStore {
     var papers: [Paper] = []
     var paperVersion: Int = 0
 
@@ -223,7 +223,7 @@ class PaperStore: ObservableObject {
                    )
                 ), ''), '') as tags,
                 COALESCE(NULLIF((
-                    SELECT group_concat(c.name, ', ')
+                    SELECT group_concat(name, ', ')
                     FROM (
                         SELECT c2.name
                         FROM collections c2

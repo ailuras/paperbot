@@ -40,7 +40,7 @@ struct VenuePref: Codable, Identifiable, Equatable {
 /// The API key is sensitive and stored in the Keychain, not here.
 @MainActor
 @Observable
-final class AppSettings: ObservableObject {
+final class AppSettings {
     static let shared = AppSettings()
 
     // ── General ──────────────────────────────────────────────────────────
