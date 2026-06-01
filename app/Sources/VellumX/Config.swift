@@ -1,47 +1,48 @@
 import Foundation
 
-struct TrackConfig: Codable {
+struct TrackConfig {
     var query: String
     var keywords: [String]
     var color: String?
 }
 
-struct ScoringTier: Codable {
+struct ScoringTier {
     var points: Int
 }
 
+// Persisted as JSON by MetadataStore, so this one keeps Codable.
 struct CitationBreakpoint: Codable {
     var up_to: Int?
     var points_per_citation: Double
 }
 
-struct ScoringConfig: Codable {
+struct ScoringConfig {
     var tiers: [String: ScoringTier]
     var citation_breakpoints: [CitationBreakpoint]
     var max_citation_points: Int
 }
 
-struct RecommendationConfig: Codable {
+struct RecommendationConfig {
     var daily_count: Int
     var quality_slots: Int
     var high_score_threshold: Int
     var recent_days: Int
 }
 
-struct TranslateConfig: Codable {
+struct TranslateConfig {
     var enabled: Bool
     var target_language: String
     var model: String
     var base_url: String
 }
 
-struct FiltersConfig: Codable {
+struct FiltersConfig {
     var title_blacklist: [String]?
     var source_blacklist: [String]?
     var venue_blacklist: [String]?
 }
 
-struct OpenAlexConfig: Codable {
+struct OpenAlexConfig {
     var base_url: String
     var mailto: String
     var per_page: Int
@@ -50,7 +51,7 @@ struct OpenAlexConfig: Codable {
     var topic_filter: String
 }
 
-struct AppConfig: Codable {
+struct AppConfig {
     var openalex: OpenAlexConfig
     var tracks: [String: TrackConfig]
     var filters: FiltersConfig?
