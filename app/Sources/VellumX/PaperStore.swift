@@ -110,15 +110,18 @@ class PaperStore: ObservableObject {
             authors TEXT,
             publication_date TEXT,
             venue TEXT,
-            venue_abbr TEXT,
             cited_by_count INTEGER DEFAULT 0,
             abstract TEXT,
             landing_page_url TEXT,
-            pdf_url TEXT,
-            track TEXT,
-            score REAL DEFAULT 0,
-            tier TEXT,
             created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS paper_cache (
+            paper_id TEXT PRIMARY KEY,
+            venue_abbr TEXT NOT NULL DEFAULT 'Others',
+            score REAL NOT NULL DEFAULT 0,
+            tier INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT DEFAULT (datetime('now'))
         );
 
@@ -167,31 +170,31 @@ class PaperStore: ObservableObject {
             print("Error creating tables: \(error)")
             sqlite3_free(errorMsg)
         }
-        sqlite3_exec(db, "ALTER TABLE paper_recommendations ADD COLUMN recommendation_reason TEXT", nil, nil, nil)
-        migrateRecommendationsIfNeeded()
-        migratePaperTopicsIfNeeded()
     }
 
     func loadPapers() {
         let query = """
-        SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue, p.venue_abbr,
-               p.cited_by_count, p.abstract, p.landing_page_url, COALESCE(f.pdf_url, p.pdf_url) as pdf_url,
+        SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue,
+               COALESCE(pc.venue_abbr, 'Others') as venue_abbr,
+               p.cited_by_count, p.abstract, p.landing_page_url, f.pdf_url,
                COALESCE(NULLIF((
                    SELECT group_concat(topic_name, ', ')
                    FROM (
                        SELECT topic_name
                        FROM paper_topics
                        WHERE paper_id = p.id
-                       ORDER BY topic_name
+                           ORDER BY topic_name
                    )
-               ), ''), p.track) as track,
-               p.score, p.tier, COALESCE(ps.status, 'pending') as status,
+               ), ''), '') as track,
+               COALESCE(pc.score, 0) as score, COALESCE(pc.tier, 0) as tier,
+               COALESCE(ps.status, 'pending') as status,
                COALESCE(ps.changed_at, datetime('now')) as changed_at,
                COALESCE(pr.is_active, 0) as is_recommended,
                pr.recommended_at,
                COALESCE(pr.recommendation_reason, '') as recommendation_reason,
                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
         FROM papers p
+        LEFT JOIN paper_cache pc ON p.id = pc.paper_id
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
         LEFT JOIN paper_recommendations pr ON p.id = pr.paper_id
         LEFT JOIN paper_notes pn ON p.id = pn.paper_id
@@ -304,8 +307,8 @@ class PaperStore: ObservableObject {
                     let updateSql = """
                     UPDATE papers SET
                         doi = ?, title = ?, authors = ?, publication_date = ?, venue = ?,
-                        venue_abbr = ?, cited_by_count = ?, abstract = ?, landing_page_url = ?,
-                        pdf_url = ?, track = ?, score = ?, tier = ?, updated_at = datetime('now')
+                        cited_by_count = ?, abstract = ?, landing_page_url = ?,
+                        updated_at = datetime('now')
                     WHERE id = ?
                     """
                     var updateStmt: OpaquePointer?
@@ -315,28 +318,25 @@ class PaperStore: ObservableObject {
                         sqlite3_bind_text(updateStmt, 3, authorsJson, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(updateStmt, 4, paper.publicationDate, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(updateStmt, 5, paper.venue, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 6, paper.venueAbbr, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_int(updateStmt, 7, Int32(paper.citedByCount))
-                        sqlite3_bind_text(updateStmt, 8, paper.abstract, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 9, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 10, paper.pdfUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 11, paper.track, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_double(updateStmt, 12, paper.score)
-                        sqlite3_bind_text(updateStmt, 13, String(paper.tier), -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(updateStmt, 14, paper.id, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_int(updateStmt, 6, Int32(paper.citedByCount))
+                        sqlite3_bind_text(updateStmt, 7, paper.abstract, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 8, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(updateStmt, 9, paper.id, -1, SQLITE_TRANSIENT)
 
                         if sqlite3_step(updateStmt) == SQLITE_DONE {
                             updated += 1
+                            upsertPaperCache(paper)
                             replaceTopics(for: paper.id, track: paper.track)
+                            upsertPaperPdfCache(paper)
                         }
                         sqlite3_finalize(updateStmt)
                     }
                 } else {
                     let insertSql = """
                     INSERT INTO papers (
-                        id, doi, title, authors, publication_date, venue, venue_abbr,
-                        cited_by_count, abstract, landing_page_url, pdf_url, track, score, tier
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        id, doi, title, authors, publication_date, venue,
+                        cited_by_count, abstract, landing_page_url
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """
                     var insertStmt: OpaquePointer?
                     if sqlite3_prepare_v2(db, insertSql, -1, &insertStmt, nil) == SQLITE_OK {
@@ -346,18 +346,15 @@ class PaperStore: ObservableObject {
                         sqlite3_bind_text(insertStmt, 4, authorsJson, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(insertStmt, 5, paper.publicationDate, -1, SQLITE_TRANSIENT)
                         sqlite3_bind_text(insertStmt, 6, paper.venue, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 7, paper.venueAbbr, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_int(insertStmt, 8, Int32(paper.citedByCount))
-                        sqlite3_bind_text(insertStmt, 9, paper.abstract, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 10, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 11, paper.pdfUrl, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_text(insertStmt, 12, paper.track, -1, SQLITE_TRANSIENT)
-                        sqlite3_bind_double(insertStmt, 13, paper.score)
-                        sqlite3_bind_text(insertStmt, 14, String(paper.tier), -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_int(insertStmt, 7, Int32(paper.citedByCount))
+                        sqlite3_bind_text(insertStmt, 8, paper.abstract, -1, SQLITE_TRANSIENT)
+                        sqlite3_bind_text(insertStmt, 9, paper.landingPageUrl, -1, SQLITE_TRANSIENT)
 
                         if sqlite3_step(insertStmt) == SQLITE_DONE {
                             inserted += 1
+                            upsertPaperCache(paper)
                             replaceTopics(for: paper.id, track: paper.track)
+                            upsertPaperPdfCache(paper)
 
                             let stateSql = "INSERT OR IGNORE INTO paper_states (paper_id, status) VALUES (?, 'pending')"
                             var stateStmt: OpaquePointer?
@@ -383,9 +380,13 @@ class PaperStore: ObservableObject {
             venues: MetadataStore.shared.venues
         )
         let updateSql = """
-        UPDATE papers
-        SET venue_abbr = ?, score = ?, tier = ?, updated_at = datetime('now')
-        WHERE id = ?
+        INSERT INTO paper_cache (paper_id, venue_abbr, score, tier, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(paper_id) DO UPDATE SET
+            venue_abbr = excluded.venue_abbr,
+            score = excluded.score,
+            tier = excluded.tier,
+            updated_at = datetime('now')
         """
 
         var stmt: OpaquePointer?
@@ -407,10 +408,10 @@ class PaperStore: ObservableObject {
 
             sqlite3_reset(stmt)
             sqlite3_clear_bindings(stmt)
-            sqlite3_bind_text(stmt, 1, venueAbbr, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_double(stmt, 2, score)
-            sqlite3_bind_text(stmt, 3, String(tier), -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 4, paper.id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, venueAbbr, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_double(stmt, 3, score)
+            sqlite3_bind_int(stmt, 4, Int32(tier))
 
             if sqlite3_step(stmt) == SQLITE_DONE {
                 changed += 1
@@ -420,43 +421,6 @@ class PaperStore: ObservableObject {
         sqlite3_exec(db, "COMMIT", nil, nil, nil)
         loadPapers()
         return changed
-    }
-
-    private func migratePaperTopicsIfNeeded() {
-        guard tableIsEmpty("paper_topics") else { return }
-
-        let query = "SELECT id, COALESCE(track, '') FROM papers WHERE COALESCE(track, '') != ''"
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, query, -1, &stmt, nil) == SQLITE_OK else { return }
-        defer { sqlite3_finalize(stmt) }
-
-        sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
-        while sqlite3_step(stmt) == SQLITE_ROW {
-            let paperId = String(cString: sqlite3_column_text(stmt, 0))
-            let track = String(cString: sqlite3_column_text(stmt, 1))
-            insertTopics(for: paperId, topics: Self.splitTopics(track))
-        }
-        sqlite3_exec(db, "COMMIT", nil, nil, nil)
-    }
-
-    private func migrateRecommendationsIfNeeded() {
-        let insertSql = """
-        INSERT OR IGNORE INTO paper_recommendations (paper_id, recommended_at, is_active)
-        SELECT paper_id, COALESCE(changed_at, datetime('now')), 1
-        FROM paper_states
-        WHERE status = 'recommended'
-        """
-        sqlite3_exec(db, insertSql, nil, nil, nil)
-        sqlite3_exec(db, "UPDATE paper_states SET status = 'pending' WHERE status = 'recommended'", nil, nil, nil)
-    }
-
-    private func tableIsEmpty(_ table: String) -> Bool {
-        var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, "SELECT 1 FROM \(table) LIMIT 1", -1, &stmt, nil) == SQLITE_OK else {
-            return true
-        }
-        defer { sqlite3_finalize(stmt) }
-        return sqlite3_step(stmt) != SQLITE_ROW
     }
 
     private func replaceTopics(for paperId: String, track: String) {
@@ -471,6 +435,41 @@ class PaperStore: ObservableObject {
         }
 
         insertTopics(for: paperId, topics: topics)
+    }
+
+    private func upsertPaperCache(_ paper: Paper) {
+        let sql = """
+        INSERT INTO paper_cache (paper_id, venue_abbr, score, tier, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(paper_id) DO UPDATE SET
+            venue_abbr = excluded.venue_abbr,
+            score = excluded.score,
+            tier = excluded.tier,
+            updated_at = datetime('now')
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, paper.venueAbbr, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_double(stmt, 3, paper.score)
+        sqlite3_bind_int(stmt, 4, Int32(paper.tier))
+        sqlite3_step(stmt)
+    }
+
+    private func upsertPaperPdfCache(_ paper: Paper) {
+        guard let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty else { return }
+        let sql = """
+        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
+        VALUES (?, ?, 'OpenAlex', datetime('now'))
+        ON CONFLICT(paper_id) DO NOTHING
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, paper.id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, pdfUrl, -1, SQLITE_TRANSIENT)
+        sqlite3_step(stmt)
     }
 
     private func insertTopics(for paperId: String, topics: [String]) {
