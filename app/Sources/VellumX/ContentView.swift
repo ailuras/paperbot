@@ -253,7 +253,40 @@ struct ContentView: View {
     // MARK: - Actions
 
     private func updatePaperStatus(_ paper: Paper, status: PaperStatus) {
+        let oldIndex = selectedPaperIndex
+        let nextId = oldIndex.flatMap { index in
+            filteredPapers.indices.contains(index + 1) ? filteredPapers[index + 1].id : nil
+        }
+        let shouldAdvance = statusListItem(selectedSidebarItem) != nil
+
         PaperStore.shared.setPaperStatus(id: paper.id, status: status)
+
+        guard shouldAdvance,
+              let selectedSidebarItem,
+              !paperMatches(sidebarItem: selectedSidebarItem, status: status) else { return }
+
+        applyFilters()
+        if let nextId, filteredPapers.contains(where: { $0.id == nextId }) {
+            selectedPaperId = nextId
+            lastViewedPaperId = nextId
+        } else {
+            selectedPaperId = nil
+            lastViewedPaperId = nil
+        }
+    }
+
+    private func statusListItem(_ item: SidebarItem?) -> PaperStatus? {
+        switch item {
+        case .pending: return .pending
+        case .starred: return .starred
+        case .read: return .read
+        case .skipped: return .skip
+        default: return nil
+        }
+    }
+
+    private func paperMatches(sidebarItem: SidebarItem, status: PaperStatus) -> Bool {
+        statusListItem(sidebarItem) == status
     }
 
     private func fetchPapers() {
