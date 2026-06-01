@@ -45,16 +45,14 @@ final class MetadataStore {
     }
 
     var allFields: [String] {
-        var names = fields.map(\.name).filter { !$0.isEmpty }
+        var names = fields.compactMap { Self.normalizedFieldName($0.name) }.filter { $0 != Self.othersField }
         for venue in venues {
             if let field = Self.normalizedField(venue.field), !names.contains(field) {
                 names.append(field)
             }
         }
-        if !names.contains(Self.othersField) {
-            names.append(Self.othersField)
-        }
-        return names.sorted()
+        // Custom fields sorted alphabetically; the built-in "Others" always last.
+        return names.sorted() + [Self.othersField]
     }
 
     var allTiers: [Int] {
@@ -99,7 +97,7 @@ final class MetadataStore {
                 topics[index].color = colorName
             }
         } else if key.hasPrefix("field:") {
-            let name = String(key.dropFirst("field:".count))
+            guard let name = Self.normalizedFieldName(String(key.dropFirst("field:".count))) else { return }
             if let index = fields.firstIndex(where: { $0.name == name }) {
                 fields[index].color = colorName
             } else {
@@ -121,7 +119,7 @@ final class MetadataStore {
             return topics.first(where: { $0.name == name })?.color
         }
         if key.hasPrefix("field:") {
-            let name = String(key.dropFirst("field:".count))
+            guard let name = Self.normalizedFieldName(String(key.dropFirst("field:".count))) else { return nil }
             return fields.first(where: { $0.name == name })?.color
         }
         if key.hasPrefix("tier:"), let rank = Int(key.dropFirst("tier:".count)) {
@@ -220,6 +218,11 @@ final class MetadataStore {
             print("Error creating metadata tables: \(error)")
             sqlite3_free(errorMsg)
         }
+
+        // One-time cleanup of retired field values: the catch-all is now the
+        // absence of a custom field, not a stored venue field value.
+        sqlite3_exec(db, "UPDATE metadata_venue_rules SET field_name = NULL WHERE UPPER(TRIM(COALESCE(field_name, ''))) IN ('OT', 'OTHERS')", nil, nil, nil)
+        sqlite3_exec(db, "DELETE FROM metadata_fields WHERE UPPER(TRIM(COALESCE(name, ''))) = 'OT'", nil, nil, nil)
     }
 
     /// Populate the taxonomy with the built-in defaults the first time the
@@ -287,7 +290,10 @@ final class MetadataStore {
 
     private func saveFields() {
         replace(table: "metadata_fields") {
-            for (index, field) in fields.enumerated() {
+            for (index, field) in fields.compactMap({ field -> FieldPref? in
+                guard let name = Self.normalizedFieldName(field.name) else { return nil }
+                return FieldPref(id: field.id, name: name, color: field.color, sortOrder: field.sortOrder)
+            }).enumerated() {
                 execute(
                     "INSERT INTO metadata_fields (id, name, color, sort_order) VALUES (?, ?, ?, ?)",
                     bindings: [field.id, field.name, field.color, index]
@@ -410,9 +416,10 @@ final class MetadataStore {
 
         var rows: [FieldPref] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
+            guard let name = Self.normalizedFieldName(columnString(stmt, 1)) else { continue }
             rows.append(FieldPref(
                 id: columnString(stmt, 0),
-                name: columnString(stmt, 1),
+                name: name,
                 color: columnOptionalString(stmt, 2),
                 sortOrder: Int(sqlite3_column_int(stmt, 3))
             ))
@@ -485,7 +492,7 @@ final class MetadataStore {
     }
 
     private func makeFields(from venues: [VenuePref]) -> [FieldPref] {
-        let names = Set(venues.compactMap { Self.normalizedField($0.field) } + [Self.othersField])
+        let names = Set(venues.compactMap { Self.normalizedField($0.field) })
         return names.sorted().enumerated().map { index, name in
             FieldPref(id: UUID().uuidString, name: name, color: nil, sortOrder: index)
         }
@@ -508,13 +515,35 @@ final class MetadataStore {
         tierPoints[rank] ?? max(1, 12 - 2 * rank)
     }
 
-    private static let othersField = "Others"
+    /// The built-in catch-all field. Any venue without a custom field belongs
+    /// here. It is never stored as a field value — it's represented by the
+    /// absence of one (nil) — so it can't be renamed or deleted.
+    static let othersField = "Others"
 
+    /// Normalize a stored/edited field value. Trims whitespace and treats both
+    /// the empty string and the built-in "Others" name as "no custom field"
+    /// (nil), so "Others" is purely derived, never persisted.
     private static func normalizedField(_ field: String?) -> String? {
         guard let value = field?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil
         }
-        return value.caseInsensitiveCompare("Preprint") == .orderedSame ? "OT" : value
+        if value.caseInsensitiveCompare(othersField) == .orderedSame || value.caseInsensitiveCompare("OT") == .orderedSame {
+            return nil
+        }
+        return value
+    }
+
+    private static func normalizedFieldName(_ field: String?) -> String? {
+        guard let value = field?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        if value.caseInsensitiveCompare("OT") == .orderedSame {
+            return nil
+        }
+        if value.caseInsensitiveCompare(othersField) == .orderedSame {
+            return othersField
+        }
+        return value
     }
 
     // MARK: - Import / Export / Preset
@@ -558,9 +587,12 @@ final class MetadataStore {
     func exportMetadata() throws -> Data {
         let export = MetadataExport(
             topics: topics.map { .init(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color) },
-            venues: venues.map { .init(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: $0.field, exact: $0.exact) },
+            venues: venues.map { .init(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: Self.normalizedField($0.field), exact: $0.exact) },
             tiers: tiers.map { .init(rank: $0.rank, name: $0.name, points: $0.points, color: $0.color) },
-            fields: fields.map { .init(name: $0.name, color: $0.color) },
+            fields: fields.compactMap { field in
+                guard let name = Self.normalizedFieldName(field.name) else { return nil }
+                return .init(name: name, color: field.color)
+            },
             scoring: .init(citation_breakpoints: citationBreakpoints, max_citation_points: maxCitationPoints)
         )
         let encoder = JSONEncoder()
@@ -577,13 +609,14 @@ final class MetadataStore {
             TrackPref(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color)
         }
         venues = decoded.venues.map {
-            VenuePref(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: $0.field, exact: $0.exact)
+            VenuePref(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: Self.normalizedField($0.field), exact: $0.exact)
         }
         tiers = decoded.tiers.map {
             TierPref(rank: $0.rank, name: $0.name, points: $0.points, color: $0.color, sortOrder: 0)
         }
-        fields = decoded.fields.enumerated().map {
-            FieldPref(id: UUID().uuidString, name: $1.name, color: $1.color, sortOrder: $0)
+        fields = decoded.fields.enumerated().compactMap {
+            guard let name = Self.normalizedFieldName($1.name) else { return nil }
+            return FieldPref(id: UUID().uuidString, name: name, color: $1.color, sortOrder: $0)
         }
         citationBreakpoints = decoded.scoring.citation_breakpoints
         maxCitationPoints = decoded.scoring.max_citation_points
@@ -708,6 +741,6 @@ final class MetadataStore {
         VenuePref(abbr: "EPTCS", phrase: "electronic proceedings in theoretical computer science", tier: 3, field: "FM"),
 
         // ── Tier 4: preprints ──
-        VenuePref(abbr: "arXiv", phrase: "arxiv", tier: 4, field: "OT")
+        VenuePref(abbr: "arXiv", phrase: "arxiv", tier: 4, field: nil)
     ]
 }

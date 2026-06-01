@@ -17,7 +17,7 @@ struct RulesSettingsTab: View {
 
                 GroupBox(L10n.t(.venueRatings)) {
                     VStack(alignment: .leading, spacing: 10) {
-                        VenuesEditor(venues: $metadata.venues)
+                        VenuesEditor(venues: $metadata.venues, availableFields: metadata.allFields)
 
                         Divider()
 
@@ -336,6 +336,14 @@ struct TracksEditor: View {
 
 struct VenuesEditor: View {
     @Binding var venues: [VenuePref]
+    /// Selectable field options (custom fields + the built-in "Others", last).
+    let availableFields: [String]
+
+    /// The venue currently having a brand-new field named via the prompt.
+    @State private var newFieldVenueID: UUID?
+    @State private var newFieldName = ""
+
+    private let othersField = MetadataStore.othersField
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -344,7 +352,7 @@ struct VenuesEditor: View {
             }
             HStack(spacing: 8) {
                 Text(L10n.t(.abbr)).font(.caption).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
-                Text(L10n.t(.field)).font(.caption).foregroundStyle(.secondary).frame(width: 56, alignment: .leading)
+                Text(L10n.t(.field)).font(.caption).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
                 Text(L10n.t(.matchPhrase)).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
                 Text(L10n.t(.tier)).font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
                 Spacer().frame(width: 20)
@@ -353,8 +361,7 @@ struct VenuesEditor: View {
                 HStack(spacing: 8) {
                     TextField(L10n.t(.abbr), text: $venue.abbr)
                         .textFieldStyle(.roundedBorder).frame(width: 64)
-                    TextField(L10n.t(.field), text: fieldBinding(for: $venue))
-                        .textFieldStyle(.roundedBorder).frame(width: 56)
+                    fieldMenu(for: $venue).frame(width: 110)
                     TextField(L10n.t(.matchPhrase), text: $venue.phrase)
                         .textFieldStyle(.roundedBorder).frame(maxWidth: .infinity)
                     Picker("", selection: $venue.tier) {
@@ -368,18 +375,71 @@ struct VenuesEditor: View {
                 }
             }
             Button {
-                venues.append(VenuePref(abbr: "", phrase: "", tier: 3, field: ""))
+                venues.append(VenuePref(abbr: "", phrase: "", tier: 3, field: nil))
             } label: { Label(L10n.t(.addVenue), systemImage: "plus") }
             .buttonStyle(.borderless)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .alert(L10n.t(.newField), isPresented: newFieldPrompt) {
+            TextField(L10n.t(.name), text: $newFieldName)
+            Button(L10n.t(.confirm)) { commitNewField() }
+            Button(L10n.t(.cancel), role: .cancel) { newFieldVenueID = nil }
+        }
     }
 
-    private func fieldBinding(for venue: Binding<VenuePref>) -> Binding<String> {
+    /// A field is "Others" (the catch-all) whenever no custom field is set.
+    private func fieldMenu(for venue: Binding<VenuePref>) -> some View {
+        let raw = venue.wrappedValue.field?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let current = raw.isEmpty ? othersField : raw
+        let customFields = availableFields.filter { $0 != othersField }
+
+        return Menu {
+            fieldChoice(othersField, isSelected: current == othersField) {
+                venue.wrappedValue.field = nil
+            }
+            if !customFields.isEmpty {
+                Divider()
+                ForEach(customFields, id: \.self) { name in
+                    fieldChoice(name, isSelected: current == name) {
+                        venue.wrappedValue.field = name
+                    }
+                }
+            }
+            Divider()
+            Button {
+                newFieldName = ""
+                newFieldVenueID = venue.wrappedValue.id
+            } label: { Label(L10n.t(.newField), systemImage: "plus") }
+        } label: {
+            Text(current).lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private func fieldChoice(_ name: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if isSelected {
+                Label(name, systemImage: "checkmark")
+            } else {
+                Text(name)
+            }
+        }
+    }
+
+    private var newFieldPrompt: Binding<Bool> {
         Binding(
-            get: { venue.wrappedValue.field ?? "" },
-            set: { venue.wrappedValue.field = $0.isEmpty ? nil : $0 }
+            get: { newFieldVenueID != nil },
+            set: { if !$0 { newFieldVenueID = nil } }
         )
+    }
+
+    private func commitNewField() {
+        defer { newFieldVenueID = nil }
+        let name = newFieldName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.caseInsensitiveCompare(othersField) != .orderedSame,
+              let id = newFieldVenueID,
+              let index = venues.firstIndex(where: { $0.id == id }) else { return }
+        venues[index].field = name
     }
 }
 

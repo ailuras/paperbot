@@ -23,7 +23,7 @@ enum L10n {
         // Rules
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
-        case noVenues, abbr, matchPhrase, tier, addVenue, field
+        case noVenues, abbr, matchPhrase, tier, addVenue, field, newField
         case applyVenueChanges, venueChangesApplied, venueChangesHint
         case tierSettings, tierRank, tierPointsValue, addTier
         case citationScoring, citationScoringHint
@@ -117,6 +117,7 @@ enum L10n {
         case .tier:               return ("Tier", "评级")
         case .addVenue:           return ("Add Venue", "添加会议")
         case .field:              return ("Field", "领域")
+        case .newField:           return ("New Field…", "新建领域…")
         case .applyVenueChanges:  return ("Apply Venue Changes", "应用会议变更")
         case .venueChangesApplied:return ("Updated paper metadata:", "已更新论文元数据：")
         case .venueChangesHint:   return ("Recomputes cached venue abbreviation, tier, and score for the current library.",
