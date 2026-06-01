@@ -148,14 +148,14 @@ struct PaperDetailView: View {
     // MARK: - Status Bar
 
     private var readerToolbar: some View {
-        HStack(spacing: 10) {
-            navigationButton(systemName: "chevron.left", enabled: canGoPrevious, action: onPrevious)
-
-            statusBar
-
-            Spacer()
-
-            navigationButton(systemName: "chevron.right", enabled: canGoNext, action: onNext)
+        HStack {
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                navigationButton(systemName: "chevron.left", enabled: canGoPrevious, action: onPrevious)
+                statusBar
+                navigationButton(systemName: "chevron.right", enabled: canGoNext, action: onNext)
+            }
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
@@ -193,6 +193,7 @@ struct PaperDetailView: View {
                         Text(statusLabel(for: status))
                             .font(.system(size: 12, weight: isActive ? .bold : .medium))
                     }
+                    .frame(width: 82)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
                     .background(isActive ? color.opacity(0.18) : Color.clear)
