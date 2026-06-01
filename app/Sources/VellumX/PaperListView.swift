@@ -19,6 +19,50 @@ struct PaperListView: View {
 
     @Binding var sortByScore: Bool
     @State private var showSortOptions = false
+    private let lastTodayId: String?
+
+    init(
+        papers: [Paper],
+        selectedPaperId: Binding<String?>,
+        searchKeyword: Binding<String>,
+        showFilters: Binding<Bool>,
+        selectedFields: Binding<Set<String>>,
+        selectedTiers: Binding<Set<Int>>,
+        metadata: MetadataStore,
+        isFetching: Bool,
+        isRecommending: Bool,
+        highlightsDailyRecommendations: Bool,
+        onFetch: @escaping () -> Void,
+        onRecommend: @escaping () -> Void,
+        onCancelRecommendation: @escaping (Paper) -> Void,
+        onSelectPaper: @escaping (String) -> Void,
+        sortByScore: Binding<Bool>
+    ) {
+        self.papers = papers
+        self._selectedPaperId = selectedPaperId
+        self._searchKeyword = searchKeyword
+        self._showFilters = showFilters
+        self._selectedFields = selectedFields
+        self._selectedTiers = selectedTiers
+        self.metadata = metadata
+        self.isFetching = isFetching
+        self.isRecommending = isRecommending
+        self.highlightsDailyRecommendations = highlightsDailyRecommendations
+        self.onFetch = onFetch
+        self.onRecommend = onRecommend
+        self.onCancelRecommendation = onCancelRecommendation
+        self.onSelectPaper = onSelectPaper
+        self._sortByScore = sortByScore
+
+        if highlightsDailyRecommendations && !sortByScore.wrappedValue {
+            let todayPapers = papers.filter {
+                $0.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
+            }
+            self.lastTodayId = todayPapers.last?.id
+        } else {
+            self.lastTodayId = nil
+        }
+    }
 
     private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
         if set.contains(value) { set.remove(value) } else { set.insert(value) }
@@ -124,9 +168,12 @@ struct PaperListView: View {
                 PaperRowView(
                     paper: paper,
                     metadata: metadata,
-                    isDailyRecommendation: highlightsDailyRecommendations
+                    isDailyRecommendation: highlightsDailyRecommendations,
+                    isLastToday: paper.id == lastTodayId
                 )
                 .tag(paper.id)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8))
                 .contextMenu {
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
@@ -189,6 +236,11 @@ struct PaperListView: View {
         .onChange(of: selectedPaperId) { _, newValue in
             if let newValue { onSelectPaper(newValue) }
         }
+        .overlay {
+            if papers.isEmpty {
+                EmptyPaperListView()
+            }
+        }
     }
 }
 
@@ -196,6 +248,7 @@ private struct PaperRowView: View {
     let paper: Paper
     var metadata: MetadataStore
     let isDailyRecommendation: Bool
+    let isLastToday: Bool
 
     private var topics: [String] {
         paper.track.split(separator: ",")
@@ -207,46 +260,63 @@ private struct PaperRowView: View {
         metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr))
     }
 
+    private var isTodayRecommended: Bool {
+        guard let recommendedAt = paper.recommendedAt else { return false }
+        return Calendar.current.isDateInToday(recommendedAt)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .top) {
+        HStack(spacing: 0) {
+            // Today recommendation left accent bar
+            if isDailyRecommendation && isTodayRecommended {
+                Rectangle()
+                    .fill(Color.accentColor)
+                    .frame(width: 3)
+                    .padding(.vertical, 6)
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                // Title row (full width, up to 2 lines)
                 Text(paper.title)
-                    .font(.headline)
+                    .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
                     .foregroundColor(.primary)
 
-                Spacer()
+                // Meta row: Score → Venue → Date → Topics
+                HStack(spacing: 6) {
+                    ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
 
-                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
-            }
+                    PaperTagView(title: paper.venueAbbr, color: venueColor)
 
-            HStack {
-                PaperTagView(title: paper.venueAbbr, color: venueColor)
+                    Text("•")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
 
-                Text("•")
-                    .foregroundColor(.secondary)
+                    Text(paper.publicationDate)
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
 
-                Text(paper.publicationDate)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-
-                Spacer()
-
-                HStack(spacing: 4) {
-                    ForEach(topics, id: \.self) { topic in
-                        PaperTagView(title: topic, color: metadata.topicColor(topic))
+                    HStack(spacing: 4) {
+                        ForEach(topics.prefix(3), id: \.self) { topic in
+                            PaperTagView(title: topic, color: metadata.topicColor(topic))
+                        }
                     }
+
+                    Spacer()
+                }
+
+                // Divider after last today's recommendation
+                if isLastToday {
+                    Divider()
+                        .padding(.top, 4)
+                        .padding(.bottom, 1)
                 }
             }
+            .padding(.leading, isDailyRecommendation && isTodayRecommended ? 10 : 14)
+            .padding(.trailing, 12)
+            .padding(.vertical, 9)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, isDailyRecommendation ? 8 : 0)
-        .background {
-            if isDailyRecommendation {
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(Color.accentColor.opacity(0.06))
-            }
-        }
+        .contentShape(Rectangle())
     }
 }
 
@@ -257,10 +327,43 @@ private struct PaperTagView: View {
     var body: some View {
         Text(title)
             .font(.system(size: 9, weight: .bold))
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
             .background(color.opacity(0.12))
             .foregroundStyle(color)
-            .cornerRadius(3)
+            .cornerRadius(4)
+    }
+}
+
+// MARK: - Empty State
+
+private struct EmptyPaperListView: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            Spacer()
+
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.secondary.opacity(0.5), .accentColor.opacity(0.3)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Text("No papers here")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.primary.opacity(0.8))
+
+            Text("Press ⌘R to fetch papers or adjust your filters")
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.textBackgroundColor).opacity(0.92))
     }
 }
