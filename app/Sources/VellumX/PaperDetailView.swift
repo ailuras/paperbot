@@ -158,7 +158,9 @@ struct PaperDetailView: View {
             }
 
             if !doiDisplay.isEmpty {
-                DetailDOILine(value: doiDisplay, url: doiUrl)
+                DetailExternalLinkLine(label: "DOI", value: doiDisplay, url: doiUrl)
+            } else if !landingPageDisplay.isEmpty {
+                DetailExternalLinkLine(label: "LINK", value: landingPageDisplay, url: landingPageUrl)
             }
         }
         .padding(.horizontal, 10)
@@ -179,7 +181,20 @@ struct PaperDetailView: View {
 
     private var doiUrl: URL? {
         guard let doi = paper.doi, !doi.isEmpty else { return nil }
-        return URL(string: doi)
+        if let url = URL(string: doi), url.scheme != nil {
+            return url
+        }
+        return URL(string: "https://doi.org/\(doi)")
+    }
+
+    private var landingPageDisplay: String {
+        let value = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "" : value
+    }
+
+    private var landingPageUrl: URL? {
+        guard !landingPageDisplay.isEmpty else { return nil }
+        return URL(string: landingPageDisplay)
     }
 
     private var venueDisplayName: String {
@@ -341,6 +356,7 @@ struct PaperDetailView: View {
                     .buttonStyle(.plain)
                 } else if !paper.abstract.isEmpty {
                     Button {
+                        showingTranslation = true
                         onTranslate(paper)
                     } label: {
                         HStack(spacing: 4) {
@@ -373,6 +389,9 @@ struct PaperDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+        .onChange(of: paper.id) { _, _ in
+            showingTranslation = false
+        }
     }
 
     // MARK: - Notes Section
@@ -679,7 +698,8 @@ private struct DetailVenueLine: View {
     }
 }
 
-private struct DetailDOILine: View {
+private struct DetailExternalLinkLine: View {
+    let label: String
     let value: String
     let url: URL?
 
@@ -690,7 +710,7 @@ private struct DetailDOILine: View {
                 .foregroundColor(.secondary)
                 .padding(.top, 1)
 
-            Text("DOI")
+            Text(label)
                 .font(.system(size: 10, weight: .bold))
                 .foregroundColor(.secondary.opacity(0.75))
 
