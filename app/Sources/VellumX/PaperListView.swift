@@ -14,6 +14,7 @@ struct PaperListView: View {
     let highlightsDailyRecommendations: Bool
     let onFetch: () -> Void
     let onRecommend: () -> Void
+    let onCancelRecommendation: (Paper) -> Void
     let onSelectPaper: (String) -> Void
 
     @Binding var sortByScore: Bool
@@ -126,6 +127,13 @@ struct PaperListView: View {
                     isDailyRecommendation: highlightsDailyRecommendations
                 )
                 .tag(paper.id)
+                .contextMenu {
+                    if highlightsDailyRecommendations {
+                        Button(L10n.t(.cancelRecommendation)) {
+                            onCancelRecommendation(paper)
+                        }
+                    }
+                }
             }
         }
         .listStyle(.inset)

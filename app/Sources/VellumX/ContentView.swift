@@ -99,6 +99,7 @@ struct ContentView: View {
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended,
                 onFetch: fetchPapers,
                 onRecommend: recommendPapers,
+                onCancelRecommendation: cancelRecommendation,
                 onSelectPaper: { lastViewedPaperId = $0 },
                 sortByScore: $sortByScore
             )
@@ -287,6 +288,11 @@ struct ContentView: View {
 
     private func paperMatches(sidebarItem: SidebarItem, status: PaperStatus) -> Bool {
         statusListItem(sidebarItem) == status
+    }
+
+    private func cancelRecommendation(_ paper: Paper) {
+        store.setPaperRecommended(id: paper.id, isRecommended: false)
+        applyFilters()
     }
 
     private func fetchPapers() {

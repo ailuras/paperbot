@@ -151,6 +151,7 @@ struct MenuBarContentView: View {
                             onStar: { setStatus(paper, .starred) },
                             onRead: { setStatus(paper, .read) },
                             onSkip: { setStatus(paper, .skip) },
+                            onCancelRecommendation: { cancelRecommendation(paper) },
                             onOpenPdf: { openPdf(for: paper) },
                             onOpenInApp: { openMainWindow(paperId: paper.id) }
                         )
@@ -211,6 +212,12 @@ struct MenuBarContentView: View {
         }
     }
 
+    private func cancelRecommendation(_ paper: Paper) {
+        withAnimation(.easeOut(duration: 0.18)) {
+            store.setPaperRecommended(id: paper.id, isRecommended: false)
+        }
+    }
+
     private func runRecommendEngine() {
         let cfg = ConfigManager.shared.effectiveConfig
         let engine = RecommendEngine(config: cfg)
@@ -259,6 +266,7 @@ private struct MenuBarPaperRow: View {
     let onStar: () -> Void
     let onRead: () -> Void
     let onSkip: () -> Void
+    let onCancelRecommendation: () -> Void
     let onOpenPdf: () -> Void
     let onOpenInApp: () -> Void
 
@@ -308,6 +316,7 @@ private struct MenuBarPaperRow: View {
         .onHover { isHovering = $0 }
         .contextMenu {
             Button(L10n.t(.openInVellumX), action: onOpenInApp)
+            Button(L10n.t(.cancelRecommendation), action: onCancelRecommendation)
             Divider()
             Button(L10n.t(.markSkip), action: onSkip)
         }
