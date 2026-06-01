@@ -1,13 +1,13 @@
 import Foundation
 
 class VenueScorer {
-    let config: AppConfig?
+    let config: AppConfig
 
     // Pre-built caches for O(1) exact-match and O(k) substring-match lookups.
     private let exactMatches: [String: (tier: Int, abbr: String)]
     private let substringMatches: [(phrase: String, tier: Int, abbr: String)]
 
-    init(config: AppConfig?, venues: [VenuePref] = []) {
+    init(config: AppConfig, venues: [VenuePref] = []) {
         self.config = config
 
         var exact: [String: (tier: Int, abbr: String)] = [:]
@@ -36,10 +36,10 @@ class VenueScorer {
         self.substringMatches = substring
     }
 
-    /// Single source of truth for venue matching, shared by `getTier` and
-    /// `computeVenueAbbr` so the tier and abbreviation always come from the same
-    /// rule. Priority: exact match, then the longest matching substring phrase
-    /// (most specific), breaking ties by the stronger tier (lower number).
+    /// Single source of truth for venue matching, used by `evaluate` so the
+    /// tier and abbreviation always come from the same rule. Priority: exact
+    /// match, then the longest matching substring phrase (most specific),
+    /// breaking ties by the stronger tier (lower number).
     private func matchVenue(_ venueLower: String) -> (tier: Int, abbr: String)? {
         if let match = exactMatches[venueLower] {
             return (match.tier, match.abbr)
@@ -74,19 +74,18 @@ class VenueScorer {
         }
 
         var base = 0.0
-        if let config, let tierConfig = config.scoring.tiers[String(tier)] {
+        if let tierConfig = config.scoring.tiers[String(tier)] {
             base = Double(tierConfig.points)
         }
         return (tier, abbr, base + citation)
     }
 
     private func isBlacklisted(_ venueLower: String) -> Bool {
-        guard let blacklist = config?.filters?.venue_blacklist else { return false }
+        guard let blacklist = config.filters?.venue_blacklist else { return false }
         return blacklist.contains { venueLower.contains($0.lowercased()) }
     }
 
     private func citationScore(citations: Int) -> Double {
-        guard let config = config else { return 0.0 }
         var remaining = Double(citations)
         var previousLimit = 0.0
         var score = 0.0
