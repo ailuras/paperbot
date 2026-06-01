@@ -733,4 +733,86 @@ class PaperStore: ObservableObject {
             sqlite3_finalize(stmt)
         }
     }
+
+    // MARK: - Collections
+
+    var allCollections: [PaperCollection] {
+        let sql = "SELECT id, name, color FROM collections ORDER BY lower(name), name"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+
+        var rows: [PaperCollection] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = String(cString: sqlite3_column_text(stmt, 0))
+            let name = String(cString: sqlite3_column_text(stmt, 1))
+            let color = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
+            rows.append(PaperCollection(id: id, name: name, color: color))
+        }
+        return rows
+    }
+
+    func createCollection(name: String, color: String? = nil) -> PaperCollection? {
+        let id = UUID().uuidString
+        let sql = "INSERT INTO collections (id, name, color) VALUES (?, ?, ?)"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, name, -1, SQLITE_TRANSIENT)
+        if let color {
+            sqlite3_bind_text(stmt, 3, color, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, 3)
+        }
+        guard sqlite3_step(stmt) == SQLITE_DONE else { return nil }
+        paperVersion += 1
+        return PaperCollection(id: id, name: name, color: color)
+    }
+
+    func deleteCollection(id: String) {
+        let sql = "DELETE FROM collections WHERE id = ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) == SQLITE_DONE {
+                loadPapers()
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    func addPaperToCollection(paperId: String, collectionId: String) {
+        let sql = "INSERT OR IGNORE INTO collection_papers (collection_id, paper_id) VALUES (?, ?)"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, collectionId, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, paperId, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) == SQLITE_DONE {
+                if let idx = papers.firstIndex(where: { $0.id == paperId }),
+                   !papers[idx].collections.contains(collectionId) {
+                    papers[idx].collections.append(collectionId)
+                    papers[idx].collections.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+                }
+                paperVersion += 1
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    func removePaperFromCollection(paperId: String, collectionId: String) {
+        let sql = "DELETE FROM collection_papers WHERE collection_id = ? AND paper_id = ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, collectionId, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, paperId, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) == SQLITE_DONE {
+                if let idx = papers.firstIndex(where: { $0.id == paperId }) {
+                    papers[idx].collections.removeAll { $0 == collectionId }
+                }
+                paperVersion += 1
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
 }
