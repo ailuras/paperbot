@@ -57,41 +57,6 @@ struct PaperDetailView: View {
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Meta row: Venue | Date | Track | Score
-            HStack(spacing: 8) {
-                Text(paper.venueAbbr)
-                    .font(.caption.bold())
-                    .foregroundColor(metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)).opacity(0.12))
-                    .cornerRadius(4)
-
-                if !paper.publicationDate.isEmpty {
-                    Text(paper.publicationDate)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-
-                Spacer()
-
-                if !paper.track.isEmpty {
-                    HStack(spacing: 4) {
-                        ForEach(topics, id: \.self) { topic in
-                            Text(topic)
-                                .font(.system(size: 10, weight: .bold))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(metadata.topicColor(topic).opacity(0.12))
-                                .foregroundColor(metadata.topicColor(topic))
-                                .cornerRadius(4)
-                        }
-                    }
-                }
-
-                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
-            }
-
             // Title
             Text(paper.title)
                 .font(.system(size: 22, weight: .bold, design: .serif))
@@ -105,9 +70,62 @@ struct PaperDetailView: View {
                     .foregroundColor(.secondary)
                     .lineSpacing(2)
             }
+
+            metaCard
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+    }
+
+    private var metaCard: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                if !paper.venueAbbr.isEmpty {
+                    DetailTag(
+                        title: paper.venueAbbr,
+                        color: metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)),
+                        fontSize: 11
+                    )
+                    .help(venueDisplayName.isEmpty ? paper.venueAbbr : venueDisplayName)
+                }
+
+                if !paper.publicationDate.isEmpty {
+                    DetailInlineMeta(icon: "calendar", value: paper.publicationDate)
+                }
+
+                if !topics.isEmpty {
+                    ForEach(topics, id: \.self) { topic in
+                        DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+            }
+
+            if !venueDisplayName.isEmpty {
+                DetailVenueLine(value: venueDisplayName)
+                    .help(venueDisplayName)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.secondary.opacity(0.06))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
+        )
+    }
+
+    private var venueDisplayName: String {
+        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty { return venue }
+
+        let abbr = paper.venueAbbr.trimmingCharacters(in: .whitespacesAndNewlines)
+        return abbr == "Others" ? "" : abbr
     }
 
     private var topics: [String] {
@@ -310,6 +328,68 @@ private struct SectionHeader: View {
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.primary)
         }
+    }
+}
+
+private struct DetailTag: View {
+    let title: String
+    let color: Color
+    let fontSize: CGFloat
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: fontSize, weight: .bold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.12))
+            .foregroundColor(color)
+            .cornerRadius(4)
+            .lineLimit(1)
+    }
+}
+
+private struct DetailInlineMeta: View {
+    let icon: String
+    let value: String
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .semibold))
+            Text(value)
+                .font(.caption)
+        }
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 7)
+        .padding(.vertical, 3)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(4)
+    }
+}
+
+private struct DetailVenueLine: View {
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "building.columns")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.top, 1)
+
+            Text("VENUE")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.75))
+
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.primary.opacity(0.8))
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .textSelection(.enabled)
+                .help(value)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
