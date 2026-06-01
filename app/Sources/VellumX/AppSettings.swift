@@ -37,7 +37,7 @@ struct VenuePref: Codable, Identifiable, Equatable {
 /// `MetadataStore` in the database; rarely-changed values (citation curve, base
 /// URLs) come from `AppConfig.builtin`.
 ///
-    /// The API key is sensitive and stored in the Keychain, not here.
+/// The API key is sensitive and stored in the Keychain, not here.
 @MainActor
 @Observable
 final class AppSettings: ObservableObject {
@@ -52,13 +52,20 @@ final class AppSettings: ObservableObject {
 
     // ── API (Translation) ────────────────────────────────────────────────
     var translateEnabled: Bool { didSet { save() } }
-    var apiProvider: TranslationProvider { didSet { save() } }
+    var apiProvider: TranslationProvider {
+        didSet {
+            save()
+            if oldValue != apiProvider {
+                apiKey = Keychain.get(Self.apiKeyAccount(for: apiProvider)) ?? ""
+            }
+        }
+    }
     var apiBaseURL: String { didSet { save() } }
     var apiModel: String { didSet { save() } }
     var targetLanguage: String { didSet { save() } }
     /// Bridges the Keychain-stored key into SwiftUI. Reads/writes the Keychain.
     var apiKey: String {
-        didSet { Keychain.set(apiKey, for: Self.apiKeyAccount) }
+        didSet { Keychain.set(apiKey, for: Self.apiKeyAccount(for: apiProvider)) }
     }
 
     // ── Recommendation knobs ─────────────────────────────────────────────
@@ -78,7 +85,16 @@ final class AppSettings: ObservableObject {
     private(set) var configVersion: Int = 0
 
     private let url: URL
-    private static let apiKeyAccount = "deepseek-api-key"
+    private static func apiKeyAccount(for provider: TranslationProvider) -> String {
+        switch provider {
+        case .deepseek:
+            return "deepseek-api-key"
+        case .openai:
+            return "openai-api-key"
+        case .anthropic:
+            return "anthropic-api-key"
+        }
+    }
 
     /// On-disk location of settings.json (the editable developer config).
     var settingsFileURL: URL { url }
@@ -116,13 +132,15 @@ final class AppSettings: ObservableObject {
             return value
         }
 
+        let selectedProvider = stored?.apiProvider ?? d.translate.provider
+
         storageDirectory   = stored?.storageDirectory ?? ""
         menuBarEnabled     = stored?.menuBarEnabled ?? true
         language           = stored?.language ?? "en"
         translateEnabled   = stored?.translateEnabled ?? d.translate.enabled
-        apiProvider        = stored?.apiProvider ?? d.translate.provider
-        apiBaseURL         = nonEmpty(stored?.apiBaseURL, fallback: d.translate.base_url)
-        apiModel           = nonEmpty(stored?.apiModel, fallback: d.translate.model)
+        apiProvider        = selectedProvider
+        apiBaseURL         = nonEmpty(stored?.apiBaseURL, fallback: nonEmpty(stored?.deepSeekBaseURL, fallback: d.translate.base_url))
+        apiModel           = nonEmpty(stored?.apiModel, fallback: nonEmpty(stored?.deepSeekModel, fallback: d.translate.model))
         targetLanguage     = nonEmpty(stored?.targetLanguage, fallback: d.translate.target_language)
         dailyCount         = stored?.dailyCount ?? d.recommendation.daily_count
         qualitySlots       = stored?.qualitySlots ?? d.recommendation.quality_slots
@@ -133,7 +151,7 @@ final class AppSettings: ObservableObject {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        apiKey             = Keychain.get(Self.apiKeyAccount) ?? ""
+        apiKey             = Keychain.get(Self.apiKeyAccount(for: selectedProvider)) ?? ""
 
         // settings.json is the editable developer config: materialize it with
         // defaults the first time so every knob is visible and hand-editable.
@@ -150,6 +168,8 @@ final class AppSettings: ObservableObject {
         var apiProvider: TranslationProvider?
         var apiBaseURL: String?
         var apiModel: String?
+        var deepSeekBaseURL: String?
+        var deepSeekModel: String?
         var targetLanguage: String?
         var dailyCount: Int?
         var qualitySlots: Int?
@@ -160,6 +180,15 @@ final class AppSettings: ObservableObject {
         var defaultDays: Int?
         var defaultMaxResults: Int?
         var topicFilter: String?
+
+        enum CodingKeys: String, CodingKey {
+            case storageDirectory, menuBarEnabled, language, translateEnabled
+            case apiProvider, apiBaseURL, apiModel
+            case deepSeekBaseURL, deepSeekModel
+            case targetLanguage, dailyCount, qualitySlots, highScoreThreshold
+            case recentDays, openAlexMailto, perPage, defaultDays
+            case defaultMaxResults, topicFilter
+        }
     }
 
     private func save() {
@@ -172,6 +201,8 @@ final class AppSettings: ObservableObject {
             apiProvider: apiProvider,
             apiBaseURL: apiBaseURL,
             apiModel: apiModel,
+            deepSeekBaseURL: nil,
+            deepSeekModel: nil,
             targetLanguage: targetLanguage,
             dailyCount: dailyCount,
             qualitySlots: qualitySlots,
