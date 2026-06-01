@@ -339,8 +339,19 @@ class PaperStore: ObservableObject {
             let checkQuery = "SELECT 1 FROM papers WHERE id = ?"
             if sqlite3_prepare_v2(db, checkQuery, -1, &existsStmt, nil) == SQLITE_OK {
                 sqlite3_bind_text(existsStmt, 1, paper.id, -1, SQLITE_TRANSIENT)
-                let exists = sqlite3_step(existsStmt) == SQLITE_ROW
+                var exists = sqlite3_step(existsStmt) == SQLITE_ROW
                 sqlite3_finalize(existsStmt)
+
+                // Also check by DOI to avoid duplicate preprint vs. published versions
+                if !exists, let doi = paper.doi, !doi.isEmpty {
+                    let doiQuery = "SELECT 1 FROM papers WHERE doi = ?"
+                    var doiStmt: OpaquePointer?
+                    if sqlite3_prepare_v2(db, doiQuery, -1, &doiStmt, nil) == SQLITE_OK {
+                        sqlite3_bind_text(doiStmt, 1, doi, -1, SQLITE_TRANSIENT)
+                        exists = sqlite3_step(doiStmt) == SQLITE_ROW
+                        sqlite3_finalize(doiStmt)
+                    }
+                }
 
                 var authorsJson = ""
                 if let authorsData = try? JSONEncoder().encode(paper.authors) {
