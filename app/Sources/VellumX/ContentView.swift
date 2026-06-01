@@ -445,8 +445,8 @@ struct ScoreBadgeView: View {
     let color: Color
 
     var body: some View {
-        Text(String(format: "%.1f", score))
-            .font(.caption2.bold())
+        Text(String(format: "%.0f", score))
+            .font(.system(size: 9, weight: .bold))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(color.opacity(0.15))
