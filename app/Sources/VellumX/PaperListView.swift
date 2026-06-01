@@ -300,18 +300,13 @@ private struct PaperRowView: View {
             .padding(.leading, isDailyRecommendation && isTodayRecommended ? 4 : 8)
             .padding(.trailing, 12)
             .padding(.vertical, 9)
-
-            // Divider after last today's recommendation
-            if isLastToday {
-                VStack {
-                    Spacer()
-                    Divider()
-                        .padding(.top, 4)
-                        .padding(.bottom, 1)
-                }
-            }
         }
         .contentShape(Rectangle())
+        .overlay(alignment: .bottom) {
+            if isLastToday {
+                Divider()
+            }
+        }
     }
 }
 
