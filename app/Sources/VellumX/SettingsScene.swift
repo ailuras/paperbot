@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The standard macOS Settings window (⌘,), organized into tabs:
-/// General (storage, menu bar, language), API (DeepSeek), Papers
+/// General (storage, menu bar, language), API (translation), Papers
 /// (recommendation + OpenAlex params), Rules (tracks, venues, tiers,
 /// citation scoring – all DB-persisted), and Config File.
 struct SettingsRootView: View {

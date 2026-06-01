@@ -13,7 +13,7 @@ enum L10n {
         case changeStorageTitle, migrateDB, switchOnly, cancel, migratePrompt
         case choose, storageUpdated
         // API
-        case deepseekSection, enableTranslation, apiKeyHint, model, targetLanguage
+        case translationSection, enableTranslation, apiKeyHint, model, targetLanguage, provider
         case testConnection, testingConnection, connectionOK, connectionFailed, connectionUntested
         case refreshModels, loadingModels, modelsLoaded, modelsUnavailable
         case apiConnection, modelSelection, apiKey, baseURL
@@ -72,12 +72,13 @@ enum L10n {
         case .choose:             return ("Choose", "选择")
         case .storageUpdated:     return ("Storage location updated:", "已更新存储位置：")
 
-        case .deepseekSection:    return ("DeepSeek Translation", "DeepSeek 翻译")
+        case .translationSection: return ("Translation", "翻译")
         case .enableTranslation:  return ("Enable abstract translation", "启用摘要翻译")
         case .apiKeyHint:         return ("The API key is stored securely in the system Keychain, not in any config file.",
                                           "API Key 安全存储在系统钥匙串中，不写入配置文件。")
         case .model:              return ("Model", "模型")
         case .targetLanguage:     return ("Target language", "目标语言")
+        case .provider:           return ("Provider", "提供商")
         case .testConnection:     return ("Test Connection", "测试连接")
         case .testingConnection:  return ("Testing connection…", "正在测试连接…")
         case .connectionOK:       return ("Connection OK", "连接正常")

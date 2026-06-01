@@ -22,15 +22,29 @@ struct APISettingsTab: View {
 
     var body: some View {
         Form {
-            Section(L10n.t(.deepseekSection)) {
+            Section(L10n.t(.translationSection)) {
                 Toggle(L10n.t(.enableTranslation), isOn: $settings.translateEnabled)
                 TextField(L10n.t(.targetLanguage), text: $settings.targetLanguage)
             }
 
             Section {
+                LabeledContent(L10n.t(.provider)) {
+                    Picker("", selection: $settings.apiProvider) {
+                        ForEach(TranslationProvider.allCases, id: \.self) { provider in
+                            Text(provider.displayName).tag(provider)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .onChange(of: settings.apiProvider) { _, newValue in
+                        applyPreset(for: newValue)
+                        connectionStatus = .untested
+                    }
+                }
+
                 LabeledContent(L10n.t(.apiKey)) {
                     HStack(spacing: 8) {
-                        SecureField("", text: $settings.deepSeekAPIKey)
+                        SecureField("", text: $settings.apiKey)
                             .textFieldStyle(.roundedBorder)
                             .onSubmit { loadModels() }
 
@@ -49,7 +63,7 @@ struct APISettingsTab: View {
                 }
 
                 LabeledContent(L10n.t(.baseURL)) {
-                    TextField("", text: $settings.deepSeekBaseURL)
+                    TextField("", text: $settings.apiBaseURL)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { loadModels() }
                 }
@@ -72,10 +86,10 @@ struct APISettingsTab: View {
             Section(L10n.t(.modelSelection)) {
                 LabeledContent(L10n.t(.model)) {
                     HStack(spacing: 8) {
-                        Picker("", selection: $settings.deepSeekModel) {
+                        Picker("", selection: $settings.apiModel) {
                             if availableModels.isEmpty {
-                                Text(settings.deepSeekModel.isEmpty ? L10n.t(.modelsUnavailable) : settings.deepSeekModel)
-                                    .tag(settings.deepSeekModel)
+                                Text(settings.apiModel.isEmpty ? L10n.t(.modelsUnavailable) : settings.apiModel)
+                                    .tag(settings.apiModel)
                             } else {
                                 ForEach(availableModels, id: \.self) { model in
                                     Text(model).tag(model)
@@ -112,14 +126,14 @@ struct APISettingsTab: View {
             isPulseAnimating = true
             if !availableModels.isEmpty {
                 connectionStatus = .connected(modelCount: availableModels.count)
-            } else if !settings.deepSeekAPIKey.isEmpty {
+            } else if !settings.apiKey.isEmpty {
                 loadModels()
             }
         }
-        .onChange(of: settings.deepSeekAPIKey) { _, _ in
+        .onChange(of: settings.apiKey) { _, _ in
             connectionStatus = .untested
         }
-        .onChange(of: settings.deepSeekBaseURL) { _, _ in
+        .onChange(of: settings.apiBaseURL) { _, _ in
             connectionStatus = .untested
         }
     }
@@ -176,6 +190,13 @@ struct APISettingsTab: View {
         .foregroundStyle(isError ? .red : successColor)
     }
 
+    private func applyPreset(for provider: TranslationProvider) {
+        settings.apiBaseURL = provider.defaultBaseURL
+        settings.apiModel = provider.defaultModel
+        availableModels = []
+        connectionStatus = .untested
+    }
+
     private func testConnection() {
         isTestingConnection = true
         connectionStatus = .testing
@@ -223,14 +244,14 @@ struct APISettingsTab: View {
 
     private func fetchModels() async throws -> [String] {
         let config = ConfigManager.shared.effectiveConfig
-        let translator = DeepSeekTranslator(config: config, apiKey: settings.deepSeekAPIKey)
-        return try await translator.fetchModels()
+        let service = TranslationService(config: config, apiKey: settings.apiKey)
+        return try await service.fetchModels()
     }
 
     private func apply(models: [String]) {
         availableModels = models
-        if !models.isEmpty, !models.contains(settings.deepSeekModel) {
-            settings.deepSeekModel = models[0]
+        if !models.isEmpty, !models.contains(settings.apiModel) {
+            settings.apiModel = models[0]
         }
     }
 }
