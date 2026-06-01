@@ -144,6 +144,13 @@ class PaperStore: ObservableObject {
             updated_at TEXT DEFAULT (datetime('now'))
         );
 
+        CREATE TABLE IF NOT EXISTS paper_tags (
+            paper_id TEXT NOT NULL,
+            tag TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (paper_id, tag)
+        );
+
         CREATE TABLE IF NOT EXISTS paper_translations (
             paper_id TEXT PRIMARY KEY,
             abstract_zh TEXT,
@@ -192,6 +199,15 @@ class PaperStore: ObservableObject {
                COALESCE(pr.is_active, 0) as is_recommended,
                pr.recommended_at,
                COALESCE(pr.recommendation_reason, '') as recommendation_reason,
+               COALESCE(NULLIF((
+                   SELECT group_concat(tag, ', ')
+                   FROM (
+                       SELECT tag
+                       FROM paper_tags
+                       WHERE paper_id = p.id
+                       ORDER BY lower(tag), tag
+                   )
+               ), ''), '') as tags,
                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
         FROM papers p
         LEFT JOIN paper_cache pc ON p.id = pc.paper_id
@@ -247,8 +263,9 @@ class PaperStore: ObservableObject {
             let recommendedAtRaw = sqlite3_column_text(stmt, 17).map { String(cString: $0) }
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
             let recommendationReason = String(cString: sqlite3_column_text(stmt, 18))
-            let note = String(cString: sqlite3_column_text(stmt, 19))
-            let abstractZh = String(cString: sqlite3_column_text(stmt, 20))
+            let tags = Self.splitTags(String(cString: sqlite3_column_text(stmt, 19)))
+            let note = String(cString: sqlite3_column_text(stmt, 20))
+            let abstractZh = String(cString: sqlite3_column_text(stmt, 21))
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -276,6 +293,7 @@ class PaperStore: ObservableObject {
                 isRecommended: isRecommended,
                 recommendedAt: recommendedAt,
                 recommendationReason: recommendationReason,
+                tags: tags,
                 note: note,
                 abstractZh: abstractZh
             )
@@ -493,6 +511,21 @@ class PaperStore: ObservableObject {
             .filter { !$0.isEmpty }
     }
 
+    private static func splitTags(_ raw: String) -> [String] {
+        raw.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    static func normalizedTag(_ value: String) -> String? {
+        var tag = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        while tag.hasPrefix("#") {
+            tag.removeFirst()
+            tag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return tag.isEmpty ? nil : tag
+    }
+
     private static func parseSQLiteDate(_ value: String) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -581,6 +614,45 @@ class PaperStore: ObservableObject {
             if sqlite3_step(stmt) == SQLITE_DONE {
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].note = note
+                }
+                paperVersion += 1
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    var allTags: [String] {
+        Array(Set(papers.flatMap(\.tags))).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    func addPaperTag(id: String, tag rawTag: String) {
+        guard let tag = Self.normalizedTag(rawTag) else { return }
+        let sql = "INSERT OR IGNORE INTO paper_tags (paper_id, tag) VALUES (?, ?)"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, tag, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) == SQLITE_DONE {
+                if let idx = papers.firstIndex(where: { $0.id == id }), !papers[idx].tags.contains(tag) {
+                    papers[idx].tags.append(tag)
+                    papers[idx].tags.sort { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+                }
+                paperVersion += 1
+            }
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    func removePaperTag(id: String, tag rawTag: String) {
+        guard let tag = Self.normalizedTag(rawTag) else { return }
+        let sql = "DELETE FROM paper_tags WHERE paper_id = ? AND tag = ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_text(stmt, 2, tag, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) == SQLITE_DONE {
+                if let idx = papers.firstIndex(where: { $0.id == id }) {
+                    papers[idx].tags.removeAll { $0 == tag }
                 }
                 paperVersion += 1
             }
