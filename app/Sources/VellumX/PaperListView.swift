@@ -198,6 +198,7 @@ struct PaperListView: View {
                         }
                     }
                     .disabled(isFetching || isRecommending)
+                    .keyboardShortcut("r", modifiers: .command)
                     .accessibilityLabel("Fetch new papers")
                     .help("Fetch new papers from OpenAlex")
 
@@ -211,6 +212,7 @@ struct PaperListView: View {
                         }
                     }
                     .disabled(isFetching || isRecommending)
+                    .keyboardShortcut("t", modifiers: .command)
                     .accessibilityLabel("Generate recommendations")
                     .help("Generate daily paper recommendations")
 
