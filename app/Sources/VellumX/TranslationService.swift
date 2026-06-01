@@ -38,13 +38,13 @@ class TranslationService {
         }
 
         if provider == .anthropic {
-            // Anthropic has no public models list endpoint; return the default model.
-            return [provider.defaultModel]
+            let model = config.translate.model.trimmingCharacters(in: .whitespacesAndNewlines)
+            let selectedModel = model.isEmpty ? provider.defaultModel : model
+            try await validateAnthropicConnection(model: selectedModel)
+            return [selectedModel]
         }
 
-        let baseUrl = config.translate.base_url
-        let trimmed = baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let url = URL(string: "\(trimmed)\(provider.modelsEndpoint)")!
+        let url = try endpointURL(path: provider.modelsEndpoint)
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -52,10 +52,7 @@ class TranslationService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let message = body?.isEmpty == false ? "API error \(status): \(body!)" : "API error \(status)"
-            throw TranslationError.apiError(message)
+            throw TranslationError.apiError(apiErrorMessage(data: data, response: response))
         }
 
         struct OpenAIModelsResponse: Decodable {
@@ -77,9 +74,7 @@ class TranslationService {
             throw TranslationError.noAPIKey
         }
 
-        let baseUrl = config.translate.base_url
-        let trimmed = baseUrl.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let url = URL(string: "\(trimmed)\(provider.chatEndpoint)")!
+        let url = try endpointURL(path: provider.chatEndpoint)
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -102,10 +97,7 @@ class TranslationService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let message = body?.isEmpty == false ? "API error \(status): \(body!)" : "API error \(status)"
-            throw TranslationError.apiError(message)
+            throw TranslationError.apiError(apiErrorMessage(data: data, response: response))
         }
 
         switch provider {
@@ -114,6 +106,49 @@ class TranslationService {
         case .anthropic:
             return try parseAnthropicChatResponse(data: data)
         }
+    }
+
+    private func endpointURL(path: String) throws -> URL {
+        let trimmed = config.translate.base_url
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard !trimmed.isEmpty,
+              let base = URL(string: trimmed),
+              let scheme = base.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              base.host != nil,
+              let url = URL(string: "\(trimmed)\(path)") else {
+            throw TranslationError.invalidBaseURL(config.translate.base_url)
+        }
+        return url
+    }
+
+    private func apiErrorMessage(data: Data, response: URLResponse) -> String {
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        let body = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return body?.isEmpty == false ? "API error \(status): \(body!)" : "API error \(status)"
+    }
+
+    private func validateAnthropicConnection(model: String) async throws {
+        let provider = TranslationProvider.anthropic
+        let url = try endpointURL(path: provider.chatEndpoint)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: provider.authHeaderName)
+        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.httpBody = try buildAnthropicChatBody(
+            model: model,
+            system: "You are validating an API connection.",
+            user: "Reply with OK.",
+            maxTokens: 1
+        )
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+            throw TranslationError.apiError(apiErrorMessage(data: data, response: response))
+        }
+        _ = try parseAnthropicChatResponse(data: data)
     }
 
     // MARK: - OpenAI-compatible request/response
@@ -145,14 +180,14 @@ class TranslationService {
 
     // MARK: - Anthropic request/response
 
-    private func buildAnthropicChatBody(model: String, system: String, user: String) throws -> Data {
+    private func buildAnthropicChatBody(model: String, system: String, user: String, maxTokens: Int = 2048) throws -> Data {
         let payload: [String: Any] = [
             "model": model,
             "system": system,
             "messages": [
                 ["role": "user", "content": user]
             ],
-            "max_tokens": 2048,
+            "max_tokens": maxTokens,
             "temperature": 0.3
         ]
         return try JSONSerialization.data(withJSONObject: payload, options: [])
@@ -174,12 +209,15 @@ class TranslationService {
 
     enum TranslationError: Error, LocalizedError {
         case noAPIKey
+        case invalidBaseURL(String)
         case apiError(String)
 
         var errorDescription: String? {
             switch self {
             case .noAPIKey:
                 return "API key not set — add it in Settings ▸ API"
+            case .invalidBaseURL(let value):
+                return "Invalid API base URL: \(value)"
             case .apiError(let message):
                 return message
             }

@@ -45,8 +45,8 @@ enum TranslationProvider: String, Codable, CaseIterable {
     var defaultBaseURL: String {
         switch self {
         case .deepseek:  return "https://api.deepseek.com"
-        case .openai:    return "https://api.openai.com"
-        case .anthropic: return "https://api.anthropic.com"
+        case .openai:    return "https://api.openai.com/v1"
+        case .anthropic: return "https://api.anthropic.com/v1"
         }
     }
 
