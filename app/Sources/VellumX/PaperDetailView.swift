@@ -12,6 +12,11 @@ struct PaperDetailView: View {
 
     let onTranslate: (Paper) -> Void
     let onResolvePdf: (Paper) -> Void
+    let onStatusChange: (Paper, PaperStatus) -> Void
+    let canGoPrevious: Bool
+    let canGoNext: Bool
+    let onPrevious: () -> Void
+    let onNext: () -> Void
 
     @FocusState private var noteFocused: Bool
 
@@ -26,6 +31,10 @@ struct PaperDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                readerToolbar
+
+                Divider().padding(.horizontal, 20)
+
                 // MARK: Header Card
                 headerCard
 
@@ -135,6 +144,37 @@ struct PaperDetailView: View {
 
     // MARK: - Status Bar
 
+    private var readerToolbar: some View {
+        HStack(spacing: 10) {
+            navigationButton(systemName: "chevron.left", enabled: canGoPrevious, action: onPrevious)
+
+            statusBar
+
+            Spacer()
+
+            navigationButton(systemName: "chevron.right", enabled: canGoNext, action: onNext)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+    }
+
+    private func navigationButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .background(Color.secondary.opacity(enabled ? 0.10 : 0.04))
+                .foregroundColor(enabled ? .primary.opacity(0.75) : .secondary.opacity(0.45))
+                .cornerRadius(7)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
     private var statusBar: some View {
         HStack(spacing: 6) {
             ForEach(Array(statuses.enumerated()), id: \.offset) { index, item in
@@ -142,7 +182,7 @@ struct PaperDetailView: View {
                 let isActive = paper.status == status
 
                 Button {
-                    PaperStore.shared.setPaperStatus(id: paper.id, status: status)
+                    onStatusChange(paper, status)
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: icon)
@@ -173,8 +213,6 @@ struct PaperDetailView: View {
 
     private var actionBar: some View {
         VStack(alignment: .leading, spacing: 12) {
-            statusBar
-
             HStack(spacing: 10) {
                 DetailActionButton(
                     icon: "doc.text",

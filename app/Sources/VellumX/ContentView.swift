@@ -72,6 +72,11 @@ struct ContentView: View {
         return store.papers.first(where: { $0.id == id })
     }
 
+    private var selectedPaperIndex: Int? {
+        guard let id = lastViewedPaperId else { return nil }
+        return filteredPapers.firstIndex(where: { $0.id == id })
+    }
+
     var body: some View {
         NavigationSplitView {
             SidebarView(
@@ -105,7 +110,12 @@ struct ContentView: View {
                     isResolvingPdf: $isResolvingPdf,
                     statusMessage: $statusMessage,
                     onTranslate: translate,
-                    onResolvePdf: resolvePdf
+                    onResolvePdf: resolvePdf,
+                    onStatusChange: updatePaperStatus,
+                    canGoPrevious: selectedPaperIndex.map { $0 > 0 } ?? false,
+                    canGoNext: selectedPaperIndex.map { $0 < filteredPapers.count - 1 } ?? false,
+                    onPrevious: selectPreviousPaper,
+                    onNext: selectNextPaper
                 )
             } else {
                 EmptyDetailView()
@@ -223,7 +233,28 @@ struct ContentView: View {
         filteredPapers = result
     }
 
+    private func selectPaper(at index: Int) {
+        guard filteredPapers.indices.contains(index) else { return }
+        let id = filteredPapers[index].id
+        selectedPaperId = id
+        lastViewedPaperId = id
+    }
+
+    private func selectPreviousPaper() {
+        guard let index = selectedPaperIndex, index > 0 else { return }
+        selectPaper(at: index - 1)
+    }
+
+    private func selectNextPaper() {
+        guard let index = selectedPaperIndex, index < filteredPapers.count - 1 else { return }
+        selectPaper(at: index + 1)
+    }
+
     // MARK: - Actions
+
+    private func updatePaperStatus(_ paper: Paper, status: PaperStatus) {
+        PaperStore.shared.setPaperStatus(id: paper.id, status: status)
+    }
 
     private func fetchPapers() {
         let config = ConfigManager.shared.effectiveConfig
