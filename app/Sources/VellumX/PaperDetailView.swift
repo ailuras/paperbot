@@ -55,6 +55,9 @@ struct PaperDetailView: View {
 
                 // MARK: Notes
                 notesSection
+
+                // MARK: System Memo
+                systemMemoSection
             }
             .padding(.vertical, 16)
         }
@@ -321,6 +324,72 @@ struct PaperDetailView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
     }
+
+    private var systemMemoSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            SectionHeader(icon: "sparkles", title: "Memo")
+
+            VStack(alignment: .leading, spacing: 7) {
+                MemoLine(title: "Recommendation", value: recommendationMemo)
+                MemoLine(title: "Venue Rule", value: venueRuleMemo)
+                MemoLine(title: "Score", value: scoreMemo)
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.055))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
+            )
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+    }
+
+    private var recommendationMemo: String {
+        let reason = paper.recommendationReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !reason.isEmpty { return reason }
+        if paper.isRecommended { return "Active recommendation" }
+        return "Not currently recommended"
+    }
+
+    private var venueRuleMemo: String {
+        guard let rule = matchedVenueRule else {
+            let field = metadata.field(forAbbr: paper.venueAbbr)
+            return "No custom venue rule matched; field: \(field)"
+        }
+        let mode = rule.exact == true ? "exact" : "contains"
+        let field = metadata.field(forAbbr: rule.abbr)
+        return "\(rule.abbr) / Tier \(rule.tier) / \(field), \(mode) \"\(rule.phrase)\""
+    }
+
+    private var scoreMemo: String {
+        let citations = paper.citedByCount == 1 ? "1 citation" : "\(paper.citedByCount) citations"
+        return "Score \(String(format: "%.1f", paper.score)); tier \(paper.tier); \(citations)"
+    }
+
+    private var matchedVenueRule: VenuePref? {
+        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !venue.isEmpty else { return nil }
+
+        if let exact = metadata.venues
+            .filter({ $0.exact == true && !$0.phrase.isEmpty && $0.phrase.lowercased() == venue })
+            .sorted(by: { $0.tier < $1.tier })
+            .first {
+            return exact
+        }
+
+        return metadata.venues
+            .filter { rule in
+                rule.exact != true && !rule.phrase.isEmpty && venue.contains(rule.phrase.lowercased())
+            }
+            .sorted {
+                if $0.phrase.count == $1.phrase.count { return $0.tier < $1.tier }
+                return $0.phrase.count > $1.phrase.count
+            }
+            .first
+    }
 }
 
 // MARK: - Empty Detail View
@@ -364,6 +433,26 @@ private struct SectionHeader: View {
             Text(title)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.primary)
+        }
+    }
+}
+
+private struct MemoLine: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.78))
+                .frame(width: 104, alignment: .leading)
+
+            Text(value)
+                .font(.caption)
+                .foregroundColor(.primary.opacity(0.82))
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

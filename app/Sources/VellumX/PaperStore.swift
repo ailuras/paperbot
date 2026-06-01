@@ -131,7 +131,8 @@ class PaperStore: ObservableObject {
         CREATE TABLE IF NOT EXISTS paper_recommendations (
             paper_id TEXT PRIMARY KEY,
             recommended_at TEXT NOT NULL DEFAULT (datetime('now')),
-            is_active INTEGER NOT NULL DEFAULT 1
+            is_active INTEGER NOT NULL DEFAULT 1,
+            recommendation_reason TEXT
         );
 
         CREATE TABLE IF NOT EXISTS paper_notes (
@@ -166,6 +167,7 @@ class PaperStore: ObservableObject {
             print("Error creating tables: \(error)")
             sqlite3_free(errorMsg)
         }
+        sqlite3_exec(db, "ALTER TABLE paper_recommendations ADD COLUMN recommendation_reason TEXT", nil, nil, nil)
         migrateRecommendationsIfNeeded()
         migratePaperTopicsIfNeeded()
     }
@@ -187,6 +189,7 @@ class PaperStore: ObservableObject {
                COALESCE(ps.changed_at, datetime('now')) as changed_at,
                COALESCE(pr.is_active, 0) as is_recommended,
                pr.recommended_at,
+               COALESCE(pr.recommendation_reason, '') as recommendation_reason,
                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
         FROM papers p
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
@@ -240,8 +243,9 @@ class PaperStore: ObservableObject {
             let isRecommended = sqlite3_column_int(stmt, 16) == 1
             let recommendedAtRaw = sqlite3_column_text(stmt, 17).map { String(cString: $0) }
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
-            let note = String(cString: sqlite3_column_text(stmt, 18))
-            let abstractZh = String(cString: sqlite3_column_text(stmt, 19))
+            let recommendationReason = String(cString: sqlite3_column_text(stmt, 18))
+            let note = String(cString: sqlite3_column_text(stmt, 19))
+            let abstractZh = String(cString: sqlite3_column_text(stmt, 20))
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -268,6 +272,7 @@ class PaperStore: ObservableObject {
                 changedAt: changedAt,
                 isRecommended: isRecommended,
                 recommendedAt: recommendedAt,
+                recommendationReason: recommendationReason,
                 note: note,
                 abstractZh: abstractZh
             )
@@ -521,15 +526,16 @@ class PaperStore: ObservableObject {
         }
     }
 
-    func setPaperRecommended(id: String, isRecommended: Bool) {
+    func setPaperRecommended(id: String, isRecommended: Bool, reason: String = "") {
         let sql: String
         if isRecommended {
             sql = """
-            INSERT INTO paper_recommendations (paper_id, recommended_at, is_active)
-            VALUES (?, datetime('now'), 1)
+            INSERT INTO paper_recommendations (paper_id, recommended_at, is_active, recommendation_reason)
+            VALUES (?, datetime('now'), 1, ?)
             ON CONFLICT(paper_id) DO UPDATE SET
                 recommended_at = datetime('now'),
-                is_active = 1
+                is_active = 1,
+                recommendation_reason = excluded.recommendation_reason
             """
         } else {
             sql = """
@@ -543,11 +549,15 @@ class PaperStore: ObservableObject {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            if isRecommended {
+                sqlite3_bind_text(stmt, 2, reason, -1, SQLITE_TRANSIENT)
+            }
             if sqlite3_step(stmt) == SQLITE_DONE {
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].isRecommended = isRecommended
                     if isRecommended {
                         papers[idx].recommendedAt = Date()
+                        papers[idx].recommendationReason = reason
                     }
                 }
                 paperVersion += 1

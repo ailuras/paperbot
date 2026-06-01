@@ -329,7 +329,7 @@ struct ContentView: View {
                 store.setPaperRecommended(id: id, isRecommended: false)
             }
             for r in selected {
-                store.setPaperRecommended(id: r.paper.id, isRecommended: true)
+                store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
             }
             statusMessage = "Selected \(selected.count) recommendations for today!"
             isRecommending = false

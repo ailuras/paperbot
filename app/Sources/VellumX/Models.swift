@@ -57,6 +57,7 @@ final class Paper: Identifiable {
     var changedAt: Date
     var isRecommended: Bool
     var recommendedAt: Date?
+    var recommendationReason: String
     var note: String
     var abstractZh: String
 
@@ -70,6 +71,7 @@ final class Paper: Identifiable {
         score: Double = 0.0, tier: Int = 0,
         status: PaperStatus = .pending, changedAt: Date = Date(),
         isRecommended: Bool = false, recommendedAt: Date? = nil,
+        recommendationReason: String = "",
         note: String = "", abstractZh: String = ""
     ) {
         self.id = id
@@ -91,6 +93,7 @@ final class Paper: Identifiable {
         self.changedAt = changedAt
         self.isRecommended = isRecommended
         self.recommendedAt = recommendedAt
+        self.recommendationReason = recommendationReason
         self.note = note
         self.abstractZh = abstractZh
     }

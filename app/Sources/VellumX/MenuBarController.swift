@@ -226,7 +226,7 @@ struct MenuBarContentView: View {
             store.setPaperRecommended(id: id, isRecommended: false)
         }
         for r in selected {
-            store.setPaperRecommended(id: r.paper.id, isRecommended: true)
+            store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
         }
     }
 
