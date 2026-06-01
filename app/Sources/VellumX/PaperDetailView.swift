@@ -26,6 +26,7 @@ struct PaperDetailView: View {
     @State private var showAddTagPrompt = false
     @State private var newTagName = ""
     @State private var showingTranslation: Bool = false
+    @State private var lastPersistedNote: String = ""
 
     // Status configuration
     private let statuses: [(PaperStatus, String, Color)] = [
@@ -460,12 +461,24 @@ struct PaperDetailView: View {
             )
             .onChange(of: noteFocused) {
                 if !noteFocused {
-                    PaperStore.shared.setPaperNote(id: paper.id, note: paper.note)
+                    saveNoteIfChanged()
                 }
+            }
+            .onAppear {
+                lastPersistedNote = paper.note
+            }
+            .onDisappear {
+                saveNoteIfChanged()
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
+    }
+
+    private func saveNoteIfChanged() {
+        guard paper.note != lastPersistedNote else { return }
+        PaperStore.shared.setPaperNote(id: paper.id, note: paper.note)
+        lastPersistedNote = paper.note
     }
 
     private var systemMemoSection: some View {
