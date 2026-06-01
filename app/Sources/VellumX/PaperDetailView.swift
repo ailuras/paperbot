@@ -13,12 +13,16 @@ struct PaperDetailView: View {
     let onTranslate: (Paper) -> Void
     let onResolvePdf: (Paper) -> Void
     let onStatusChange: (Paper, PaperStatus) -> Void
+    let onAddTag: (Paper, String) -> Void
+    let onRemoveTag: (Paper, String) -> Void
     let canGoPrevious: Bool
     let canGoNext: Bool
     let onPrevious: () -> Void
     let onNext: () -> Void
 
     @FocusState private var noteFocused: Bool
+    @State private var showAddTagPrompt = false
+    @State private var newTagName = ""
 
     // Status configuration
     private let statuses: [(PaperStatus, String, Color)] = [
@@ -45,6 +49,11 @@ struct PaperDetailView: View {
 
                 Divider().padding(.horizontal, 20)
 
+                // MARK: Tags
+                tagSection
+
+                Divider().padding(.horizontal, 20)
+
                 // MARK: Abstract
                 abstractSection
 
@@ -62,6 +71,11 @@ struct PaperDetailView: View {
             .padding(.vertical, 16)
         }
         .background(Color(NSColor.textBackgroundColor))
+        .alert("Add Tag", isPresented: $showAddTagPrompt) {
+            TextField("Tag", text: $newTagName)
+            Button("Add") { commitNewTag() }
+            Button("Cancel", role: .cancel) { newTagName = "" }
+        }
     }
 
     // MARK: - Header Card
@@ -249,6 +263,47 @@ struct PaperDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    private var tagSection: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                SectionHeader(icon: "tag", title: "Tags")
+                Spacer()
+                Button {
+                    newTagName = ""
+                    showAddTagPrompt = true
+                } label: {
+                    Label("Add Tag", systemImage: "plus")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .buttonStyle(.borderless)
+            }
+
+            if paper.tags.isEmpty {
+                Text("No tags yet.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                FlowLayout(spacing: 7) {
+                    ForEach(paper.tags, id: \.self) { tag in
+                        PaperTagChip(title: "#\(tag)")
+                            .contextMenu {
+                                Button("Remove Tag") {
+                                    onRemoveTag(paper, tag)
+                                }
+                            }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+
+    private func commitNewTag() {
+        defer { newTagName = "" }
+        onAddTag(paper, newTagName)
     }
 
     // MARK: - Abstract Section
@@ -455,6 +510,83 @@ private struct MemoLine: View {
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+private struct PaperTagChip: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.12))
+            .foregroundColor(.primary.opacity(0.82))
+            .cornerRadius(8)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
+            )
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        layout(in: proposal.width ?? 0, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let rows = layout(in: bounds.width, subviews: subviews).rows
+        for row in rows {
+            for item in row.items {
+                subviews[item.index].place(
+                    at: CGPoint(x: bounds.minX + item.x, y: bounds.minY + row.y),
+                    proposal: ProposedViewSize(item.size)
+                )
+            }
+        }
+    }
+
+    private func layout(in width: CGFloat, subviews: Subviews) -> (size: CGSize, rows: [Row]) {
+        var rows: [Row] = []
+        var current = Row(y: 0, height: 0, items: [])
+        var x: CGFloat = 0
+        let maxWidth = max(width, 1)
+
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            if x > 0, x + size.width > maxWidth {
+                rows.append(current)
+                current = Row(y: (rows.last?.bottom ?? 0) + spacing, height: 0, items: [])
+                x = 0
+            }
+            current.items.append(Item(index: index, x: x, size: size))
+            current.height = max(current.height, size.height)
+            x += size.width + spacing
+        }
+
+        if !current.items.isEmpty {
+            rows.append(current)
+        }
+
+        let height = rows.last?.bottom ?? 0
+        return (CGSize(width: width, height: height), rows)
+    }
+
+    private struct Row {
+        var y: CGFloat
+        var height: CGFloat
+        var items: [Item]
+        var bottom: CGFloat { y + height }
+    }
+
+    private struct Item {
+        var index: Int
+        var x: CGFloat
+        var size: CGSize
     }
 }
 

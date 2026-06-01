@@ -122,6 +122,8 @@ struct ContentView: View {
                     onTranslate: translate,
                     onResolvePdf: resolvePdf,
                     onStatusChange: updatePaperStatus,
+                    onAddTag: addPaperTag,
+                    onRemoveTag: removePaperTag,
                     canGoPrevious: selectedPaperIndex.map { $0 > 0 } ?? false,
                     canGoNext: selectedPaperIndex.map { $0 < filteredPapers.count - 1 } ?? false,
                     onPrevious: selectPreviousPaper,
@@ -311,6 +313,16 @@ struct ContentView: View {
 
     private func cancelRecommendation(_ paper: Paper) {
         store.setPaperRecommended(id: paper.id, isRecommended: false)
+        applyFilters()
+    }
+
+    private func addPaperTag(_ paper: Paper, tag: String) {
+        store.addPaperTag(id: paper.id, tag: tag)
+        applyFilters()
+    }
+
+    private func removePaperTag(_ paper: Paper, tag: String) {
+        store.removePaperTag(id: paper.id, tag: tag)
         applyFilters()
     }
 
