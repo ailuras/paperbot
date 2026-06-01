@@ -410,7 +410,7 @@ struct PaperDetailView: View {
 
     private var scoreMemo: String {
         let citations = paper.citedByCount == 1 ? "1 citation" : "\(paper.citedByCount) citations"
-        return "Score \(String(format: "%.1f", paper.score)); tier \(paper.tier); \(citations)"
+        return "Score \(Int(paper.score)); tier \(paper.tier); \(citations)"
     }
 
     private var matchedVenueRule: VenuePref? {
