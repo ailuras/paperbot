@@ -17,6 +17,8 @@ struct ContentView: View {
     @State private var selectedTopic: String?
     @State private var selectedFields: Set<String> = []
     @State private var selectedTiers: Set<Int> = []
+    @State private var includedTags: Set<String> = []
+    @State private var excludedTags: Set<String> = []
     @State private var showFilters = false
 
     // Selection state
@@ -44,6 +46,8 @@ struct ContentView: View {
             metadataVersion: metadata.metadataVersion,
             sidebarItem: selectedSidebarItem,
             topic: selectedTopic,
+            includedTags: includedTags,
+            excludedTags: excludedTags,
             fields: selectedFields,
             tiers: selectedTiers,
             search: searchKeyword,
@@ -58,6 +62,8 @@ struct ContentView: View {
         var metadataVersion: Int
         var sidebarItem: SidebarItem?
         var topic: String?
+        var includedTags: Set<String>
+        var excludedTags: Set<String>
         var fields: Set<String>
         var tiers: Set<Int>
         var search: String
@@ -82,6 +88,9 @@ struct ContentView: View {
             SidebarView(
                 selectedItem: $selectedSidebarItem,
                 selectedTopic: $selectedTopic,
+                includedTags: $includedTags,
+                excludedTags: $excludedTags,
+                tags: store.allTags,
                 metadata: metadata,
                 statusMessage: statusMessage
             )
@@ -207,6 +216,16 @@ struct ContentView: View {
         }
         if !selectedTiers.isEmpty {
             result = result.filter { selectedTiers.contains($0.tier) }
+        }
+        if !includedTags.isEmpty {
+            result = result.filter { paper in
+                !includedTags.isDisjoint(with: Set(paper.tags))
+            }
+        }
+        if !excludedTags.isEmpty {
+            result = result.filter { paper in
+                excludedTags.isDisjoint(with: Set(paper.tags))
+            }
         }
 
         // 2. Filter by search keyword
