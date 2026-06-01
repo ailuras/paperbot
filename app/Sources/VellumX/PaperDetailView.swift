@@ -18,7 +18,6 @@ struct PaperDetailView: View {
     // Status configuration
     private let statuses: [(PaperStatus, String, Color)] = [
         (.pending,     "clock",        .blue),
-        (.recommended, "sparkles",     .orange),
         (.read,        "checkmark.circle", .green),
         (.starred,     "star.fill",    .yellow),
         (.skip,        "eye.slash",    .secondary)

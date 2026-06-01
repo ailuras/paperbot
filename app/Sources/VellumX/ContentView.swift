@@ -141,9 +141,13 @@ struct ContentView: View {
     }
 
     private func sidebarItem(for paper: Paper) -> SidebarItem {
+        if paper.isRecommended,
+           let recommendedAt = paper.recommendedAt,
+           Calendar.current.isDateInToday(recommendedAt) {
+            return .recommended
+        }
+
         switch paper.status {
-        case .recommended:
-            return Calendar.current.isDateInToday(paper.changedAt) ? .recommended : .all
         case .pending:  return .pending
         case .starred:  return .starred
         case .read:     return .read
@@ -162,7 +166,9 @@ struct ContentView: View {
             case .all:
                 break
             case .recommended:
-                result = result.filter { $0.status == .recommended && Calendar.current.isDateInToday($0.changedAt) }
+                result = result.filter { paper in
+                    paper.isRecommended && paper.recommendedAt.map { Calendar.current.isDateInToday($0) } == true
+                }
             case .pending:
                 result = result.filter { $0.status == .pending }
             case .starred:
@@ -250,10 +256,10 @@ struct ContentView: View {
             let engine = RecommendEngine(config: config)
             let (selected, resetIds) = engine.recommend(papers: store.papers)
             for id in resetIds {
-                store.setPaperStatus(id: id, status: .pending)
+                store.setPaperRecommended(id: id, isRecommended: false)
             }
             for r in selected {
-                store.setPaperStatus(id: r.paper.id, status: .recommended)
+                store.setPaperRecommended(id: r.paper.id, isRecommended: true)
             }
             statusMessage = "Selected \(selected.count) recommendations for today!"
             isRecommending = false

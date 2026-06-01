@@ -96,7 +96,9 @@ struct MenuBarContentView: View {
     private static let popoverWidth: CGFloat = 340
 
     private var recommendedPapers: [Paper] {
-        store.papers.filter { $0.status == .recommended && Calendar.current.isDateInToday($0.changedAt) }
+        store.papers.filter { paper in
+            paper.isRecommended && paper.recommendedAt.map { Calendar.current.isDateInToday($0) } == true
+        }
     }
 
     var body: some View {
@@ -214,10 +216,10 @@ struct MenuBarContentView: View {
         let engine = RecommendEngine(config: cfg)
         let (selected, resetIds) = engine.recommend(papers: store.papers)
         for id in resetIds {
-            store.setPaperStatus(id: id, status: .pending)
+            store.setPaperRecommended(id: id, isRecommended: false)
         }
         for r in selected {
-            store.setPaperStatus(id: r.paper.id, status: .recommended)
+            store.setPaperRecommended(id: r.paper.id, isRecommended: true)
         }
     }
 

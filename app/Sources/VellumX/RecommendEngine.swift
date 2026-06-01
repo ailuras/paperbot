@@ -33,18 +33,18 @@ class RecommendEngine {
 
         if papers.isEmpty { return (selected: [], resetIds: []) }
 
-        // Collect papers to reset: any prior recommendations should go back
-        // to pending so repeated runs replace the day's picks.
-        let toReset = papers.filter { $0.status == .recommended }.map(\.id)
+        // Collect active recommendations to reset so repeated runs replace the
+        // day's picks without changing the user's lifecycle status.
+        let toReset = papers.filter(\.isRecommended).map(\.id)
 
         let calendar = Calendar.current
         guard let cutoffDate = calendar.date(byAdding: .day, value: -recentDays, to: Date()) else {
             return (selected: [], resetIds: [])
         }
 
-        // Pools. Prior recommendations are treated as pending candidates because
+        // Pools. Prior recommendations are treated as candidates because
         // callers apply `resetIds` after selection.
-        let candidatePapers = papers.filter { $0.status == .pending || $0.status == .recommended }
+        let candidatePapers = papers.filter { $0.status == .pending || $0.isRecommended }
         let recentPool = candidatePapers.filter { isRecent(paper: $0, cutoff: cutoffDate) }
         let highScorePool = candidatePapers.filter { $0.score >= highThreshold }
 

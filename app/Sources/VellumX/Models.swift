@@ -3,7 +3,6 @@ import SwiftUI
 
 enum PaperStatus: String, Codable, CaseIterable {
     case pending = "pending"
-    case recommended = "recommended"
     case read = "read"
     case starred = "starred"
     case skip = "skip"
@@ -11,7 +10,6 @@ enum PaperStatus: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .pending:     return "Pending"
-        case .recommended: return "Recommended"
         case .read:        return "Read"
         case .starred:     return "Starred"
         case .skip:        return "Skip"
@@ -21,7 +19,6 @@ enum PaperStatus: String, Codable, CaseIterable {
     var iconName: String {
         switch self {
         case .pending:     return "clock"
-        case .recommended: return "sparkles"
         case .read:        return "checkmark.circle"
         case .starred:     return "star.fill"
         case .skip:        return "eye.slash"
@@ -31,7 +28,6 @@ enum PaperStatus: String, Codable, CaseIterable {
     var iconColor: Color {
         switch self {
         case .pending:     return .blue
-        case .recommended: return .orange
         case .read:        return .green
         case .starred:     return .yellow
         case .skip:        return .secondary
@@ -59,6 +55,8 @@ final class Paper: Identifiable {
     var tier: Int
     var status: PaperStatus
     var changedAt: Date
+    var isRecommended: Bool
+    var recommendedAt: Date?
     var note: String
     var abstractZh: String
 
@@ -71,6 +69,7 @@ final class Paper: Identifiable {
         pdfUrl: String? = nil, track: String = "",
         score: Double = 0.0, tier: Int = 0,
         status: PaperStatus = .pending, changedAt: Date = Date(),
+        isRecommended: Bool = false, recommendedAt: Date? = nil,
         note: String = "", abstractZh: String = ""
     ) {
         self.id = id
@@ -90,6 +89,8 @@ final class Paper: Identifiable {
         self.tier = tier
         self.status = status
         self.changedAt = changedAt
+        self.isRecommended = isRecommended
+        self.recommendedAt = recommendedAt
         self.note = note
         self.abstractZh = abstractZh
     }
