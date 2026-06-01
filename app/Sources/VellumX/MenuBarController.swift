@@ -93,75 +93,141 @@ struct MenuBarContentView: View {
     var store: PaperStore
     let closePopover: () -> Void
 
+    private static let popoverWidth: CGFloat = 340
+
     private var recommendedPapers: [Paper] {
         store.papers.filter { $0.status == .recommended && Calendar.current.isDateInToday($0.changedAt) }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if recommendedPapers.isEmpty {
-                Text(L10n.t(.noRecommendations))
-                    .font(.caption)
-                Button(L10n.t(.runRecommendEngine)) {
-                    let cfg = ConfigManager.shared.effectiveConfig
-                    let engine = RecommendEngine(config: cfg)
-                    let (selected, resetIds) = engine.recommend(papers: store.papers)
-                    for id in resetIds {
-                        store.setPaperStatus(id: id, status: .pending)
-                    }
-                    for r in selected {
-                        store.setPaperStatus(id: r.paper.id, status: .recommended)
-                    }
-                }
-            } else {
-                Text(L10n.t(.todaysTopPicks))
-                    .font(.headline)
-                ForEach(recommendedPapers) { paper in
-                    Menu(paper.title) {
-                        Button(L10n.t(.openPDF)) { openPdf(for: paper) }
-                        Button(L10n.t(.markRead)) { store.setPaperStatus(id: paper.id, status: .read) }
-                        Button(L10n.t(.markStarred)) { store.setPaperStatus(id: paper.id, status: .starred) }
-                    }
-                }
-            }
+        VStack(alignment: .leading, spacing: 0) {
+            header
             Divider()
-            HStack {
-                Button {
-                    openMainWindow()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(nsImage: MenuBarController.icon)
-                            .resizable()
-                            .frame(width: 14, height: 14)
-                            .opacity(0.62)
-                        Text(L10n.t(.openVellumX))
-                    }
-                    .foregroundStyle(.primary.opacity(0.82))
-                }
-                .buttonStyle(.plain)
+            content
+            Divider()
+            footer
+        }
+        .frame(width: Self.popoverWidth)
+    }
 
-                Spacer()
+    // MARK: - Header
 
-                Button {
-                    NSApplication.shared.terminate(nil)
-                } label: {
-                    Label(L10n.t(.quit), systemImage: "power")
-                        .foregroundStyle(.primary.opacity(0.68))
-                }
-                .buttonStyle(.plain)
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(nsImage: MenuBarController.icon)
+                .resizable()
+                .frame(width: 15, height: 15)
+                .opacity(0.7)
+            Text(L10n.t(.todaysTopPicks))
+                .font(.system(size: 13, weight: .semibold))
+            Spacer()
+            if !recommendedPapers.isEmpty {
+                Text("\(recommendedPapers.count)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.14), in: Capsule())
             }
         }
-        .padding(12)
-        .frame(width: 320)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    // MARK: - Content
+
+    @ViewBuilder
+    private var content: some View {
+        if recommendedPapers.isEmpty {
+            emptyState
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 2) {
+                    ForEach(recommendedPapers) { paper in
+                        MenuBarPaperRow(
+                            paper: paper,
+                            onStar: { setStatus(paper, .starred) },
+                            onRead: { setStatus(paper, .read) },
+                            onSkip: { setStatus(paper, .skip) },
+                            onOpenPdf: { openPdf(for: paper) },
+                            onOpenInApp: { openMainWindow(paperId: paper.id) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+            }
+            .frame(maxHeight: 360)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 22))
+                .foregroundStyle(.secondary)
+            Text(L10n.t(.noRecommendations))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Button(L10n.t(.runRecommendEngine)) { runRecommendEngine() }
+                .controlSize(.small)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack {
+            Button { openMainWindow() } label: {
+                Label(L10n.t(.openVellumX), systemImage: "macwindow")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary.opacity(0.82))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            Button { NSApplication.shared.terminate(nil) } label: {
+                Label(L10n.t(.quit), systemImage: "power")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.primary.opacity(0.62))
+            }
+            .buttonStyle(.plain)
+        }
+        .labelStyle(.titleAndIcon)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - Actions
+
+    private func setStatus(_ paper: Paper, _ status: PaperStatus) {
+        withAnimation(.easeOut(duration: 0.18)) {
+            store.setPaperStatus(id: paper.id, status: status)
+        }
+    }
+
+    private func runRecommendEngine() {
+        let cfg = ConfigManager.shared.effectiveConfig
+        let engine = RecommendEngine(config: cfg)
+        let (selected, resetIds) = engine.recommend(papers: store.papers)
+        for id in resetIds {
+            store.setPaperStatus(id: id, status: .pending)
+        }
+        for r in selected {
+            store.setPaperStatus(id: r.paper.id, status: .recommended)
+        }
     }
 
     /// Bring the main window to the front (activating the app), then dismiss
     /// the popover. Uses SwiftUI's openWindow action (captured by the App) so a
     /// closed WindowGroup window is recreated rather than just re-fronted.
-    private func openMainWindow() {
+    private func openMainWindow(paperId: String? = nil) {
         closePopover()
         NSApp.activate(ignoringOtherApps: true)
-        MainWindowOpener.shared.open()
+        MainWindowOpener.shared.open(paperId: paperId)
     }
 
     private func openPdf(for paper: Paper) {
@@ -180,5 +246,94 @@ struct MenuBarContentView: View {
                 }
             }
         }
+    }
+}
+
+/// A single recommendation row: title + meta on the left, inline Star / Read /
+/// PDF actions on the right. Low-frequency actions (Skip, open in app) live in
+/// the right-click context menu.
+private struct MenuBarPaperRow: View {
+    let paper: Paper
+    let onStar: () -> Void
+    let onRead: () -> Void
+    let onSkip: () -> Void
+    let onOpenPdf: () -> Void
+    let onOpenInApp: () -> Void
+
+    @State private var isHovering = false
+
+    private var meta: String {
+        var parts: [String] = []
+        let venue = paper.venueAbbr.isEmpty ? paper.venue : paper.venueAbbr
+        if !venue.isEmpty { parts.append(venue) }
+        if paper.citedByCount > 0 { parts.append("\(paper.citedByCount) cites") }
+        return parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(paper.title)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                if !meta.isEmpty {
+                    Text(meta)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 2) {
+                MenuBarActionButton(systemName: "star", color: .yellow,
+                                    help: L10n.t(.markStarred), action: onStar)
+                MenuBarActionButton(systemName: "checkmark.circle", color: .green,
+                                    help: L10n.t(.markRead), action: onRead)
+                MenuBarActionButton(systemName: "doc.text", color: .accentColor,
+                                    help: L10n.t(.openPDF), action: onOpenPdf)
+            }
+            .opacity(isHovering ? 1 : 0.55)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .contextMenu {
+            Button(L10n.t(.openInVellumX), action: onOpenInApp)
+            Divider()
+            Button(L10n.t(.markSkip), action: onSkip)
+        }
+    }
+}
+
+/// Small square icon button used for the inline row actions.
+private struct MenuBarActionButton: View {
+    let systemName: String
+    let color: Color
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isHovering ? color : .secondary)
+                .frame(width: 24, height: 24)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isHovering ? color.opacity(0.16) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(help)
     }
 }

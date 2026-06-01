@@ -1,13 +1,25 @@
 import SwiftUI
 import AppKit
+import Observation
 
 /// Bridges SwiftUI's `openWindow` action to AppKit code (the menu bar
 /// controller), so "Open VellumX" can recreate the main window even after it
 /// was closed. The App captures the action on appear.
 @MainActor
+@Observable
 final class MainWindowOpener {
     static let shared = MainWindowOpener()
-    var openAction: (() -> Void)?
+    @ObservationIgnored var openAction: (() -> Void)?
+
+    /// A paper the UI should reveal/select on the next window open. `ContentView`
+    /// observes this, focuses the paper, then clears it back to nil.
+    var requestedPaperId: String?
+
+    /// Open (or re-front) the main window and ask the UI to focus `paperId`.
+    func open(paperId: String? = nil) {
+        if let paperId { requestedPaperId = paperId }
+        open()
+    }
 
     func open() {
         // Prefer re-fronting an existing main window (a titled standard window,

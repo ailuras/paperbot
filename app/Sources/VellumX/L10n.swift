@@ -36,7 +36,7 @@ enum L10n {
         case path, open, revealInFinder, settingsFile, settingsFileHint
         // Menu bar
         case noRecommendations, runRecommendEngine, todaysTopPicks
-        case openPDF, markRead, markStarred, openVellumX, quit
+        case openPDF, markRead, markStarred, markSkip, openInVellumX, openVellumX, quit
     }
 
     @MainActor
@@ -159,6 +159,8 @@ enum L10n {
         case .openPDF:            return ("Open PDF", "打开 PDF")
         case .markRead:           return ("Mark Read", "标记已读")
         case .markStarred:        return ("Mark Starred", "标记收藏")
+        case .markSkip:           return ("Skip", "跳过")
+        case .openInVellumX:      return ("Open in VellumX", "在 VellumX 中打开")
         case .openVellumX:        return ("Open VellumX", "打开 VellumX")
         case .quit:               return ("Quit", "退出")
         }

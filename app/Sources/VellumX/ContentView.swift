@@ -4,6 +4,7 @@ import AppKit
 struct ContentView: View {
     @State private var store = PaperStore.shared
     @State private var metadata = MetadataStore.shared
+    @State private var windowOpener = MainWindowOpener.shared
     private var settings = AppSettings.shared
 
     // Filter and Sort states
@@ -110,8 +111,44 @@ struct ContentView: View {
                 EmptyDetailView()
             }
         }
-        .onAppear { applyFilters() }
+        .onAppear {
+            applyFilters()
+            focusRequestedPaper()
+        }
         .onChange(of: filterInputs) { applyFilters() }
+        .onChange(of: windowOpener.requestedPaperId) { focusRequestedPaper() }
+    }
+
+    /// Reveal and select a paper requested from outside the window (e.g. the
+    /// menu bar's "Open in VellumX"). Switches to a sidebar tab that contains
+    /// the paper so the list selection lands, then opens its detail.
+    private func focusRequestedPaper() {
+        guard let id = windowOpener.requestedPaperId,
+              let paper = store.papers.first(where: { $0.id == id }) else { return }
+
+        // Point the sidebar at the bucket that holds this paper's status so it
+        // shows up in the list; fall back to "All".
+        selectedSidebarItem = sidebarItem(for: paper)
+        selectedTopic = nil
+        selectedFields = []
+        selectedTiers = []
+        searchKeyword = ""
+        applyFilters()
+
+        selectedPaperId = id
+        lastViewedPaperId = id
+        windowOpener.requestedPaperId = nil
+    }
+
+    private func sidebarItem(for paper: Paper) -> SidebarItem {
+        switch paper.status {
+        case .recommended:
+            return Calendar.current.isDateInToday(paper.changedAt) ? .recommended : .all
+        case .pending:  return .pending
+        case .starred:  return .starred
+        case .read:     return .read
+        case .skip:     return .skipped
+        }
     }
 
     // MARK: - Filtering
