@@ -103,8 +103,11 @@ struct PaperDetailView: View {
     }
 
     private var metaCard: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
+            // Row 1: Score | Venue | Date | Citations | Topics
+            HStack(spacing: 8) {
+                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+
                 if !paper.venueAbbr.isEmpty {
                     DetailTag(
                         title: paper.venueAbbr,
@@ -118,24 +121,32 @@ struct PaperDetailView: View {
                     DetailInlineMeta(icon: "calendar", value: paper.publicationDate)
                 }
 
+                if paper.citedByCount > 0 {
+                    DetailInlineMeta(
+                        icon: "quote.bubble",
+                        value: "\(paper.citedByCount) citation\(paper.citedByCount == 1 ? "" : "s")"
+                    )
+                }
+
                 if !topics.isEmpty {
-                    ForEach(topics, id: \.self) { topic in
-                        DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                    HStack(spacing: 6) {
+                        ForEach(topics, id: \.self) { topic in
+                            DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                        }
                     }
                 }
 
-                Spacer(minLength: 8)
-
-                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+                Spacer(minLength: 0)
             }
 
+            // Row 2: Full venue name
             if !venueDisplayName.isEmpty {
                 DetailVenueLine(value: venueDisplayName)
                     .help(venueDisplayName)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondary.opacity(0.06))
         .cornerRadius(8)
