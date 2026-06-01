@@ -275,46 +275,41 @@ private struct PaperRowView: View {
                     .padding(.vertical, 6)
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                // Title row (full width, up to 2 lines)
+            HStack(alignment: .top, spacing: 10) {
+                // Left: Title (2 lines max)
                 Text(paper.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
                     .foregroundColor(.primary)
 
-                // Meta row: Score → Venue → Date → Topics
-                HStack(spacing: 6) {
-                    ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+                Spacer(minLength: 8)
 
-                    PaperTagView(title: paper.venueAbbr, color: venueColor)
-
-                    Text("•")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-
-                    Text(paper.publicationDate)
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-
+                // Right: Tags
+                VStack(alignment: .trailing, spacing: 5) {
+                    // Top: venue tag + score
                     HStack(spacing: 4) {
-                        ForEach(topics.prefix(3), id: \.self) { topic in
-                            PaperTagView(title: topic, color: metadata.topicColor(topic))
-                        }
+                        PaperTagView(title: paper.venueAbbr, color: venueColor)
+                        ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
                     }
-
-                    Spacer()
+                    // Bottom: date
+                    Text(paper.publicationDate)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.secondary)
                 }
+            }
+            .padding(.leading, isDailyRecommendation && isTodayRecommended ? 4 : 8)
+            .padding(.trailing, 12)
+            .padding(.vertical, 9)
 
-                // Divider after last today's recommendation
-                if isLastToday {
+            // Divider after last today's recommendation
+            if isLastToday {
+                VStack {
+                    Spacer()
                     Divider()
                         .padding(.top, 4)
                         .padding(.bottom, 1)
                 }
             }
-            .padding(.leading, isDailyRecommendation && isTodayRecommended ? 10 : 14)
-            .padding(.trailing, 12)
-            .padding(.vertical, 9)
         }
         .contentShape(Rectangle())
     }
@@ -332,6 +327,24 @@ private struct PaperTagView: View {
             .background(color.opacity(0.12))
             .foregroundStyle(color)
             .cornerRadius(4)
+    }
+}
+
+private struct DateBadgeView: View {
+    let date: String
+
+    var body: some View {
+        Text(date)
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color.accentColor.opacity(0.12))
+            .foregroundStyle(Color.accentColor)
+            .cornerRadius(5)
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 0.5)
+            )
     }
 }
 
