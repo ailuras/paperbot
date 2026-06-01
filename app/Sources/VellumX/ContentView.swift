@@ -78,7 +78,10 @@ struct ContentView: View {
         return store.papers.first(where: { $0.id == id })
     }
 
-    @State private var selectedPaperIndex: Int? = nil
+    private var selectedPaperIndex: Int? {
+        guard let id = lastViewedPaperId else { return nil }
+        return filteredPapers.firstIndex(where: { $0.id == id })
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -157,7 +160,6 @@ struct ContentView: View {
 
         selectedPaperId = id
         lastViewedPaperId = id
-        selectedPaperIndex = filteredPapers.firstIndex(where: { $0.id == id })
         windowOpener.requestedPaperId = nil
     }
 
@@ -259,13 +261,6 @@ struct ContentView: View {
         }
 
         filteredPapers = result
-
-        // Cache selected index to avoid O(n) lookup on every body evaluation
-        if let id = lastViewedPaperId {
-            selectedPaperIndex = filteredPapers.firstIndex(where: { $0.id == id })
-        } else {
-            selectedPaperIndex = nil
-        }
     }
 
     private func selectPaper(at index: Int) {
@@ -273,7 +268,6 @@ struct ContentView: View {
         let id = filteredPapers[index].id
         selectedPaperId = id
         lastViewedPaperId = id
-        selectedPaperIndex = index
     }
 
     private func selectPreviousPaper() {
