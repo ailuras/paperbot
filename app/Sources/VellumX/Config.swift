@@ -29,7 +29,78 @@ struct RecommendationConfig {
     var recent_days: Int
 }
 
+enum TranslationProvider: String, Codable, CaseIterable {
+    case deepseek = "deepseek"
+    case openai = "openai"
+    case anthropic = "anthropic"
+
+    var displayName: String {
+        switch self {
+        case .deepseek:  return "DeepSeek"
+        case .openai:    return "OpenAI"
+        case .anthropic: return "Anthropic"
+        }
+    }
+
+    var defaultBaseURL: String {
+        switch self {
+        case .deepseek:  return "https://api.deepseek.com"
+        case .openai:    return "https://api.openai.com/v1"
+        case .anthropic: return "https://api.anthropic.com/v1"
+        }
+    }
+
+    var defaultModel: String {
+        switch self {
+        case .deepseek:  return "deepseek-chat"
+        case .openai:    return "gpt-4o-mini"
+        case .anthropic: return "claude-3-5-haiku-20241022"
+        }
+    }
+
+    var modelsEndpoint: String {
+        switch self {
+        case .deepseek, .openai:
+            return "/models"
+        case .anthropic:
+            return "" // Anthropic does not have a public models list endpoint
+        }
+    }
+
+    var chatEndpoint: String {
+        switch self {
+        case .deepseek, .openai:
+            return "/chat/completions"
+        case .anthropic:
+            return "/messages"
+        }
+    }
+
+    var authHeaderName: String {
+        switch self {
+        case .deepseek, .openai:
+            return "Authorization"
+        case .anthropic:
+            return "x-api-key"
+        }
+    }
+
+    var authHeaderValuePrefix: String {
+        switch self {
+        case .deepseek, .openai:
+            return "Bearer "
+        case .anthropic:
+            return ""
+        }
+    }
+
+    var requiresVersionHeader: Bool {
+        self == .anthropic
+    }
+}
+
 struct TranslateConfig {
+    var provider: TranslationProvider
     var enabled: Bool
     var target_language: String
     var model: String
@@ -121,12 +192,13 @@ class ConfigManager {
         cfg.openalex.default_days = s.defaultDays
         cfg.openalex.default_max_results = s.defaultMaxResults
         cfg.openalex.topic_filter = s.topicFilter
+        cfg.translate.provider = s.apiProvider
         cfg.translate.enabled = s.translateEnabled
-        if !s.deepSeekBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            cfg.translate.base_url = s.deepSeekBaseURL
+        if !s.apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cfg.translate.base_url = s.apiBaseURL
         }
-        if !s.deepSeekModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            cfg.translate.model = s.deepSeekModel
+        if !s.apiModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            cfg.translate.model = s.apiModel
         }
         if !s.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             cfg.translate.target_language = s.targetLanguage

@@ -417,12 +417,13 @@ struct ContentView: View {
             return
         }
         isTranslating = true
-        statusMessage = "Translating abstract with DeepSeek..."
+        let provider = ConfigManager.shared.effectiveConfig.translate.provider
+        statusMessage = "Translating abstract via \(provider.displayName)..."
         let config = ConfigManager.shared.effectiveConfig
 
         Task {
             do {
-                let translator = DeepSeekTranslator(config: config, apiKey: settings.deepSeekAPIKey)
+                let translator = TranslationService(config: config, apiKey: settings.apiKey)
                 let abstractZh = try await translator.translateAbstract(
                     id: paper.id,
                     abstract: paper.abstract,

@@ -1,8 +1,8 @@
 import Foundation
 import Security
 
-/// Minimal Keychain wrapper for storing sensitive strings (the DeepSeek API
-/// key). Uses only the system Security framework — no third-party deps. Items
+/// Minimal Keychain wrapper for storing sensitive strings (the API key).
+/// Uses only the system Security framework — no third-party deps. Items
 /// are stored as generic passwords scoped to this app's service name.
 enum Keychain {
     private static let service = "com.ailuras.vellumx"

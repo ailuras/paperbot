@@ -25,6 +25,7 @@ struct PaperDetailView: View {
     @FocusState private var noteFocused: Bool
     @State private var showAddTagPrompt = false
     @State private var newTagName = ""
+    @State private var showingTranslation: Bool = false
 
     // Status configuration
     private let statuses: [(PaperStatus, String, Color)] = [
@@ -46,11 +47,6 @@ struct PaperDetailView: View {
 
                 Divider().padding(.horizontal, 20)
 
-                // MARK: Action Buttons
-                actionBar
-
-                Divider().padding(.horizontal, 20)
-
                 // MARK: Tags
                 tagSection
 
@@ -58,11 +54,6 @@ struct PaperDetailView: View {
 
                 // MARK: Abstract
                 abstractSection
-
-                // MARK: Translation
-                if !paper.abstractZh.isEmpty || isTranslating {
-                    translationSection
-                }
 
                 // MARK: Notes
                 notesSection
@@ -84,11 +75,18 @@ struct PaperDetailView: View {
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Title
-            Text(paper.title)
-                .font(.system(size: 22, weight: .bold, design: .serif))
-                .lineSpacing(3)
-                .foregroundColor(.primary)
+            HStack(alignment: .top, spacing: 12) {
+                // Title
+                Text(paper.title)
+                    .font(.system(size: 22, weight: .bold, design: .serif))
+                    .lineSpacing(3)
+                    .foregroundColor(.primary)
+
+                Spacer(minLength: 8)
+
+                collectionMenu
+                pdfButton
+            }
 
             // Authors
             if !paper.authors.isEmpty {
@@ -102,6 +100,71 @@ struct PaperDetailView: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+    }
+
+    private var pdfButton: some View {
+        Button {
+            onResolvePdf(paper)
+        } label: {
+            if isResolvingPdf {
+                ProgressView()
+                    .controlSize(.small)
+                    .frame(width: 28, height: 28)
+            } else {
+                Image(systemName: paper.pdfUrl?.isEmpty == false ? "doc.text" : "doc.text.magnifyingglass")
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .background(Color.secondary.opacity(0.10))
+                    .foregroundColor(.primary.opacity(0.75))
+                    .cornerRadius(7)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7)
+                            .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
+                    )
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isResolvingPdf)
+        .help(paper.pdfUrl?.isEmpty == false ? "Open PDF" : "Resolve PDF")
+    }
+
+    private var collectionMenu: some View {
+        let allCollections = PaperStore.shared.allCollections
+        let isInAny = !paper.collections.isEmpty
+
+        return Menu {
+            if allCollections.isEmpty {
+                Text("No collections yet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(allCollections) { collection in
+                    let isMember = paper.collections.contains(collection.id)
+                    Button {
+                        if isMember {
+                            onRemoveFromCollection(paper, collection.id)
+                        } else {
+                            onAddToCollection(paper, collection.id)
+                        }
+                    } label: {
+                        Label(collection.name, systemImage: isMember ? "checkmark" : "folder")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: isInAny ? "folder.fill" : "folder")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .background(Color.secondary.opacity(0.10))
+                .foregroundColor(.primary.opacity(0.75))
+                .cornerRadius(7)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
+                )
+        }
+        .menuStyle(.borderlessButton)
+        .help("Collections")
     }
 
     private var metaCard: some View {
@@ -146,6 +209,12 @@ struct PaperDetailView: View {
                 DetailVenueLine(value: venueDisplayName)
                     .help(venueDisplayName)
             }
+
+            if !doiDisplay.isEmpty {
+                DetailExternalLinkLine(label: "DOI", value: doiDisplay, url: doiUrl)
+            } else if !landingPageDisplay.isEmpty {
+                DetailExternalLinkLine(label: "LINK", value: landingPageDisplay, url: landingPageUrl)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -156,6 +225,29 @@ struct PaperDetailView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
         )
+    }
+
+    private var doiDisplay: String {
+        guard let doi = paper.doi, !doi.isEmpty else { return "" }
+        return doi
+    }
+
+    private var doiUrl: URL? {
+        guard let doi = paper.doi, !doi.isEmpty else { return nil }
+        if let url = URL(string: doi), url.scheme != nil {
+            return url
+        }
+        return URL(string: "https://doi.org/\(doi)")
+    }
+
+    private var landingPageDisplay: String {
+        let value = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? "" : value
+    }
+
+    private var landingPageUrl: URL? {
+        guard !landingPageDisplay.isEmpty else { return nil }
+        return URL(string: landingPageDisplay)
     }
 
     private var venueDisplayName: String {
@@ -228,79 +320,6 @@ struct PaperDetailView: View {
         status.displayName
     }
 
-    // MARK: - Action Bar
-
-    private var collectionMenu: some View {
-        let allCollections = PaperStore.shared.allCollections
-        let isInAny = !paper.collections.isEmpty
-
-        return Menu {
-            if allCollections.isEmpty {
-                Text("No collections yet")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(allCollections) { collection in
-                    let isMember = paper.collections.contains(collection.id)
-                    Button {
-                        if isMember {
-                            onRemoveFromCollection(paper, collection.id)
-                        } else {
-                            onAddToCollection(paper, collection.id)
-                        }
-                    } label: {
-                        Label(collection.name, systemImage: isMember ? "checkmark" : "folder")
-                    }
-                }
-            }
-        } label: {
-            DetailActionButtonContent(
-                icon: isInAny ? "folder.fill" : "folder",
-                label: "Collections",
-                isLoading: false
-            )
-        }
-        .menuStyle(.borderlessButton)
-    }
-
-    private var actionBar: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 10) {
-                DetailActionButton(
-                    icon: "doc.text",
-                    label: "Open PDF",
-                    isLoading: isResolvingPdf,
-                    action: { onResolvePdf(paper) }
-                )
-
-                DetailActionButton(
-                    icon: "character.book.closed",
-                    label: "Translate",
-                    isLoading: isTranslating,
-                    action: { onTranslate(paper) }
-                )
-
-                if let doi = paper.doi, !doi.isEmpty, let doiURL = URL(string: doi) {
-                    Link(destination: doiURL) {
-                        DetailActionButtonContent(icon: "link", label: "DOI Link", isLoading: false)
-                    }
-                    .buttonStyle(.plain)
-                } else if let url = URL(string: paper.landingPageUrl), !paper.landingPageUrl.isEmpty {
-                    Link(destination: url) {
-                        DetailActionButtonContent(icon: "link", label: "Open Link", isLoading: false)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                collectionMenu
-
-                Spacer()
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-    }
-
     private var tagSection: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
@@ -346,42 +365,74 @@ struct PaperDetailView: View {
 
     private var abstractSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(icon: "text.alignleft", title: "Abstract")
-
-            Text(paper.abstract.isEmpty ? "No abstract available." : paper.abstract)
-                .font(.system(size: 14, design: .serif))
-                .lineSpacing(4)
-                .foregroundColor(paper.abstract.isEmpty ? .secondary : .primary)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Translation Section
-
-    private var translationSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            SectionHeader(icon: "character", title: "Translation")
-
-            if isTranslating {
-                HStack(spacing: 6) {
-                    ProgressView().controlSize(.small)
-                    Text("Translating...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+            HStack {
+                SectionHeader(
+                    icon: showingTranslation ? "character" : "text.alignleft",
+                    title: showingTranslation ? "Translation" : "Abstract"
+                )
+                Spacer()
+                if isTranslating {
+                    HStack(spacing: 4) {
+                        ProgressView().controlSize(.small)
+                        Text("Translating...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                } else if !paper.abstractZh.isEmpty {
+                    Button {
+                        showingTranslation.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(showingTranslation ? "Original" : "Translate")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.12))
+                        .foregroundColor(.accentColor)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
+                } else if !paper.abstract.isEmpty {
+                    Button {
+                        showingTranslation = true
+                        onTranslate(paper)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "character.book.closed")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text("Translate")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.accentColor.opacity(0.12))
+                        .foregroundColor(.accentColor)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
-            if !paper.abstractZh.isEmpty {
+            if showingTranslation && !paper.abstractZh.isEmpty {
                 Text(paper.abstractZh)
                     .font(.system(size: 14, design: .serif))
                     .lineSpacing(4)
                     .foregroundColor(.primary)
+            } else {
+                Text(paper.abstract.isEmpty ? "No abstract available." : paper.abstract)
+                    .font(.system(size: 14, design: .serif))
+                    .lineSpacing(4)
+                    .foregroundColor(paper.abstract.isEmpty ? .secondary : .primary)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(Color.yellow.opacity(0.04))
+        .onChange(of: paper.id) { _, _ in
+            showingTranslation = false
+        }
     }
 
     // MARK: - Notes Section
@@ -727,48 +778,43 @@ private struct DetailVenueLine: View {
     }
 }
 
-private struct DetailActionButtonContent: View {
-    let icon: String
+private struct DetailExternalLinkLine: View {
     let label: String
-    let isLoading: Bool
+    let value: String
+    let url: URL?
 
     var body: some View {
-        HStack(spacing: 5) {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.7)
-            } else {
-                Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-            }
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "link")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.secondary)
+                .padding(.top, 1)
+
             Text(label)
-                .font(.system(size: 12, weight: .medium))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(Color.secondary.opacity(0.08))
-        .foregroundColor(.primary)
-        .cornerRadius(6)
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.gray.opacity(0.25), lineWidth: 0.5)
-        )
-    }
-}
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(.secondary.opacity(0.75))
 
-private struct DetailActionButton: View {
-    let icon: String
-    let label: String
-    let isLoading: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            DetailActionButtonContent(icon: icon, label: label, isLoading: isLoading)
+            if let url {
+                Link(destination: url) {
+                    Text(value)
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .textSelection(.enabled)
+                        .help(value)
+                }
+                .buttonStyle(.plain)
+            } else {
+                Text(value)
+                    .font(.caption)
+                    .foregroundColor(.primary.opacity(0.8))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .textSelection(.enabled)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(isLoading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
