@@ -106,34 +106,42 @@ class PdfResolver {
     }
     
     func resolve(id: String, title: String, doi: String?, currentPdfUrl: String?) async -> (url: String, source: String)? {
-        // Cache / Preset check
         if let currentPdf = currentPdfUrl, !currentPdf.isEmpty {
             return (currentPdf, "cached")
         }
-        
-        guard let doi = doi, !doi.isEmpty else {
-            // If no DOI, fallback to arXiv title lookup
+
+        guard let rawDoi = doi, !rawDoi.isEmpty else {
             if let arxivPdf = await fetchArxiv(title: title) {
                 return (arxivPdf, "arxiv")
             }
             return nil
         }
-        
-        // Layer 2: Unpaywall
-        if let unpaywallPdf = await fetchUnpaywall(doi: doi) {
+
+        // OpenAlex returns DOIs as full URLs (https://doi.org/10.xxx).
+        // Unpaywall and Semantic Scholar expect a bare DOI path (10.xxx).
+        let bareDoi = Self.stripDoiPrefix(rawDoi)
+
+        if let unpaywallPdf = await fetchUnpaywall(doi: bareDoi) {
             return (unpaywallPdf, "unpaywall")
         }
-        
-        // Layer 3: arXiv
+
         if let arxivPdf = await fetchArxiv(title: title) {
             return (arxivPdf, "arxiv")
         }
-        
-        // Layer 4: Semantic Scholar
-        if let s2Pdf = await fetchSemanticScholar(doi: doi) {
+
+        if let s2Pdf = await fetchSemanticScholar(doi: bareDoi) {
             return (s2Pdf, "semanticscholar")
         }
-        
+
         return nil
+    }
+
+    private static func stripDoiPrefix(_ doi: String) -> String {
+        let lower = doi.lowercased()
+        for prefix in ["https://doi.org/", "http://doi.org/",
+                        "https://dx.doi.org/", "http://dx.doi.org/"] {
+            if lower.hasPrefix(prefix) { return String(doi.dropFirst(prefix.count)) }
+        }
+        return doi
     }
 }
