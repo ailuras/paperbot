@@ -156,7 +156,7 @@ class PaperStore {
 
         CREATE TABLE IF NOT EXISTS paper_recommendations (
             paper_id TEXT PRIMARY KEY,
-            recommended_at TEXT NOT NULL DEFAULT (datetime('now')),
+            recommended_at TEXT,
             is_active INTEGER NOT NULL DEFAULT 1,
             recommendation_reason TEXT
         );
@@ -215,65 +215,6 @@ class PaperStore {
             let error = errorMsg.map { String(cString: $0) } ?? "unknown error"
             print("Error creating tables: \(error)")
             sqlite3_free(errorMsg)
-        }
-        migrateCollectionsSchema()
-    }
-
-    /// Brings pre-existing `collections` tables up to the nested-folder schema:
-    /// adds the `icon`/`parent_id` columns and drops the legacy global-UNIQUE
-    /// on `name` (subfolders under different parents may share a name). Each
-    /// step is a no-op once already applied, so this is safe to run every launch.
-    private func migrateCollectionsSchema() {
-        ensureColumn("icon", "TEXT", inTable: "collections")
-        ensureColumn("parent_id", "TEXT", inTable: "collections")
-
-        // The legacy CREATE carried `name TEXT NOT NULL UNIQUE`. Detect it from
-        // the stored DDL and rebuild without the constraint, preserving rows.
-        var stmt: OpaquePointer?
-        var ddl = ""
-        if sqlite3_prepare_v2(db,
-            "SELECT sql FROM sqlite_master WHERE type='table' AND name='collections'",
-            -1, &stmt, nil) == SQLITE_OK, sqlite3_step(stmt) == SQLITE_ROW,
-           let c = sqlite3_column_text(stmt, 0) {
-            ddl = String(cString: c)
-        }
-        sqlite3_finalize(stmt)
-        guard ddl.uppercased().contains("UNIQUE") else { return }
-
-        let rebuild = """
-        BEGIN TRANSACTION;
-        CREATE TABLE collections_new (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL,
-            color TEXT,
-            icon TEXT,
-            parent_id TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
-        );
-        INSERT INTO collections_new (id, name, color, icon, parent_id, created_at)
-            SELECT id, name, color, icon, parent_id, created_at FROM collections;
-        DROP TABLE collections;
-        ALTER TABLE collections_new RENAME TO collections;
-        COMMIT;
-        """
-        sqlite3_exec(db, rebuild, nil, nil, nil)
-    }
-
-    /// Adds `column` to `table` if it isn't already present (idempotent).
-    private func ensureColumn(_ column: String, _ type: String, inTable table: String) {
-        var stmt: OpaquePointer?
-        var exists = false
-        if sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &stmt, nil) == SQLITE_OK {
-            while sqlite3_step(stmt) == SQLITE_ROW {
-                if let c = sqlite3_column_text(stmt, 1), String(cString: c) == column {
-                    exists = true
-                    break
-                }
-            }
-        }
-        sqlite3_finalize(stmt)
-        if !exists {
-            sqlite3_exec(db, "ALTER TABLE \(table) ADD COLUMN \(column) \(type)", nil, nil, nil)
         }
     }
 
@@ -337,9 +278,9 @@ class PaperStore {
         var loadedPapers: [Paper] = []
 
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = String(cString: sqlite3_column_text(stmt, 0))
-            let doi = sqlite3_column_text(stmt, 1).map { String(cString: $0) }
-            let title = String(cString: sqlite3_column_text(stmt, 2))
+            let id = columnString(stmt, 0)
+            let doi = columnOptionalString(stmt, 1)
+            let title = columnString(stmt, 2)
 
             var authors: [String] = []
             if let authorsRaw = sqlite3_column_text(stmt, 3) {
@@ -349,30 +290,30 @@ class PaperStore {
                 }
             }
 
-            let pubDate = sqlite3_column_text(stmt, 4).map { String(cString: $0) } ?? ""
-            let venue = String(cString: sqlite3_column_text(stmt, 5))
-            let venueAbbr = String(cString: sqlite3_column_text(stmt, 6))
+            let pubDate = columnString(stmt, 4)
+            let venue = columnString(stmt, 5)
+            let venueAbbr = columnString(stmt, 6)
             let citedCount = Int(sqlite3_column_int(stmt, 7))
-            let abstract = String(cString: sqlite3_column_text(stmt, 8))
-            let landingPage = String(cString: sqlite3_column_text(stmt, 9))
-            let pdfUrl = sqlite3_column_text(stmt, 10).map { String(cString: $0) }
-            let track = String(cString: sqlite3_column_text(stmt, 11))
+            let abstract = columnString(stmt, 8)
+            let landingPage = columnString(stmt, 9)
+            let pdfUrl = columnOptionalString(stmt, 10)
+            let track = columnString(stmt, 11)
             let score = sqlite3_column_double(stmt, 12)
 
             let tier = Int(sqlite3_column_int(stmt, 13))
 
-            let statusRaw = String(cString: sqlite3_column_text(stmt, 14))
+            let statusRaw = columnString(stmt, 14)
             let status = PaperStatus(rawValue: statusRaw) ?? .pending
-            let changedAtRaw = String(cString: sqlite3_column_text(stmt, 15))
+            let changedAtRaw = columnString(stmt, 15)
             let changedAt = Self.parseSQLiteDate(changedAtRaw) ?? Date()
             let isRecommended = sqlite3_column_int(stmt, 16) == 1
-            let recommendedAtRaw = sqlite3_column_text(stmt, 17).map { String(cString: $0) }
+            let recommendedAtRaw = columnOptionalString(stmt, 17)
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
-            let recommendationReason = String(cString: sqlite3_column_text(stmt, 18))
-            let tags = Self.splitCSV(String(cString: sqlite3_column_text(stmt, 19)))
-            let collectionIds = Self.splitCSV(String(cString: sqlite3_column_text(stmt, 20)))
-            let note = String(cString: sqlite3_column_text(stmt, 21))
-            let abstractZh = String(cString: sqlite3_column_text(stmt, 22))
+            let recommendationReason = columnString(stmt, 18)
+            let tags = Self.splitCSV(columnString(stmt, 19))
+            let collectionIds = Self.splitCSV(columnString(stmt, 20))
+            let note = columnString(stmt, 21)
+            let abstractZh = columnString(stmt, 22)
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -670,6 +611,16 @@ class PaperStore {
         sqliteDateFormatter.date(from: value)
     }
 
+    private func columnString(_ stmt: OpaquePointer?, _ index: Int32) -> String {
+        sqlite3_column_text(stmt, index).map { String(cString: $0) } ?? ""
+    }
+
+    private func columnOptionalString(_ stmt: OpaquePointer?, _ index: Int32) -> String? {
+        guard let raw = sqlite3_column_text(stmt, index) else { return nil }
+        let value = String(cString: raw)
+        return value.isEmpty ? nil : value
+    }
+
     func setPaperStatus(id: String, status: PaperStatus) {
         let sql = """
         INSERT INTO paper_states (paper_id, status, changed_at)
@@ -707,10 +658,12 @@ class PaperStore {
             """
         } else {
             sql = """
-            INSERT INTO paper_recommendations (paper_id, recommended_at, is_active)
-            VALUES (?, datetime('now'), 0)
+            INSERT INTO paper_recommendations (paper_id, recommended_at, is_active, recommendation_reason)
+            VALUES (?, NULL, 0, '')
             ON CONFLICT(paper_id) DO UPDATE SET
-                is_active = 0
+                recommended_at = NULL,
+                is_active = 0,
+                recommendation_reason = ''
             """
         }
 
@@ -726,6 +679,9 @@ class PaperStore {
                     if isRecommended {
                         papers[idx].recommendedAt = Date()
                         papers[idx].recommendationReason = reason
+                    } else {
+                        papers[idx].recommendedAt = nil
+                        papers[idx].recommendationReason = ""
                     }
                 }
                 paperVersion += 1
@@ -854,11 +810,11 @@ class PaperStore {
 
         var rows: [PaperCollection] = []
         while sqlite3_step(stmt) == SQLITE_ROW {
-            let id = String(cString: sqlite3_column_text(stmt, 0))
-            let name = String(cString: sqlite3_column_text(stmt, 1))
-            let color = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
-            let icon = sqlite3_column_text(stmt, 3).map { String(cString: $0) }
-            let parentId = sqlite3_column_text(stmt, 4).map { String(cString: $0) }
+            let id = columnString(stmt, 0)
+            let name = columnString(stmt, 1)
+            let color = columnOptionalString(stmt, 2)
+            let icon = columnOptionalString(stmt, 3)
+            let parentId = columnOptionalString(stmt, 4)
             rows.append(PaperCollection(id: id, name: name, color: color, icon: icon, parentId: parentId))
         }
         return rows
@@ -926,7 +882,7 @@ class PaperStore {
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
             while sqlite3_step(stmt) == SQLITE_ROW {
-                ids.insert(String(cString: sqlite3_column_text(stmt, 0)))
+                ids.insert(columnString(stmt, 0))
             }
         }
         sqlite3_finalize(stmt)

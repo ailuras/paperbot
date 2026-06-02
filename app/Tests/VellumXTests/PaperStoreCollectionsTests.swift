@@ -1,11 +1,10 @@
-import SQLite3
 import XCTest
 @testable import VellumX
 
 @MainActor
 final class PaperStoreCollectionsTests: XCTestCase {
     func testCreateCollectionTrimsNameAndBuildsSubtree() throws {
-        let store = PaperStore(databaseURL: try temporaryDatabaseURL())
+        let store = PaperStore(databaseURL: try temporaryDatabaseURL(self))
 
         let parent = try XCTUnwrap(store.createCollection(name: "  Parent  ", color: "blue", icon: "book"))
         let child = try XCTUnwrap(store.createCollection(name: "  Child  ", parentId: parent.id))
@@ -17,7 +16,7 @@ final class PaperStoreCollectionsTests: XCTestCase {
     }
 
     func testDeleteCollectionRemovesWholeSubtreeMembershipOnly() throws {
-        let store = PaperStore(databaseURL: try temporaryDatabaseURL())
+        let store = PaperStore(databaseURL: try temporaryDatabaseURL(self))
         _ = store.addOrUpdate(papers: [makePaper(id: "p1", title: "Paper One")])
 
         let parent = try XCTUnwrap(store.createCollection(name: "Parent"))
@@ -33,42 +32,4 @@ final class PaperStoreCollectionsTests: XCTestCase {
         XCTAssertEqual(store.papers.first?.collectionIds, [sibling.id])
     }
 
-    func testLegacyCollectionsSchemaMigratesWithoutNameUniqueConstraint() throws {
-        let dbURL = try temporaryDatabaseURL()
-        try createLegacyCollectionsDatabase(at: dbURL)
-
-        let store = PaperStore(databaseURL: dbURL)
-        XCTAssertEqual(store.allCollections.first?.name, "Root")
-
-        let duplicate = try XCTUnwrap(store.createCollection(name: "Root"))
-        XCTAssertEqual(duplicate.name, "Root")
-        XCTAssertEqual(store.allCollections.filter { $0.name == "Root" }.count, 2)
-    }
-
-    private func temporaryDatabaseURL() throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("VellumXTests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        addTeardownBlock {
-            try? FileManager.default.removeItem(at: dir)
-        }
-        return dir.appendingPathComponent("vellumx.db")
-    }
-
-    private func createLegacyCollectionsDatabase(at url: URL) throws {
-        var db: OpaquePointer?
-        XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
-        defer { sqlite3_close(db) }
-
-        let sql = """
-        CREATE TABLE collections (
-            id TEXT PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
-            color TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
-        );
-        INSERT INTO collections (id, name, color) VALUES ('root', 'Root', NULL);
-        """
-        XCTAssertEqual(sqlite3_exec(db, sql, nil, nil, nil), SQLITE_OK)
-    }
 }

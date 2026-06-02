@@ -78,15 +78,9 @@ Venue→tier/abbreviation matching is done **solely** by `VenueScorer` from
 
 ### API key storage
 
-The translation API key is stored in
-`~/Library/Application Support/VellumX/settings.json` as plaintext (field
-`apiKey`). This avoids macOS Keychain authorization dialogs that fire on every
-rebuild when ad-hoc signing changes the binary hash. On first launch after
-upgrading from an older build, the key is migrated automatically from the
-Keychain; subsequent saves go to `settings.json` only.
-
-`Keychain.swift` is kept for potential future use but is no longer called for
-API keys.
+Translation API keys are stored in
+`~/Library/Application Support/VellumX/settings.json` as plaintext under
+`apiKeys`, keyed by provider.
 
 ## Data
 
@@ -131,7 +125,8 @@ the pure business-logic layer (76 test cases):
 | `RecommendEngineTests` | Pool selection, slot allocation, deduplication |
 | `PdfResolverTests` | DOI URL normalisation (`stripDoiPrefix`) |
 | `PaperStoreHelpersTests` | `splitCSV`, `normalizedTag`, `parseSQLiteDate` |
-| `PaperStoreCollectionsTests` | Collection schema migration, nested subtree membership |
+| `PaperStoreCollectionsTests` | Nested collection creation, subtree membership, recursive deletion |
+| `PaperStoreRecommendationsTests` | Recommendation state persistence and cancellation cleanup |
 | `MetadataStoreHelpersTests` | Field/tier normalisation, default point values |
 | `CitationExporterTests` | Cite-key generation, BibTeX escaping/field output |
 

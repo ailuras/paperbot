@@ -147,30 +147,12 @@ final class AppSettings {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        // Per-provider key map.  Load from the new `apiKeys` dict field.
-        // On first run after upgrading from a build that only stored a single
-        // `apiKey`, migrate it into the map; then fall back to the Keychain.
         // NOTE: didSet does not fire during init, so apiKeys is set directly.
-        var keys = stored?.apiKeys ?? [:]
-        if (keys[selectedProvider.rawValue] ?? "").isEmpty {
-            let legacyKey = stored?.apiKey.flatMap { $0.isEmpty ? nil : $0 }
-            let keychainAccount: String
-            switch selectedProvider {
-            case .deepseek:  keychainAccount = "deepseek-api-key"
-            case .openai:    keychainAccount = "openai-api-key"
-            case .anthropic: keychainAccount = "anthropic-api-key"
-            }
-            let keychainKey = Keychain.get(keychainAccount).flatMap { $0.isEmpty ? nil : $0 }
-            if let key = legacyKey ?? keychainKey { keys[selectedProvider.rawValue] = key }
-        }
-        apiKeys = keys
+        apiKeys = stored?.apiKeys ?? [:]
         apiKey   = apiKeys[selectedProvider.rawValue] ?? ""
 
-        // Materialise settings.json on first run, or flush after migrating to the
-        // per-provider key map format.
-        if !FileManager.default.fileExists(atPath: url.path) || stored?.apiKeys == nil {
-            save()
-        }
+        // Always rewrite through the current schema so retired fields disappear.
+        save()
     }
 
     private struct Stored: Codable {
@@ -191,15 +173,14 @@ final class AppSettings {
         var defaultDays: Int?
         var defaultMaxResults: Int?
         var topicFilter: String?
-        var apiKey: String?                  // legacy — read for migration only
-        var apiKeys: [String: String]?       // per-provider map (current)
+        var apiKeys: [String: String]?
 
         enum CodingKeys: String, CodingKey {
             case storageDirectory, menuBarEnabled, language, translateEnabled
             case apiProvider, apiBaseURL, apiModel, targetLanguage
             case dailyCount, qualitySlots, highScoreThreshold
             case recentDays, openAlexMailto, perPage, defaultDays
-            case defaultMaxResults, topicFilter, apiKey, apiKeys
+            case defaultMaxResults, topicFilter, apiKeys
         }
     }
 
@@ -224,7 +205,6 @@ final class AppSettings {
             defaultDays: defaultDays,
             defaultMaxResults: defaultMaxResults,
             topicFilter: topicFilter,
-            apiKey: apiKeys[apiProvider.rawValue].flatMap { $0.isEmpty ? nil : $0 },
             apiKeys: nonEmptyKeys.isEmpty ? nil : nonEmptyKeys
         )
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]

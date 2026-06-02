@@ -1,4 +1,5 @@
 import Foundation
+import XCTest
 @testable import VellumX
 
 // MARK: - AppConfig factory
@@ -85,4 +86,14 @@ func dateString(daysAgo: Int) -> String {
     formatter.dateFormat = "yyyy-MM-dd"
     let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date()
     return formatter.string(from: date)
+}
+
+func temporaryDatabaseURL(_ testCase: XCTestCase) throws -> URL {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("VellumXTests-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    testCase.addTeardownBlock {
+        try? FileManager.default.removeItem(at: dir)
+    }
+    return dir.appendingPathComponent("vellumx.db")
 }

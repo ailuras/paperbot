@@ -447,8 +447,7 @@ struct PaperDetailView: View {
 
     private var recommendationMemo: String {
         let reason = paper.recommendationReason.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !reason.isEmpty { return reason }
-        if paper.isRecommended { return "Active recommendation" }
+        if paper.isRecommended { return reason.isEmpty ? "Active recommendation" : reason }
         return "Not currently recommended"
     }
 
@@ -935,4 +934,3 @@ private struct DetailExternalLinkLine: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
-
