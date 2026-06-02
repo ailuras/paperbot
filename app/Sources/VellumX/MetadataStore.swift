@@ -80,7 +80,7 @@ final class MetadataStore {
     }
 
     func tierColor(_ tier: Int) -> Color {
-        color(named: tiers.first(where: { $0.rank == tier })?.color, default: tierDefaultColor(tier))
+        color(named: tiers.first(where: { $0.rank == tier })?.color, default: Self.tierDefaultColor(tier))
     }
 
     func color(forKey key: String, default defaultColor: LabelColor) -> Color {
@@ -132,7 +132,7 @@ final class MetadataStore {
         LabelColor.color(named: name) ?? defaultColor.color
     }
 
-    private func tierDefaultColor(_ tier: Int) -> LabelColor {
+    static func tierDefaultColor(_ tier: Int) -> LabelColor {
         switch tier {
         case 1: return .red
         case 2: return .orange

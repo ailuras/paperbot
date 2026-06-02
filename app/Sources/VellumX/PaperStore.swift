@@ -286,8 +286,8 @@ class PaperStore {
             let recommendedAtRaw = sqlite3_column_text(stmt, 17).map { String(cString: $0) }
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
             let recommendationReason = String(cString: sqlite3_column_text(stmt, 18))
-            let tags = Self.splitTags(String(cString: sqlite3_column_text(stmt, 19)))
-            let collectionIds = Self.splitTags(String(cString: sqlite3_column_text(stmt, 20)))
+            let tags = Self.splitCSV(String(cString: sqlite3_column_text(stmt, 19)))
+            let collectionIds = Self.splitCSV(String(cString: sqlite3_column_text(stmt, 20)))
             let note = String(cString: sqlite3_column_text(stmt, 21))
             let abstractZh = String(cString: sqlite3_column_text(stmt, 22))
 
@@ -493,7 +493,7 @@ class PaperStore {
     }
 
     private func replaceTopics(for paperId: String, track: String) {
-        let topics = Self.splitTopics(track)
+        let topics = Self.splitCSV(track)
 
         let deleteSql = "DELETE FROM paper_topics WHERE paper_id = ?"
         var deleteStmt: OpaquePointer?
@@ -556,13 +556,9 @@ class PaperStore {
         }
     }
 
-    private static func splitTopics(_ track: String) -> [String] {
-        track.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private static func splitTags(_ raw: String) -> [String] {
+    /// Split a comma-separated SQLite string into trimmed, non-empty tokens.
+    /// Used for topics, tags, and collection IDs stored as group_concat results.
+    private static func splitCSV(_ raw: String) -> [String] {
         raw.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -577,12 +573,16 @@ class PaperStore {
         return tag.isEmpty ? nil : tag
     }
 
+    private static let sqliteDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return f
+    }()
+
     private static func parseSQLiteDate(_ value: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-        return formatter.date(from: value)
+        sqliteDateFormatter.date(from: value)
     }
 
     func setPaperStatus(id: String, status: PaperStatus) {

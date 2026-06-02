@@ -1,6 +1,8 @@
 import Foundation
 
 class TranslationService {
+    private static let anthropicAPIVersion = "2023-06-01"
+
     let config: AppConfig
     let apiKey: String
 
@@ -82,7 +84,7 @@ class TranslationService {
         request.setValue("\(provider.authHeaderValuePrefix)\(apiKey)", forHTTPHeaderField: provider.authHeaderName)
 
         if provider.requiresVersionHeader {
-            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            request.setValue(Self.anthropicAPIVersion, forHTTPHeaderField: "anthropic-version")
         }
 
         let bodyData: Data
@@ -136,7 +138,7 @@ class TranslationService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: provider.authHeaderName)
-        request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+        request.setValue(Self.anthropicAPIVersion, forHTTPHeaderField: "anthropic-version")
         request.httpBody = try buildAnthropicChatBody(
             model: model,
             system: "You are validating an API connection.",

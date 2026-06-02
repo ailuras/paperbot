@@ -44,7 +44,7 @@ class PdfResolver {
     
     private func fetchArxiv(title: String) async -> String? {
         if title.isEmpty { return nil }
-        var components = URLComponents(string: "http://export.arxiv.org/api/query")
+        var components = URLComponents(string: "https://export.arxiv.org/api/query")
         components?.queryItems = [
             URLQueryItem(name: "search_query", value: "ti:\"\(title)\""),
             URLQueryItem(name: "max_results", value: "3"),

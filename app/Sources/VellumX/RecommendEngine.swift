@@ -13,14 +13,15 @@ class RecommendEngine {
         self.config = config
     }
 
-    private func parsePubDate(paper: Paper) -> Date? {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: paper.publicationDate)
-    }
+    private static let pubDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f
+    }()
 
     private func isRecent(paper: Paper, cutoff: Date) -> Bool {
-        guard let pubDate = parsePubDate(paper: paper) else { return false }
+        guard let pubDate = Self.pubDateFormatter.date(from: paper.publicationDate) else { return false }
         return pubDate >= cutoff
     }
 

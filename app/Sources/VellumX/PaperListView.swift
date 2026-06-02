@@ -70,15 +70,6 @@ struct PaperListView: View {
 
     private var filtersActive: Bool { !selectedFields.isEmpty || !selectedTiers.isEmpty }
 
-    private func tierDefaultColor(_ tier: Int) -> LabelColor {
-        switch tier {
-        case 1: return .red
-        case 2: return .orange
-        case 3: return .yellow
-        default: return .gray
-        }
-    }
-
     private var filterPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -106,7 +97,7 @@ struct PaperListView: View {
                     Text("TIER").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                     ForEach(metadata.allTiers, id: \.self) { tier in
                         FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
-                                  defaultColor: tierDefaultColor(tier),
+                                  defaultColor: MetadataStore.tierDefaultColor(tier),
                                   isSelected: selectedTiers.contains(tier)) {
                             toggle(tier, in: &selectedTiers)
                         }
