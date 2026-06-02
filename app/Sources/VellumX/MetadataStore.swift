@@ -511,7 +511,7 @@ final class MetadataStore {
         }
     }
 
-    private static func defaultPoints(for rank: Int) -> Int {
+    static func defaultPoints(for rank: Int) -> Int {
         tierPoints[rank] ?? max(1, 12 - 2 * rank)
     }
 
@@ -523,7 +523,7 @@ final class MetadataStore {
     /// Normalize a stored/edited field value. Trims whitespace and treats both
     /// the empty string and the built-in "Others" name as "no custom field"
     /// (nil), so "Others" is purely derived, never persisted.
-    private static func normalizedField(_ field: String?) -> String? {
+    static func normalizedField(_ field: String?) -> String? {
         guard let value = field?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil
         }
@@ -533,7 +533,7 @@ final class MetadataStore {
         return value
     }
 
-    private static func normalizedFieldName(_ field: String?) -> String? {
+    static func normalizedFieldName(_ field: String?) -> String? {
         guard let value = field?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
             return nil
         }

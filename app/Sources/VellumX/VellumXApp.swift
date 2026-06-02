@@ -37,7 +37,6 @@ final class MainWindowOpener {
     }
 }
 
-@main
 struct VellumXApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var store = PaperStore.shared

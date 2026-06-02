@@ -572,7 +572,7 @@ class PaperStore {
 
     /// Split a comma-separated SQLite string into trimmed, non-empty tokens.
     /// Used for topics, tags, and collection IDs stored as group_concat results.
-    private static func splitCSV(_ raw: String) -> [String] {
+    static func splitCSV(_ raw: String) -> [String] {
         raw.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -587,7 +587,7 @@ class PaperStore {
         return tag.isEmpty ? nil : tag
     }
 
-    private static let sqliteDateFormatter: DateFormatter = {
+    static let sqliteDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.timeZone = TimeZone(secondsFromGMT: 0)
@@ -595,7 +595,7 @@ class PaperStore {
         return f
     }()
 
-    private static func parseSQLiteDate(_ value: String) -> Date? {
+    static func parseSQLiteDate(_ value: String) -> Date? {
         sqliteDateFormatter.date(from: value)
     }
 

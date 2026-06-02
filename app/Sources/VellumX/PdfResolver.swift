@@ -136,7 +136,7 @@ class PdfResolver {
         return nil
     }
 
-    private static func stripDoiPrefix(_ doi: String) -> String {
+    static func stripDoiPrefix(_ doi: String) -> String {
         let lower = doi.lowercased()
         for prefix in ["https://doi.org/", "http://doi.org/",
                         "https://dx.doi.org/", "http://dx.doi.org/"] {

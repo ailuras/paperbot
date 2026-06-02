@@ -25,26 +25,25 @@ class RecommendEngine {
         return pubDate >= cutoff
     }
 
-    func recommend(papers: [Paper], count: Int? = nil) -> (selected: [RecommendationResult], resetIds: [String]) {
+    /// Picks up to `count` new papers from the unrecommended pool and appends
+    /// them to the recommendation list. Already-recommended papers are never
+    /// touched — call `setPaperRecommended(id:isRecommended:false)` explicitly
+    /// to remove individual picks.
+    func recommend(papers: [Paper], count: Int? = nil) -> [RecommendationResult] {
         let recConfig = config.recommendation
         let dailyCount = count ?? recConfig.daily_count
         let qualitySlots = min(recConfig.quality_slots, dailyCount)
         let highThreshold = Double(recConfig.high_score_threshold)
         let recentDays = recConfig.recent_days
 
-        if papers.isEmpty { return (selected: [], resetIds: []) }
-
-        // Collect active recommendations to reset so repeated runs replace the
-        // day's picks without changing the user's lifecycle status.
-        let toReset = papers.filter(\.isRecommended).map(\.id)
+        if papers.isEmpty { return [] }
 
         let calendar = Calendar.current
         guard let cutoffDate = calendar.date(byAdding: .day, value: -recentDays, to: Date()) else {
-            return (selected: [], resetIds: [])
+            return []
         }
 
-        // Candidate priority: never pick an already-active recommendation;
-        // exhaust pending papers first, then fill from the remaining statuses.
+        // Only consider papers not already recommended; pending papers are exhausted first.
         let unrecommended = papers.filter { !$0.isRecommended }
         let pendingPool = unrecommended.filter { $0.status == .pending }
         let fallbackPool = unrecommended.filter { $0.status != .pending }
@@ -118,6 +117,6 @@ class RecommendEngine {
             }
         }
 
-        return (selected: selected, resetIds: toReset)
+        return selected
     }
 }

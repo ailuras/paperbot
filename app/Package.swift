@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "VellumX",
             path: "Sources/VellumX"
+        ),
+        .testTarget(
+            name: "VellumXTests",
+            dependencies: ["VellumX"],
+            path: "Tests/VellumXTests"
         )
     ]
 )
