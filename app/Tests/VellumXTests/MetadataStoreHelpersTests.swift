@@ -1,6 +1,7 @@
 import XCTest
 @testable import VellumX
 
+@MainActor
 final class MetadataStoreHelpersTests: XCTestCase {
 
     // MARK: - normalizedField

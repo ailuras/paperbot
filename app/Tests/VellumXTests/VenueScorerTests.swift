@@ -10,7 +10,7 @@ final class VenueScorerTests: XCTestCase {
             VenuePref(abbr: "AIJ-EXACT", phrase: "artificial intelligence", tier: 2, field: nil, exact: true),
             VenuePref(abbr: "AI-SUB",    phrase: "artificial intelligence", tier: 1, field: nil, exact: false)
         ]
-        let scorer = VenueScorer(config: .forTesting(tiers: ["1": ScoringTier(points: 10), "2": ScoringTier(points: 7)], venues: venues), venues: venues)
+        let scorer = VenueScorer(config: .forTesting(venues: venues, tiers: ["1": ScoringTier(points: 10), "2": ScoringTier(points: 7)]), venues: venues)
         let result = scorer.evaluate(venue: "Artificial Intelligence", citations: 0)
         XCTAssertEqual(result.abbr, "AIJ-EXACT")
         XCTAssertEqual(result.tier, 2)
@@ -21,7 +21,7 @@ final class VenueScorerTests: XCTestCase {
             VenuePref(abbr: "ICSE", phrase: "international conference on software engineering", tier: 2, field: nil),
             VenuePref(abbr: "SE",   phrase: "software engineering",                              tier: 1, field: nil)
         ]
-        let scorer = VenueScorer(config: .forTesting(tiers: ["1": ScoringTier(points: 10), "2": ScoringTier(points: 7)], venues: venues), venues: venues)
+        let scorer = VenueScorer(config: .forTesting(venues: venues, tiers: ["1": ScoringTier(points: 10), "2": ScoringTier(points: 7)]), venues: venues)
         let result = scorer.evaluate(venue: "ACM/IEEE International Conference on Software Engineering", citations: 0)
         XCTAssertEqual(result.abbr, "ICSE")
         XCTAssertEqual(result.tier, 2)
@@ -33,7 +33,7 @@ final class VenueScorerTests: XCTestCase {
             VenuePref(abbr: "WEAK",   phrase: "machine learning", tier: 2, field: nil),
             VenuePref(abbr: "STRONG", phrase: "machine learning", tier: 1, field: nil)
         ]
-        let scorer = VenueScorer(config: .forTesting(tiers: ["1": ScoringTier(points: 10), "2": ScoringTier(points: 7)], venues: venues), venues: venues)
+        let scorer = VenueScorer(config: .forTesting(venues: venues, tiers: ["1": ScoringTier(points: 10), "2": ScoringTier(points: 7)]), venues: venues)
         let result = scorer.evaluate(venue: "Conference on Machine Learning 2024", citations: 0)
         XCTAssertEqual(result.abbr, "STRONG")
         XCTAssertEqual(result.tier, 1)
@@ -59,7 +59,7 @@ final class VenueScorerTests: XCTestCase {
             VenuePref(abbr: "WEAK",   phrase: "science", tier: 3, field: nil, exact: true),
             VenuePref(abbr: "STRONG", phrase: "science", tier: 1, field: nil, exact: true)
         ]
-        let scorer = VenueScorer(config: .forTesting(tiers: ["1": ScoringTier(points: 10), "3": ScoringTier(points: 3)], venues: venues), venues: venues)
+        let scorer = VenueScorer(config: .forTesting(venues: venues, tiers: ["1": ScoringTier(points: 10), "3": ScoringTier(points: 3)]), venues: venues)
         let result = scorer.evaluate(venue: "Science", citations: 0)
         XCTAssertEqual(result.abbr, "STRONG")
         XCTAssertEqual(result.tier, 1)
