@@ -63,10 +63,7 @@ final class AppSettings {
     var apiBaseURL: String { didSet { save() } }
     var apiModel: String { didSet { save() } }
     var targetLanguage: String { didSet { save() } }
-    /// Bridges the Keychain-stored key into SwiftUI. Reads/writes the Keychain.
-    var apiKey: String {
-        didSet { Keychain.set(apiKey, for: Self.apiKeyAccount(for: apiProvider)) }
-    }
+    var apiKey: String { didSet { save() } }
 
     // ── Recommendation knobs ─────────────────────────────────────────────
     var dailyCount: Int { didSet { save() } }
@@ -151,7 +148,9 @@ final class AppSettings {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        apiKey             = Keychain.get(Self.apiKeyAccount(for: selectedProvider)) ?? ""
+        // Prefer the value persisted in settings.json; fall back to Keychain once
+        // for migration from the old storage, then the next save() will persist it.
+        apiKey = stored?.apiKey ?? Keychain.get(Self.apiKeyAccount(for: selectedProvider)) ?? ""
 
         // settings.json is the editable developer config: materialize it with
         // defaults the first time so every knob is visible and hand-editable.
@@ -180,6 +179,7 @@ final class AppSettings {
         var defaultDays: Int?
         var defaultMaxResults: Int?
         var topicFilter: String?
+        var apiKey: String?
 
         enum CodingKeys: String, CodingKey {
             case storageDirectory, menuBarEnabled, language, translateEnabled
@@ -187,7 +187,7 @@ final class AppSettings {
             case deepSeekBaseURL, deepSeekModel
             case targetLanguage, dailyCount, qualitySlots, highScoreThreshold
             case recentDays, openAlexMailto, perPage, defaultDays
-            case defaultMaxResults, topicFilter
+            case defaultMaxResults, topicFilter, apiKey
         }
     }
 
@@ -212,7 +212,8 @@ final class AppSettings {
             perPage: perPage,
             defaultDays: defaultDays,
             defaultMaxResults: defaultMaxResults,
-            topicFilter: topicFilter
+            topicFilter: topicFilter,
+            apiKey: apiKey.isEmpty ? nil : apiKey
         )
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try? enc.encode(stored).write(to: url, options: .atomic)
