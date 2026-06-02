@@ -332,7 +332,7 @@ struct PaperDetailView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.accentColor.opacity(0.12))
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(Color.accentColor)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
@@ -350,7 +350,7 @@ struct PaperDetailView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.accentColor.opacity(0.12))
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(Color.accentColor)
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
@@ -571,7 +571,7 @@ private struct SectionHeader: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(.accentColor)
+                .foregroundStyle(Color.accentColor)
             Text(title)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(.primary)
@@ -802,7 +802,7 @@ private struct DetailExternalLinkLine: View {
                 Link(destination: url) {
                     Text(value)
                         .font(.caption)
-                        .foregroundStyle(.accentColor)
+                        .foregroundStyle(Color.accentColor)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .textSelection(.enabled)

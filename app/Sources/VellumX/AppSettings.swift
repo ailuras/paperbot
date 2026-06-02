@@ -54,9 +54,10 @@ final class AppSettings {
     var apiProvider: TranslationProvider {
         didSet {
             if oldValue != apiProvider {
-                // Read from settings.json (already loaded); no Keychain access needed.
-                // The key for the new provider will be empty until the user enters it.
-                apiKey = ""
+                // Swap in the saved key for the newly selected provider instead of
+                // clearing — this lets the user switch between providers without
+                // re-entering keys they've already saved.
+                apiKey = apiKeys[apiProvider.rawValue] ?? ""
             }
             save()
         }
@@ -64,7 +65,15 @@ final class AppSettings {
     var apiBaseURL: String { didSet { save() } }
     var apiModel: String { didSet { save() } }
     var targetLanguage: String { didSet { save() } }
-    var apiKey: String { didSet { save() } }
+    var apiKey: String {
+        didSet {
+            apiKeys[apiProvider.rawValue] = apiKey.isEmpty ? nil : apiKey
+            save()
+        }
+    }
+
+    /// Per-provider key backing store — not directly observed by SwiftUI.
+    @ObservationIgnored private var apiKeys: [String: String] = [:]
 
     // ── Recommendation knobs ─────────────────────────────────────────────
     var dailyCount: Int { didSet { save() } }
@@ -138,20 +147,28 @@ final class AppSettings {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        // API key lives in settings.json (field `apiKey`).  If absent, attempt a
-        // one-time migration from the old Keychain-backed storage.
-        // NOTE: didSet does not fire during init, so save() is called explicitly below.
-        let keychainAccount: String
-        switch selectedProvider {
-        case .deepseek:  keychainAccount = "deepseek-api-key"
-        case .openai:    keychainAccount = "openai-api-key"
-        case .anthropic: keychainAccount = "anthropic-api-key"
+        // Per-provider key map.  Load from the new `apiKeys` dict field.
+        // On first run after upgrading from a build that only stored a single
+        // `apiKey`, migrate it into the map; then fall back to the Keychain.
+        // NOTE: didSet does not fire during init, so apiKeys is set directly.
+        var keys = stored?.apiKeys ?? [:]
+        if (keys[selectedProvider.rawValue] ?? "").isEmpty {
+            let legacyKey = stored?.apiKey.flatMap { $0.isEmpty ? nil : $0 }
+            let keychainAccount: String
+            switch selectedProvider {
+            case .deepseek:  keychainAccount = "deepseek-api-key"
+            case .openai:    keychainAccount = "openai-api-key"
+            case .anthropic: keychainAccount = "anthropic-api-key"
+            }
+            let keychainKey = Keychain.get(keychainAccount).flatMap { $0.isEmpty ? nil : $0 }
+            if let key = legacyKey ?? keychainKey { keys[selectedProvider.rawValue] = key }
         }
-        let storedKey = stored?.apiKey.flatMap { $0.isEmpty ? nil : $0 }
-        apiKey = storedKey ?? Keychain.get(keychainAccount) ?? ""
+        apiKeys = keys
+        apiKey   = apiKeys[selectedProvider.rawValue] ?? ""
 
-        // Materialise settings.json on first run, or flush if we just migrated from Keychain.
-        if !FileManager.default.fileExists(atPath: url.path) || storedKey == nil {
+        // Materialise settings.json on first run, or flush after migrating to the
+        // per-provider key map format.
+        if !FileManager.default.fileExists(atPath: url.path) || stored?.apiKeys == nil {
             save()
         }
     }
@@ -174,19 +191,21 @@ final class AppSettings {
         var defaultDays: Int?
         var defaultMaxResults: Int?
         var topicFilter: String?
-        var apiKey: String?
+        var apiKey: String?                  // legacy — read for migration only
+        var apiKeys: [String: String]?       // per-provider map (current)
 
         enum CodingKeys: String, CodingKey {
             case storageDirectory, menuBarEnabled, language, translateEnabled
             case apiProvider, apiBaseURL, apiModel, targetLanguage
             case dailyCount, qualitySlots, highScoreThreshold
             case recentDays, openAlexMailto, perPage, defaultDays
-            case defaultMaxResults, topicFilter, apiKey
+            case defaultMaxResults, topicFilter, apiKey, apiKeys
         }
     }
 
     private func save() {
         configVersion += 1
+        let nonEmptyKeys = apiKeys.filter { !$0.value.isEmpty }
         let stored = Stored(
             storageDirectory: storageDirectory,
             menuBarEnabled: menuBarEnabled,
@@ -205,7 +224,8 @@ final class AppSettings {
             defaultDays: defaultDays,
             defaultMaxResults: defaultMaxResults,
             topicFilter: topicFilter,
-            apiKey: apiKey.isEmpty ? nil : apiKey
+            apiKey: apiKeys[apiProvider.rawValue].flatMap { $0.isEmpty ? nil : $0 },
+            apiKeys: nonEmptyKeys.isEmpty ? nil : nonEmptyKeys
         )
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         try? enc.encode(stored).write(to: url, options: .atomic)
