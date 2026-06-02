@@ -20,9 +20,7 @@ class PaperStore {
     private var db: OpaquePointer?
 
     var dbURL: URL {
-        let targetDir = AppSettings.shared.resolvedStorageDirectory
-        try? FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
-        return targetDir.appendingPathComponent("vellumx.db")
+        AppSettings.shared.resolvedStorageDirectory.appendingPathComponent("vellumx.db")
     }
 
     private init() {
@@ -33,6 +31,8 @@ class PaperStore {
 
     private func openDatabase() {
         let url = dbURL
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if sqlite3_open(url.path, &db) != SQLITE_OK {
             print("Error: Could not open database at \(url.path)")
         } else {
@@ -288,8 +288,7 @@ class PaperStore {
             let track = String(cString: sqlite3_column_text(stmt, 11))
             let score = sqlite3_column_double(stmt, 12)
 
-            let tierRaw = String(cString: sqlite3_column_text(stmt, 13))
-            let tier = Int(tierRaw) ?? 0
+            let tier = Int(sqlite3_column_int(stmt, 13))
 
             let statusRaw = String(cString: sqlite3_column_text(stmt, 14))
             let status = PaperStatus(rawValue: statusRaw) ?? .pending

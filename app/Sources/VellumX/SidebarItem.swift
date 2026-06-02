@@ -11,7 +11,7 @@ enum SidebarItem: Hashable {
     var displayName: String {
         switch self {
         case .all: return "All Papers"
-        case .recommended: return "Recommend"
+        case .recommended: return "Recommended"
         case .pending: return "Pending"
         case .starred: return "Starred"
         case .read: return "Read"
