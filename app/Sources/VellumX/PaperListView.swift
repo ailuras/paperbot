@@ -103,7 +103,7 @@ private struct PaperRowView: View {
                 Text(paper.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
 
                 Spacer(minLength: 8)
 
@@ -114,7 +114,7 @@ private struct PaperRowView: View {
                     }
                     Text(paper.publicationDate)
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .padding(.leading, isDailyRecommendation && isTodayRecommended ? 2 : 5)
@@ -147,7 +147,7 @@ private struct PaperTagView: View {
             .padding(.vertical, 2)
             .background(color.opacity(0.12))
             .foregroundStyle(color)
-            .cornerRadius(4)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
@@ -170,11 +170,11 @@ private struct EmptyPaperListView: View {
 
             Text("No papers here")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.primary.opacity(0.8))
+                .foregroundStyle(.primary.opacity(0.8))
 
             Text("Press ⌘R to fetch papers or adjust your filters")
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
             Spacer()

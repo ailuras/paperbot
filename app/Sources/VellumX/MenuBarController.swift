@@ -221,10 +221,7 @@ struct MenuBarContentView: View {
     private func runRecommendEngine() {
         let cfg = ConfigManager.shared.effectiveConfig
         let engine = RecommendEngine(config: cfg)
-        let (selected, resetIds) = engine.recommend(papers: store.papers)
-        for id in resetIds {
-            store.setPaperRecommended(id: id, isRecommended: false)
-        }
+        let selected = engine.recommend(papers: store.papers)
         for r in selected {
             store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
         }

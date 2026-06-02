@@ -570,14 +570,13 @@ struct ContentView: View {
 
         Task {
             let engine = RecommendEngine(config: config)
-            let (selected, resetIds) = engine.recommend(papers: store.papers)
-            for id in resetIds {
-                store.setPaperRecommended(id: id, isRecommended: false)
-            }
+            let selected = engine.recommend(papers: store.papers)
             for r in selected {
                 store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
             }
-            statusMessage = "Selected \(selected.count) recommendations for today!"
+            statusMessage = selected.isEmpty
+                ? "No new candidates to recommend."
+                : "Added \(selected.count) new recommendations!"
             isRecommending = false
         }
     }
@@ -652,7 +651,7 @@ struct ScoreBadgeView: View {
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(color.opacity(0.15))
-            .foregroundColor(color)
-            .cornerRadius(4)
+            .foregroundStyle(color)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }

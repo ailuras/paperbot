@@ -66,14 +66,14 @@ struct PaperDetailView: View {
                 .lineSpacing(3)
                 .lineLimit(3)
                 .truncationMode(.tail)
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
                 .help(paper.title)
 
             // Authors
             if !paper.authors.isEmpty {
                 Text(paper.authors.joined(separator: ", "))
                     .font(.callout)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .lineSpacing(2)
             }
 
@@ -96,8 +96,8 @@ struct PaperDetailView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .frame(width: 28, height: 28)
                     .background(Color.secondary.opacity(0.10))
-                    .foregroundColor(.primary.opacity(0.75))
-                    .cornerRadius(7)
+                    .foregroundStyle(.primary.opacity(0.75))
+                    .clipShape(RoundedRectangle(cornerRadius: 7))
                     .overlay(
                         RoundedRectangle(cornerRadius: 7)
                             .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
@@ -137,8 +137,8 @@ struct PaperDetailView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 28, height: 28)
                 .background(Color.secondary.opacity(0.10))
-                .foregroundColor(.primary.opacity(0.75))
-                .cornerRadius(7)
+                .foregroundStyle(.primary.opacity(0.75))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
                 .overlay(
                     RoundedRectangle(cornerRadius: 7)
                         .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
@@ -206,7 +206,7 @@ struct PaperDetailView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color.secondary.opacity(0.06))
-        .cornerRadius(8)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
@@ -268,8 +268,8 @@ struct PaperDetailView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .background(Color.secondary.opacity(0.08))
-                    .foregroundColor(.secondary)
-                    .cornerRadius(6)
+                    .foregroundStyle(.secondary)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
@@ -282,7 +282,7 @@ struct PaperDetailView: View {
             if paper.tags.isEmpty {
                 Text("No tags yet.")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
             } else {
                 FlowLayout(spacing: 7) {
                     ForEach(paper.tags, id: \.self) { tag in
@@ -317,7 +317,7 @@ struct PaperDetailView: View {
                         ProgressView().controlSize(.small)
                         Text("Translating...")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 } else if !paper.abstractZh.isEmpty {
                     Button {
@@ -332,8 +332,8 @@ struct PaperDetailView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.accentColor.opacity(0.12))
-                        .foregroundColor(.accentColor)
-                        .cornerRadius(6)
+                        .foregroundStyle(.accentColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                     .help(showingTranslation ? "Switch to original abstract" : "Show translated abstract")
@@ -350,8 +350,8 @@ struct PaperDetailView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.accentColor.opacity(0.12))
-                        .foregroundColor(.accentColor)
-                        .cornerRadius(6)
+                        .foregroundStyle(.accentColor)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
                     .help("Translate abstract via AI")
@@ -362,12 +362,12 @@ struct PaperDetailView: View {
                 Text(paper.abstractZh)
                     .font(.system(size: 14, design: .serif))
                     .lineSpacing(4)
-                    .foregroundColor(.primary)
+                    .foregroundStyle(.primary)
             } else {
                 Text(paper.abstract.isEmpty ? "No abstract available." : paper.abstract)
                     .font(.system(size: 14, design: .serif))
                     .lineSpacing(4)
-                    .foregroundColor(paper.abstract.isEmpty ? .secondary : .primary)
+                    .foregroundStyle(paper.abstract.isEmpty ? .secondary : .primary)
             }
         }
         .padding(.horizontal, 20)
@@ -401,7 +401,7 @@ struct PaperDetailView: View {
             .frame(minHeight: 120, maxHeight: .infinity)
             .padding(8)
             .background(Color(NSColor.textBackgroundColor).opacity(0.5))
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.gray.opacity(noteFocused ? 0.4 : 0.2), lineWidth: 1)
@@ -440,7 +440,7 @@ struct PaperDetailView: View {
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.secondary.opacity(0.055))
-            .cornerRadius(8)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
@@ -514,14 +514,14 @@ struct EmptyDetailView: View {
 
             Text("Select a paper to view details")
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(.primary.opacity(0.85))
+                .foregroundStyle(.primary.opacity(0.85))
 
             VStack(spacing: 6) {
                 Text("Choose an item from the list to read its abstract,")
                 Text("add notes, or open the PDF.")
             }
             .font(.system(size: 13))
-            .foregroundColor(.secondary.opacity(0.75))
+            .foregroundStyle(.secondary.opacity(0.75))
             .multilineTextAlignment(.center)
 
             HStack(spacing: 16) {
@@ -548,7 +548,7 @@ private struct ShortcutHint: View {
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
                 .background(Color.secondary.opacity(0.12))
-                .cornerRadius(4)
+                .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .stroke(Color.gray.opacity(0.18), lineWidth: 0.5)
@@ -556,7 +556,7 @@ private struct ShortcutHint: View {
 
             Text(action)
                 .font(.system(size: 12))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
     }
 }
@@ -571,10 +571,10 @@ private struct SectionHeader: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.accentColor)
+                .foregroundStyle(.accentColor)
             Text(title)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundStyle(.primary)
         }
     }
 }
@@ -587,12 +587,12 @@ private struct MemoLine: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title.uppercased())
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.secondary.opacity(0.78))
+                .foregroundStyle(.secondary.opacity(0.78))
                 .frame(width: 104, alignment: .leading)
 
             Text(value)
                 .font(.caption)
-                .foregroundColor(.primary.opacity(0.82))
+                .foregroundStyle(.primary.opacity(0.82))
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -608,8 +608,8 @@ private struct PaperTagChip: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .background(Color.secondary.opacity(0.12))
-            .foregroundColor(.primary.opacity(0.82))
-            .cornerRadius(8)
+            .foregroundStyle(.primary.opacity(0.82))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
@@ -692,8 +692,8 @@ private struct ScoreTagView: View {
         .padding(.horizontal, 6)
         .frame(height: 20)
         .background(color.opacity(0.15))
-        .foregroundColor(color)
-        .cornerRadius(4)
+        .foregroundStyle(color)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
@@ -709,8 +709,8 @@ private struct CitationBadgeView: View {
         .padding(.horizontal, 6)
         .frame(height: 20)
         .background(Color.secondary.opacity(0.10))
-        .foregroundColor(.secondary)
-        .cornerRadius(4)
+        .foregroundStyle(.secondary)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
@@ -732,8 +732,8 @@ private struct DetailTag: View {
         .padding(.horizontal, 7)
         .frame(height: 20)
         .background(color.opacity(0.12))
-        .foregroundColor(color)
-        .cornerRadius(4)
+        .foregroundStyle(color)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
@@ -748,11 +748,11 @@ private struct DetailInlineMeta: View {
             Text(value)
                 .font(.caption)
         }
-        .foregroundColor(.secondary)
+        .foregroundStyle(.secondary)
         .padding(.horizontal, 7)
         .frame(height: 20)
         .background(Color.secondary.opacity(0.08))
-        .cornerRadius(4)
+        .clipShape(RoundedRectangle(cornerRadius: 4))
     }
 }
 
@@ -763,16 +763,16 @@ private struct DetailVenueLine: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "building.columns")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.top, 1)
 
             Text("VENUE")
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.secondary.opacity(0.75))
+                .foregroundStyle(.secondary.opacity(0.75))
 
             Text(value)
                 .font(.caption)
-                .foregroundColor(.primary.opacity(0.8))
+                .foregroundStyle(.primary.opacity(0.8))
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .textSelection(.enabled)
@@ -791,18 +791,18 @@ private struct DetailExternalLinkLine: View {
         HStack(alignment: .top, spacing: 6) {
             Image(systemName: "link")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .padding(.top, 1)
 
             Text(label)
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.secondary.opacity(0.75))
+                .foregroundStyle(.secondary.opacity(0.75))
 
             if let url {
                 Link(destination: url) {
                     Text(value)
                         .font(.caption)
-                        .foregroundColor(.accentColor)
+                        .foregroundStyle(.accentColor)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .textSelection(.enabled)
@@ -815,7 +815,7 @@ private struct DetailExternalLinkLine: View {
             } else {
                 Text(value)
                     .font(.caption)
-                    .foregroundColor(.primary.opacity(0.8))
+                    .foregroundStyle(.primary.opacity(0.8))
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .textSelection(.enabled)

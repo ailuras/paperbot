@@ -94,7 +94,7 @@ struct SidebarView: View {
                     Divider()
                     Text(statusMessage)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .padding(.horizontal)
                         .padding(.vertical, 8)
@@ -155,7 +155,7 @@ private struct TagFilterChip: View {
                 .frame(maxWidth: .infinity)
                 .background(backgroundColor)
                 .foregroundStyle(foregroundColor)
-                .cornerRadius(9)
+                .clipShape(RoundedRectangle(cornerRadius: 9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 9)
                         .stroke(borderColor, lineWidth: state == .neutral ? 0.5 : 1)
@@ -208,9 +208,9 @@ private struct CollectionSidebarRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundColor(isSelected ? .primary : .secondary)
+        .foregroundStyle(isSelected ? .primary : .secondary)
         .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-        .cornerRadius(5)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 
     private var collectionColor: Color {
