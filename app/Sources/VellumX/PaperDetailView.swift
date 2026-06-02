@@ -339,7 +339,6 @@ struct PaperDetailView: View {
                     .help(showingTranslation ? "Switch to original abstract" : "Show translated abstract")
                 } else if !paper.abstract.isEmpty {
                     Button {
-                        showingTranslation = true
                         onTranslate(paper)
                     } label: {
                         HStack(spacing: 4) {
@@ -375,6 +374,12 @@ struct PaperDetailView: View {
         .padding(.vertical, 14)
         .onChange(of: paper.id) { _, _ in
             showingTranslation = false
+            lastPersistedNote = paper.note
+        }
+        .onChange(of: isTranslating) { _, translating in
+            if !translating, !paper.abstractZh.isEmpty {
+                showingTranslation = true
+            }
         }
     }
 
