@@ -28,9 +28,12 @@ osascript -e "tell application id \"$BUNDLE_ID\" to quit" 2>/dev/null || true
 sleep 0.8
 pkill -f "${APP_NAME}.app/Contents/MacOS" 2>/dev/null || true
 
-echo "[2/3] building..."
+echo "[2/4] testing..."
+(cd "$REPO/app" && swift test)
+
+echo "[3/4] building..."
 "$REPO/app/build-app.sh" "$CONFIG"
 
-echo "[3/3] launching $APP_PATH (right screen)"
+echo "[4/4] launching $APP_PATH (right screen)"
 defaults write com.ailuras.vellumx launchOnRightScreen -bool true
 open "$APP_PATH"

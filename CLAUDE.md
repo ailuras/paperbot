@@ -22,8 +22,13 @@ scripts/build.sh            # release (default)
 scripts/build.sh debug      # debug build
 
 # Rebuild and relaunch in one step (preferred during development):
-scripts/restart.sh          # debug build, stop→build→open
+# Runs swift test first — restart aborts if any test fails.
+scripts/restart.sh          # debug build, test→build→open
 scripts/restart.sh release
+
+# Run the unit test suite directly (forwards extra args to swift test):
+scripts/test.sh
+scripts/test.sh --filter VenueScorerTests
 
 # Stream OS logs from all running VellumX instances:
 scripts/log.sh
@@ -54,7 +59,6 @@ To override the variant explicitly: `./app/build-app.sh debug myfork`.
 `build-app.sh` runs `swift build`, wraps the binary into a `.app` bundle with
 [Info.plist](app/Info.plist) + [VellumX.entitlements](app/VellumX.entitlements),
 patches the bundle ID when a variant is active, then ad-hoc code-signs it.
-There is no test target.
 
 ## Configuration
 
@@ -100,9 +104,9 @@ All variant builds share this same directory.
 
 ## Architecture
 
-- [VellumXApp.swift](app/Sources/VellumX/VellumXApp.swift) — `@main`. A
-  `WindowGroup` (main two-column UI) plus a `MenuBarExtra` showing the day's top
-  picks. Shares one `PaperStore.shared`.
+- [VellumXApp.swift](app/Sources/VellumX/VellumXApp.swift) — App entry point
+  (launched via `main.swift`). A `WindowGroup` (main two-column UI) plus a
+  `MenuBarExtra` showing the day's top picks. Shares one `PaperStore.shared`.
 - [ContentView.swift](app/Sources/VellumX/ContentView.swift) — the macOS
   two-column UI (left: category/track filter; right: detail + bilingual abstract).
 - [OpenAlexFetcher.swift](app/Sources/VellumX/OpenAlexFetcher.swift) — paper
@@ -116,10 +120,38 @@ All variant builds share this same directory.
   resolution (OpenAlex → Unpaywall → arXiv → Semantic Scholar).
 - [Models.swift](app/Sources/VellumX/Models.swift) — `Paper` and related types.
 
+## Testing
+
+Unit tests live in [app/Tests/VellumXTests/](app/Tests/VellumXTests/) and cover
+the pure business-logic layer (65 test cases):
+
+| Suite | What it covers |
+|---|---|
+| `VenueScorerTests` | Venue matching, priority rules, citation scoring |
+| `RecommendEngineTests` | Pool selection, slot allocation, deduplication |
+| `PdfResolverTests` | DOI URL normalisation (`stripDoiPrefix`) |
+| `PaperStoreHelpersTests` | `splitCSV`, `normalizedTag`, `parseSQLiteDate` |
+| `MetadataStoreHelpersTests` | Field/tier normalisation, default point values |
+
+**What to test when adding new features:**
+- Any pure function (no UI, no SQLite, no network) must have unit tests.
+- Add a test case for every non-trivial edge case you identify while implementing.
+- UI behaviour, SQLite writes, and network calls are verified manually.
+
+**`scripts/restart.sh` runs `swift test` before every build.** If tests fail the
+restart aborts — fix the tests before relaunching.
+
+Requires Xcode (not just Command Line Tools) as the active developer directory:
+```bash
+sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+```
+
 ## Conventions
 
 - Keep the dependency surface at zero: pure SwiftPM + system frameworks only
   (no Xcode project required — Command Line Tools build must keep working).
 - `PaperStore` and `ConfigManager` are `@MainActor`; respect that when calling.
+- Static helpers on `@MainActor` classes are also `@MainActor`-isolated; mark
+  test classes `@MainActor` when calling them from XCTest.
 - Paper status is a plain string (`"recommended"`, `"read"`, `"starred"`, …)
   set via `store.setPaperStatus(id:status:)`.
