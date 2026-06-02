@@ -79,30 +79,4 @@ final class CitationExporterTests: XCTestCase {
         XCTAssertTrue(bib.contains("title ="))
         XCTAssertTrue(bib.contains("year ="))
     }
-
-    // MARK: - RIS
-
-    func testRisStructureAndAuthorsMultiline() {
-        let ris = CitationExporter.ris(for: makePaper())
-        let lines = ris.components(separatedBy: "\n")
-        XCTAssertEqual(lines.first, "TY  - JOUR")
-        XCTAssertEqual(lines.last, "ER  - ")
-        XCTAssertTrue(lines.contains("AU  - Ashish Vaswani"))
-        XCTAssertTrue(lines.contains("AU  - Noam Shazeer"))
-        XCTAssertTrue(lines.contains("TI  - Attention Is All You Need"))
-        XCTAssertTrue(lines.contains("JO  - NeurIPS"))
-        XCTAssertTrue(lines.contains("PY  - 2017"))
-        XCTAssertTrue(lines.contains("DO  - 10.5555/3295222"))
-        XCTAssertTrue(lines.contains("UR  - https://example.org/paper"))
-    }
-
-    func testRisOmitsMissingFields() {
-        let ris = CitationExporter.ris(for: makePaper(authors: [], year: nil, venue: "", doi: nil, landing: ""))
-        XCTAssertFalse(ris.contains("AU  -"))
-        XCTAssertFalse(ris.contains("JO  -"))
-        XCTAssertFalse(ris.contains("PY  -"))
-        XCTAssertFalse(ris.contains("DO  -"))
-        XCTAssertFalse(ris.contains("UR  -"))
-        XCTAssertTrue(ris.contains("TI  - Attention Is All You Need"))
-    }
 }

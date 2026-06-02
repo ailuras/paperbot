@@ -19,6 +19,7 @@ struct PaperDetailView: View {
     let onRemoveFromCollection: (Paper, String) -> Void
 
     @FocusState private var noteFocused: Bool
+    @State private var showCollectionPopover = false
     @State private var showAddTagPrompt = false
     @State private var newTagName = ""
     @State private var showingTranslation: Bool = false
@@ -92,54 +93,28 @@ struct PaperDetailView: View {
         Button {
             onResolvePdf(paper)
         } label: {
-            if isResolvingPdf {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 28, height: 28)
-            } else {
-                Image(systemName: paper.pdfUrl?.isEmpty == false ? "doc.text" : "doc.text.magnifyingglass")
-                    .font(.system(size: 13, weight: .semibold))
-                    .frame(width: 28, height: 28)
-                    .background(Color.secondary.opacity(0.10))
-                    .foregroundStyle(.primary.opacity(0.75))
-                    .clipShape(RoundedRectangle(cornerRadius: 7))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 7)
-                            .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
-                    )
+            Group {
+                if isResolvingPdf {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Image(systemName: paper.pdfUrl?.isEmpty == false ? "doc.text" : "doc.text.magnifyingglass")
+                }
             }
+            .detailActionChrome()
         }
         .buttonStyle(.plain)
         .disabled(isResolvingPdf)
         .help(paper.pdfUrl?.isEmpty == false ? "Open PDF" : "Resolve PDF")
     }
 
-    private var citeMenu: some View {
-        Menu {
-            Button(L10n.t(.copyBibtex)) {
-                copyToPasteboard(CitationExporter.bibtex(for: paper))
-                statusMessage = L10n.t(.copiedBibtex)
-            }
-            Button(L10n.t(.copyRIS)) {
-                copyToPasteboard(CitationExporter.ris(for: paper))
-                statusMessage = L10n.t(.copiedRIS)
-            }
-            Divider()
-            Button(L10n.t(.saveBib)) { saveBibFile() }
+    private var citeButton: some View {
+        Button {
+            copyToPasteboard(CitationExporter.bibtex(for: paper))
+            statusMessage = L10n.t(.copiedBibtex)
         } label: {
-            Image(systemName: "text.quote")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
-                .background(Color.secondary.opacity(0.10))
-                .foregroundStyle(.primary.opacity(0.75))
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
-                )
+            Image(systemName: "text.quote").detailActionChrome()
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
         .help(L10n.t(.cite))
     }
 
@@ -149,56 +124,22 @@ struct PaperDetailView: View {
         pb.setString(text, forType: .string)
     }
 
-    private func saveBibFile() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = "\(CitationExporter.citeKey(for: paper)).bib"
-        panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try CitationExporter.bibtex(for: paper).write(to: url, atomically: true, encoding: .utf8)
-            statusMessage = L10n.t(.savedBib)
-        } catch {
-            statusMessage = "Save failed: \(error.localizedDescription)"
-        }
-    }
-
-    private var collectionMenu: some View {
-        let allCollections = PaperStore.shared.allCollections
+    private var collectionButton: some View {
         let isInAny = !paper.collectionIds.isEmpty
-
-        return Menu {
-            if allCollections.isEmpty {
-                Text("No collections yet")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(allCollections) { collection in
-                    let isMember = paper.collectionIds.contains(collection.id)
-                    Button {
-                        if isMember {
-                            onRemoveFromCollection(paper, collection.id)
-                        } else {
-                            onAddToCollection(paper, collection.id)
-                        }
-                    } label: {
-                        Label(collection.name, systemImage: isMember ? "checkmark" : "folder")
-                    }
-                }
-            }
+        return Button {
+            showCollectionPopover = true
         } label: {
-            Image(systemName: isInAny ? "folder.fill" : "folder")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 28, height: 28)
-                .background(Color.secondary.opacity(0.10))
-                .foregroundStyle(.primary.opacity(0.75))
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
-                )
+            Image(systemName: isInAny ? "folder.fill" : "folder").detailActionChrome()
         }
-        .menuStyle(.borderlessButton)
+        .buttonStyle(.plain)
         .help("Collections")
+        .popover(isPresented: $showCollectionPopover, arrowEdge: .bottom) {
+            CollectionPickerPopover(
+                paper: paper,
+                onAddToCollection: onAddToCollection,
+                onRemoveFromCollection: onRemoveFromCollection
+            )
+        }
     }
 
     private var metaCard: some View {
@@ -238,8 +179,8 @@ struct PaperDetailView: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
-                    citeMenu
-                    collectionMenu
+                    citeButton
+                    collectionButton
                     pdfButton
                 }
             }
@@ -546,6 +487,122 @@ struct PaperDetailView: View {
                 return $0.phrase.count > $1.phrase.count
             }
             .first
+    }
+}
+
+// MARK: - Header Action Chrome
+
+private extension View {
+    /// Shared 28×28 rounded-square chrome so the header action icons
+    /// (cite / collection / PDF) look identical.
+    func detailActionChrome() -> some View {
+        self
+            .font(.system(size: 13, weight: .semibold))
+            .frame(width: 28, height: 28)
+            .background(Color.secondary.opacity(0.10))
+            .foregroundStyle(.primary.opacity(0.75))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay(
+                RoundedRectangle(cornerRadius: 7)
+                    .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
+            )
+    }
+}
+
+// MARK: - Collection Picker Popover
+
+/// Click-to-open popover for adding/removing the paper from collections and
+/// creating new ones inline. Keeps local member/collection state for instant
+/// feedback (`PaperStore.allCollections` is a plain SQLite read, not observed).
+private struct CollectionPickerPopover: View {
+    let paper: Paper
+    let onAddToCollection: (Paper, String) -> Void
+    let onRemoveFromCollection: (Paper, String) -> Void
+
+    @State private var collections: [PaperCollection] = []
+    @State private var memberIds: Set<String> = []
+    @State private var newName: String = ""
+    @FocusState private var newNameFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Collections")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            if collections.isEmpty {
+                Text("No collections yet")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+            } else {
+                ScrollView {
+                    VStack(spacing: 2) {
+                        ForEach(collections) { collection in
+                            row(for: collection)
+                        }
+                    }
+                }
+                .frame(maxHeight: 220)
+            }
+
+            Divider()
+
+            HStack(spacing: 6) {
+                TextField("New collection", text: $newName)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12))
+                    .focused($newNameFocused)
+                    .onSubmit(createAndAdd)
+                Button(action: createAndAdd) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(.borderless)
+                .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(12)
+        .frame(width: 240)
+        .onAppear {
+            collections = PaperStore.shared.allCollections
+            memberIds = Set(paper.collectionIds)
+        }
+    }
+
+    private func row(for collection: PaperCollection) -> some View {
+        let isMember = memberIds.contains(collection.id)
+        return Button {
+            if isMember {
+                onRemoveFromCollection(paper, collection.id)
+                memberIds.remove(collection.id)
+            } else {
+                onAddToCollection(paper, collection.id)
+                memberIds.insert(collection.id)
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isMember ? Color.accentColor : .secondary)
+                Text(collection.name)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 12))
+            .contentShape(Rectangle())
+            .padding(.vertical, 3)
+            .padding(.horizontal, 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func createAndAdd() {
+        let name = newName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, let created = PaperStore.shared.createCollection(name: name) else { return }
+        collections = PaperStore.shared.allCollections
+        onAddToCollection(paper, created.id)
+        memberIds.insert(created.id)
+        newName = ""
     }
 }
 

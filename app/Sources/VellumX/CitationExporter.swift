@@ -56,31 +56,6 @@ enum CitationExporter {
         return "@article{\(citeKey(for: paper)),\n\(body)\n}"
     }
 
-    // MARK: - RIS
-
-    static func ris(for paper: Paper) -> String {
-        var lines: [String] = ["TY  - JOUR"]
-
-        for author in paper.authors {
-            let a = author.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !a.isEmpty { lines.append("AU  - \(a)") }
-        }
-        let title = paper.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !title.isEmpty { lines.append("TI  - \(title)") }
-
-        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !venue.isEmpty { lines.append("JO  - \(venue)") }
-
-        if let year = paper.publicationYear { lines.append("PY  - \(year)") }
-        if let doi = bareDoi(paper.doi) { lines.append("DO  - \(doi)") }
-
-        let landing = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !landing.isEmpty { lines.append("UR  - \(landing)") }
-
-        lines.append("ER  - ")
-        return lines.joined(separator: "\n")
-    }
-
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.
