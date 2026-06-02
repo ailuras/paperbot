@@ -67,5 +67,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuBar = MenuBarController(store: .shared, settings: .shared)
+        // If restart.sh set the "open on right screen" flag, honour it once then clear it.
+        if UserDefaults.standard.bool(forKey: "launchOnRightScreen") {
+            UserDefaults.standard.removeObject(forKey: "launchOnRightScreen")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                guard let screen = NSScreen.screens.max(by: { $0.frame.minX < $1.frame.minX }),
+                      let window = NSApp.windows.first(where: { $0.canBecomeMain && $0.styleMask.contains(.titled) })
+                else { return }
+                var f = window.frame
+                let sf = screen.visibleFrame
+                f.origin = CGPoint(x: sf.midX - f.width / 2, y: sf.maxY - f.height - 20)
+                window.setFrame(f, display: true)
+            }
+        }
     }
 }

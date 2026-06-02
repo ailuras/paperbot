@@ -237,8 +237,7 @@ struct ContentView: View {
         .onChange(of: selectedSidebarItem) { _, new in
             if new != nil { selectedCollectionId = nil }
         }
-        .searchable(text: $searchKeyword, placement: .toolbar,
-                    prompt: "Search title, abstract or authors...")
+        .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
         .toolbar {
             // ── List operations ────────────────────────────────────────────
             ToolbarItem(placement: .automatic) {

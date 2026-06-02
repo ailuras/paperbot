@@ -259,10 +259,23 @@ struct PaperDetailView: View {
                     newTagName = ""
                     showAddTagPrompt = true
                 } label: {
-                    Label("Add Tag", systemImage: "plus")
-                        .font(.system(size: 12, weight: .medium))
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("Tag")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(Color.secondary.opacity(0.08))
+                    .foregroundColor(.secondary)
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
+                    )
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("Add a tag to this paper")
             }
 
@@ -297,10 +310,7 @@ struct PaperDetailView: View {
     private var abstractSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                SectionHeader(
-                    icon: showingTranslation ? "character" : "text.alignleft",
-                    title: showingTranslation ? "Translation" : "Abstract"
-                )
+                SectionHeader(icon: "text.alignleft", title: "Abstract")
                 Spacer()
                 if isTranslating {
                     HStack(spacing: 4) {
@@ -316,7 +326,7 @@ struct PaperDetailView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .font(.system(size: 10, weight: .semibold))
-                            Text(showingTranslation ? "Original" : "Translate")
+                            Text(showingTranslation ? "Original" : "Translation")
                                 .font(.system(size: 11, weight: .medium))
                         }
                         .padding(.horizontal, 8)
@@ -794,6 +804,9 @@ private struct DetailExternalLinkLine: View {
                         .help(value)
                 }
                 .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+                }
             } else {
                 Text(value)
                     .font(.caption)

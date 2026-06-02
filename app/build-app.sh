@@ -54,4 +54,6 @@ codesign --force --sign - \
 
 echo "[4/4] done -> $APP"
 echo "run:  open ./$APP"
-[ -n "$VARIANT" ] && echo "note: bundle ID = com.ailuras.vellumx.$VARIANT (shares ~/Library/Application Support/VellumX/)"
+if [ -n "$VARIANT" ]; then
+    echo "note: bundle ID = com.ailuras.vellumx.$VARIANT (shares ~/Library/Application Support/VellumX/)"
+fi

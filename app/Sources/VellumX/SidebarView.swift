@@ -53,15 +53,14 @@ struct SidebarView: View {
 
             if !tags.isEmpty {
                 Section("Tags") {
-                    TagFilterChip(
-                        title: "All Tags",
-                        state: includedTags.isEmpty && excludedTags.isEmpty ? .include : .neutral
-                    ) {
-                        includedTags.removeAll()
-                        excludedTags.removeAll()
-                    }
-
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
+                        TagFilterChip(
+                            title: "All",
+                            state: includedTags.isEmpty && excludedTags.isEmpty ? .include : .neutral
+                        ) {
+                            includedTags.removeAll()
+                            excludedTags.removeAll()
+                        }
                         ForEach(tags, id: \.self) { tag in
                             TagFilterChip(title: "#\(tag)", state: tagState(tag)) {
                                 cycleTag(tag)

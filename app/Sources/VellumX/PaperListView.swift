@@ -91,9 +91,10 @@ private struct PaperRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            // Status-colored accent bar for today's picks
             if isDailyRecommendation && isTodayRecommended {
                 Rectangle()
-                    .fill(Color.accentColor)
+                    .fill(paper.status.iconColor)
                     .frame(width: 3)
                     .padding(.vertical, 6)
             }
@@ -120,6 +121,10 @@ private struct PaperRowView: View {
             .padding(.trailing, 8)
             .padding(.vertical, 6)
         }
+        // Subtle status-tinted background for today's recommended cards
+        .background(isDailyRecommendation && isTodayRecommended
+            ? paper.status.iconColor.opacity(0.05)
+            : Color.clear)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             if isLastToday {

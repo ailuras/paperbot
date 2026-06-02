@@ -84,36 +84,34 @@ struct APISettingsTab: View {
             }
 
             Section(L10n.t(.modelSelection)) {
-                LabeledContent(L10n.t(.model)) {
-                    HStack(spacing: 8) {
-                        Picker("", selection: $settings.apiModel) {
-                            if availableModels.isEmpty {
-                                Text(settings.apiModel.isEmpty ? L10n.t(.modelsUnavailable) : settings.apiModel)
-                                    .tag(settings.apiModel)
-                            } else {
-                                ForEach(availableModels, id: \.self) { model in
-                                    Text(model).tag(model)
-                                }
-                            }
+                HStack(spacing: 8) {
+                    Text(L10n.t(.model))
+                    Spacer()
+                    Picker("", selection: $settings.apiModel) {
+                        if availableModels.isEmpty {
+                            Text(settings.apiModel.isEmpty ? L10n.t(.modelsUnavailable) : settings.apiModel)
+                                .tag(settings.apiModel)
+                        } else {
+                            ForEach(availableModels, id: \.self) { Text($0).tag($0) }
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .disabled(availableModels.isEmpty)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                        Button {
-                            loadModels()
-                        } label: {
-                            if isLoadingModels {
-                                ProgressView().controlSize(.small)
-                            } else {
-                                Image(systemName: "arrow.clockwise")
-                            }
-                        }
-                        .controlSize(.small)
-                        .disabled(isLoadingModels)
-                        .help(L10n.t(.refreshModels))
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .disabled(availableModels.isEmpty)
+
+                    Button {
+                        loadModels()
+                    } label: {
+                        if isLoadingModels {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isLoadingModels)
+                    .help(L10n.t(.refreshModels))
                 }
 
                 if let modelMessage {
