@@ -70,6 +70,9 @@ class PaperStore {
         }
 
         if currentDb.standardizedFileURL != destDb.standardizedFileURL, migrate {
+            // Flush all WAL frames into the main file before closing so the
+            // moved database is self-contained (no pending uncommitted frames).
+            sqlite3_exec(db, "PRAGMA wal_checkpoint(TRUNCATE)", nil, nil, nil)
             closeDatabase()
             do {
                 if fm.fileExists(atPath: destDb.path) {
@@ -77,6 +80,16 @@ class PaperStore {
                 }
                 if fm.fileExists(atPath: currentDb.path) {
                     try fm.moveItem(at: currentDb, to: destDb)
+                }
+                // Move WAL sidecar files (-wal, -shm) if they still exist after
+                // the checkpoint. Without this, the destination DB would open with
+                // a stale SHM index and lose any frames that weren't checkpointed.
+                for suffix in ["-wal", "-shm"] {
+                    let src = URL(fileURLWithPath: currentDb.path + suffix)
+                    let dst = URL(fileURLWithPath: destDb.path + suffix)
+                    guard fm.fileExists(atPath: src.path) else { continue }
+                    if fm.fileExists(atPath: dst.path) { try fm.removeItem(at: dst) }
+                    try fm.moveItem(at: src, to: dst)
                 }
             } catch {
                 openDatabase()
