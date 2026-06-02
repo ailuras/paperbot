@@ -3,58 +3,32 @@ import SwiftUI
 struct PaperListView: View {
     let papers: [Paper]
     @Binding var selectedPaperId: String?
-    @Binding var searchKeyword: String
-    @Binding var showFilters: Bool
-    @Binding var selectedFields: Set<String>
-    @Binding var selectedTiers: Set<Int>
     var metadata: MetadataStore
-
-    let isFetching: Bool
-    let isRecommending: Bool
     let highlightsDailyRecommendations: Bool
-    let onFetch: () -> Void
-    let onRecommend: () -> Void
+    let sortByScore: Bool
     let onCancelRecommendation: (Paper) -> Void
     let onSelectPaper: (String) -> Void
 
-    @Binding var sortByScore: Bool
-    @State private var showSortOptions = false
     private let lastTodayId: String?
 
     init(
         papers: [Paper],
         selectedPaperId: Binding<String?>,
-        searchKeyword: Binding<String>,
-        showFilters: Binding<Bool>,
-        selectedFields: Binding<Set<String>>,
-        selectedTiers: Binding<Set<Int>>,
         metadata: MetadataStore,
-        isFetching: Bool,
-        isRecommending: Bool,
         highlightsDailyRecommendations: Bool,
-        onFetch: @escaping () -> Void,
-        onRecommend: @escaping () -> Void,
+        sortByScore: Bool,
         onCancelRecommendation: @escaping (Paper) -> Void,
-        onSelectPaper: @escaping (String) -> Void,
-        sortByScore: Binding<Bool>
+        onSelectPaper: @escaping (String) -> Void
     ) {
         self.papers = papers
         self._selectedPaperId = selectedPaperId
-        self._searchKeyword = searchKeyword
-        self._showFilters = showFilters
-        self._selectedFields = selectedFields
-        self._selectedTiers = selectedTiers
         self.metadata = metadata
-        self.isFetching = isFetching
-        self.isRecommending = isRecommending
         self.highlightsDailyRecommendations = highlightsDailyRecommendations
-        self.onFetch = onFetch
-        self.onRecommend = onRecommend
+        self.sortByScore = sortByScore
         self.onCancelRecommendation = onCancelRecommendation
         self.onSelectPaper = onSelectPaper
-        self._sortByScore = sortByScore
 
-        if highlightsDailyRecommendations && !sortByScore.wrappedValue {
+        if highlightsDailyRecommendations && !sortByScore {
             let todayPapers = papers.filter {
                 $0.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
             }
@@ -62,95 +36,6 @@ struct PaperListView: View {
         } else {
             self.lastTodayId = nil
         }
-    }
-
-    private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
-        if set.contains(value) { set.remove(value) } else { set.insert(value) }
-    }
-
-    private var filtersActive: Bool { !selectedFields.isEmpty || !selectedTiers.isEmpty }
-
-    private var filterPopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Filters").font(.headline)
-                Spacer()
-                Button("Clear") { selectedFields = []; selectedTiers = [] }
-                    .controlSize(.small)
-                    .disabled(!filtersActive)
-            }
-            if !metadata.allFields.isEmpty {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("FIELDS").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                    ForEach(metadata.allFields, id: \.self) { field in
-                        FilterRow(title: field, colorKey: "field:\(field)",
-                                  defaultColor: .teal,
-                                  isSelected: selectedFields.contains(field)) {
-                            toggle(field, in: &selectedFields)
-                        }
-                    }
-                }
-            }
-            if !metadata.allTiers.isEmpty {
-                Divider()
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("TIER").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                    ForEach(metadata.allTiers, id: \.self) { tier in
-                        FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
-                                  defaultColor: MetadataStore.tierDefaultColor(tier),
-                                  isSelected: selectedTiers.contains(tier)) {
-                            toggle(tier, in: &selectedTiers)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .frame(width: 230)
-    }
-
-    private var sortPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Sort")
-                .font(.headline)
-
-            Button {
-                sortByScore = true
-                showSortOptions = false
-            } label: {
-                Label("Score", systemImage: sortByScore ? "checkmark.circle.fill" : "number")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-
-            Button {
-                sortByScore = false
-                showSortOptions = false
-            } label: {
-                Label("Date", systemImage: sortByScore ? "calendar" : "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .frame(width: 170)
-    }
-
-    private func toolbarIcon(_ systemName: String, isActive: Bool = false) -> some View {
-        ZStack {
-            if isActive {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.9))
-                    .frame(width: 19, height: 19)
-            }
-
-            Image(systemName: systemName)
-                .font(.system(size: 8.8, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(isActive ? Color.white : Color.primary.opacity(0.72))
-        }
-        .frame(width: 23, height: 23)
-        .contentShape(Circle())
     }
 
     var body: some View {
@@ -163,8 +48,9 @@ struct PaperListView: View {
                     isLastToday: paper.id == lastTodayId
                 )
                 .tag(paper.id)
-                    .listRowSeparator(.hidden)
-                    .listRowInsets(EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8))
+                .listRowSeparator(.visible)
+                .listRowSeparatorTint(Color.primary.opacity(0.07))
+                .listRowInsets(EdgeInsets(top: 1, leading: 2, bottom: 1, trailing: 2))
                 .contextMenu {
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
@@ -175,57 +61,6 @@ struct PaperListView: View {
             }
         }
         .listStyle(.inset)
-        .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
-        .toolbar {
-            ToolbarItemGroup(placement: .automatic) {
-                ControlGroup {
-                    Button(action: onFetch) {
-                        if isFetching {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(width: 22, height: 22)
-                        } else {
-                            toolbarIcon("arrow.clockwise")
-                        }
-                    }
-                    .disabled(isFetching || isRecommending)
-                    .keyboardShortcut("r", modifiers: .command)
-                    .accessibilityLabel("Fetch new papers")
-                    .help("Fetch new papers from OpenAlex")
-
-                    Button(action: onRecommend) {
-                        if isRecommending {
-                            ProgressView()
-                                .controlSize(.small)
-                                .frame(width: 22, height: 22)
-                        } else {
-                            toolbarIcon("wand.and.stars")
-                        }
-                    }
-                    .disabled(isFetching || isRecommending)
-                    .keyboardShortcut("t", modifiers: .command)
-                    .accessibilityLabel("Generate recommendations")
-                    .help("Generate daily paper recommendations")
-
-                    Button { showFilters.toggle() } label: {
-                        toolbarIcon(filtersActive
-                                    ? "line.3.horizontal.decrease"
-                                    : "line.3.horizontal.decrease",
-                                    isActive: filtersActive)
-                    }
-                    .accessibilityLabel("Filter papers")
-                    .help("Filter by field and tier")
-                    .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
-
-                    Button { showSortOptions.toggle() } label: {
-                        toolbarIcon("arrow.up.arrow.down", isActive: showSortOptions)
-                    }
-                    .accessibilityLabel("Sort papers")
-                    .help("Sort papers")
-                    .popover(isPresented: $showSortOptions, arrowEdge: .bottom) { sortPopover }
-                }
-            }
-        }
         .onChange(of: selectedPaperId) { _, newValue in
             if let newValue { onSelectPaper(newValue) }
         }
@@ -237,17 +72,13 @@ struct PaperListView: View {
     }
 }
 
+// MARK: - Row
+
 private struct PaperRowView: View {
     let paper: Paper
     var metadata: MetadataStore
     let isDailyRecommendation: Bool
     let isLastToday: Bool
-
-    private var topics: [String] {
-        paper.track.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
 
     private var venueColor: Color {
         metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr))
@@ -260,7 +91,6 @@ private struct PaperRowView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Today recommendation left accent bar
             if isDailyRecommendation && isTodayRecommended {
                 Rectangle()
                     .fill(Color.accentColor)
@@ -269,7 +99,6 @@ private struct PaperRowView: View {
             }
 
             HStack(alignment: .top, spacing: 10) {
-                // Left: Title (2 lines max)
                 Text(paper.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
@@ -277,27 +106,26 @@ private struct PaperRowView: View {
 
                 Spacer(minLength: 8)
 
-                // Right: Tags
                 VStack(alignment: .trailing, spacing: 5) {
-                    // Top: venue tag + score
                     HStack(spacing: 4) {
                         PaperTagView(title: paper.venueAbbr, color: venueColor)
                         ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
                     }
-                    // Bottom: date
                     Text(paper.publicationDate)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.secondary)
                 }
             }
-            .padding(.leading, isDailyRecommendation && isTodayRecommended ? 4 : 8)
-            .padding(.trailing, 12)
-            .padding(.vertical, 9)
+            .padding(.leading, isDailyRecommendation && isTodayRecommended ? 2 : 5)
+            .padding(.trailing, 8)
+            .padding(.vertical, 6)
         }
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
             if isLastToday {
-                Divider()
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.35))
+                    .frame(height: 1)
             }
         }
     }
@@ -315,24 +143,6 @@ private struct PaperTagView: View {
             .background(color.opacity(0.12))
             .foregroundStyle(color)
             .cornerRadius(4)
-    }
-}
-
-private struct DateBadgeView: View {
-    let date: String
-
-    var body: some View {
-        Text(date)
-            .font(.system(size: 10, weight: .semibold))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Color.accentColor.opacity(0.12))
-            .foregroundStyle(Color.accentColor)
-            .cornerRadius(5)
-            .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .stroke(Color.accentColor.opacity(0.25), lineWidth: 0.5)
-            )
     }
 }
 

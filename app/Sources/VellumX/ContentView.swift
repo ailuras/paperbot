@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var includedTags: Set<String> = []
     @State private var excludedTags: Set<String> = []
     @State private var showFilters = false
+    @State private var showSortOptions = false
 
     // Selection state
     @State private var selectedPaperId: String?
@@ -86,6 +87,104 @@ struct ContentView: View {
         return filteredPapers.firstIndex(where: { $0.id == id })
     }
 
+    private var canGoPrevious: Bool { selectedPaperIndex.map { $0 > 0 } ?? false }
+    private var canGoNext: Bool {
+        selectedPaperIndex.map { $0 < filteredPapers.count - 1 } ?? false
+    }
+
+    // MARK: - Toolbar helpers (unified; used for both list and detail groups)
+
+    private var filtersActive: Bool { !selectedFields.isEmpty || !selectedTiers.isEmpty }
+
+    private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
+        if set.contains(value) { set.remove(value) } else { set.insert(value) }
+    }
+
+    @ViewBuilder
+    private func toolbarIcon(_ systemName: String,
+                             isActive: Bool = false,
+                             isEnabled: Bool = true,
+                             activeColor: Color = .accentColor) -> some View {
+        ZStack {
+            if isActive {
+                Circle()
+                    .fill(activeColor.opacity(0.85))
+                    .frame(width: 19, height: 19)
+            }
+            Image(systemName: systemName)
+                .font(.system(size: 8.8, weight: .semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(
+                    isActive  ? Color.white :
+                    isEnabled ? Color.primary.opacity(0.72) :
+                                Color.primary.opacity(0.22)
+                )
+        }
+        .frame(width: 23, height: 23)
+        .contentShape(Circle())
+    }
+
+    private var filterPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Filters").font(.headline)
+                Spacer()
+                Button("Clear") { selectedFields = []; selectedTiers = [] }
+                    .controlSize(.small)
+                    .disabled(!filtersActive)
+            }
+            if !metadata.allFields.isEmpty {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("FIELDS").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(metadata.allFields, id: \.self) { field in
+                        FilterRow(title: field, colorKey: "field:\(field)",
+                                  defaultColor: .teal,
+                                  isSelected: selectedFields.contains(field)) {
+                            toggle(field, in: &selectedFields)
+                        }
+                    }
+                }
+            }
+            if !metadata.allTiers.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("TIER").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(metadata.allTiers, id: \.self) { tier in
+                        FilterRow(title: "Tier \(tier)", colorKey: "tier:\(tier)",
+                                  defaultColor: MetadataStore.tierDefaultColor(tier),
+                                  isSelected: selectedTiers.contains(tier)) {
+                            toggle(tier, in: &selectedTiers)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 230)
+    }
+
+    private var sortPopover: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Sort").font(.headline)
+            Button {
+                sortByScore = true; showSortOptions = false
+            } label: {
+                Label("Score", systemImage: sortByScore ? "checkmark.circle.fill" : "number")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            Button {
+                sortByScore = false; showSortOptions = false
+            } label: {
+                Label("Date", systemImage: sortByScore ? "calendar" : "checkmark.circle.fill")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .frame(width: 170)
+    }
+
     var body: some View {
         NavigationSplitView {
             SidebarView(
@@ -104,19 +203,11 @@ struct ContentView: View {
             PaperListView(
                 papers: filteredPapers,
                 selectedPaperId: $selectedPaperId,
-                searchKeyword: $searchKeyword,
-                showFilters: $showFilters,
-                selectedFields: $selectedFields,
-                selectedTiers: $selectedTiers,
                 metadata: metadata,
-                isFetching: isFetching,
-                isRecommending: isRecommending,
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
-                onFetch: fetchPapers,
-                onRecommend: recommendPapers,
+                sortByScore: sortByScore,
                 onCancelRecommendation: cancelRecommendation,
-                onSelectPaper: { lastViewedPaperId = $0 },
-                sortByScore: $sortByScore
+                onSelectPaper: { lastViewedPaperId = $0 }
             )
         } detail: {
             if let paper = selectedPaper {
@@ -131,11 +222,7 @@ struct ContentView: View {
                     onAddTag: addPaperTag,
                     onRemoveTag: removePaperTag,
                     onAddToCollection: addPaperToCollection,
-                    onRemoveFromCollection: removePaperFromCollection,
-                    canGoPrevious: selectedPaperIndex.map { $0 > 0 } ?? false,
-                    canGoNext: selectedPaperIndex.map { $0 < filteredPapers.count - 1 } ?? false,
-                    onPrevious: selectPreviousPaper,
-                    onNext: selectNextPaper
+                    onRemoveFromCollection: removePaperFromCollection
                 )
             } else {
                 EmptyDetailView()
@@ -149,6 +236,85 @@ struct ContentView: View {
         .onChange(of: windowOpener.requestedPaperId) { focusRequestedPaper() }
         .onChange(of: selectedSidebarItem) { _, new in
             if new != nil { selectedCollectionId = nil }
+        }
+        .searchable(text: $searchKeyword, placement: .toolbar,
+                    prompt: "Search title, abstract or authors...")
+        .toolbar {
+            // ── List operations ────────────────────────────────────────────
+            ToolbarItem(placement: .automatic) {
+                ControlGroup {
+                    Button(action: fetchPapers) {
+                        if isFetching {
+                            ProgressView().controlSize(.small).frame(width: 22, height: 22)
+                        } else {
+                            toolbarIcon("arrow.clockwise")
+                        }
+                    }
+                    .disabled(isFetching || isRecommending)
+                    .keyboardShortcut("r", modifiers: .command)
+                    .accessibilityLabel("Fetch new papers")
+                    .help("Fetch new papers from OpenAlex")
+
+                    Button(action: recommendPapers) {
+                        if isRecommending {
+                            ProgressView().controlSize(.small).frame(width: 22, height: 22)
+                        } else {
+                            toolbarIcon("wand.and.stars")
+                        }
+                    }
+                    .disabled(isFetching || isRecommending)
+                    .keyboardShortcut("t", modifiers: .command)
+                    .accessibilityLabel("Generate recommendations")
+                    .help("Generate daily paper recommendations")
+
+                    Button { showFilters.toggle() } label: {
+                        toolbarIcon("line.3.horizontal.decrease", isActive: filtersActive)
+                    }
+                    .accessibilityLabel("Filter papers")
+                    .help("Filter by field and tier")
+                    .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
+
+                    Button { showSortOptions.toggle() } label: {
+                        toolbarIcon("arrow.up.arrow.down", isActive: showSortOptions)
+                    }
+                    .accessibilityLabel("Sort papers")
+                    .help("Sort papers")
+                    .popover(isPresented: $showSortOptions, arrowEdge: .bottom) { sortPopover }
+                }
+            }
+
+            // ── Detail navigation + status (always visible; disabled when nothing is open) ──
+            // `paper` is resolved once here — avoids repeated O(n) scans inside ForEach.
+            ToolbarItem(placement: .automatic) {
+                let paper = selectedPaper
+                ControlGroup {
+                    Button(action: selectPreviousPaper) {
+                        toolbarIcon("chevron.left", isEnabled: canGoPrevious)
+                    }
+                    .disabled(!canGoPrevious)
+                    .help("Previous paper")
+
+                    ForEach(PaperStatus.allCases, id: \.self) { status in
+                        let isActive = paper?.status == status
+                        Button {
+                            if let paper { updatePaperStatus(paper, status: status) }
+                        } label: {
+                            toolbarIcon(status.iconName,
+                                       isActive: isActive,
+                                       isEnabled: paper != nil,
+                                       activeColor: status.iconColor)
+                        }
+                        .disabled(paper == nil)
+                        .help(status.displayName)
+                    }
+
+                    Button(action: selectNextPaper) {
+                        toolbarIcon("chevron.right", isEnabled: canGoNext)
+                    }
+                    .disabled(!canGoNext)
+                    .help("Next paper")
+                }
+            }
         }
     }
 

@@ -17,10 +17,6 @@ struct PaperDetailView: View {
     let onRemoveTag: (Paper, String) -> Void
     let onAddToCollection: (Paper, String) -> Void
     let onRemoveFromCollection: (Paper, String) -> Void
-    let canGoPrevious: Bool
-    let canGoNext: Bool
-    let onPrevious: () -> Void
-    let onNext: () -> Void
 
     @FocusState private var noteFocused: Bool
     @State private var showAddTagPrompt = false
@@ -28,21 +24,9 @@ struct PaperDetailView: View {
     @State private var showingTranslation: Bool = false
     @State private var lastPersistedNote: String = ""
 
-    // Status configuration
-    private let statuses: [(PaperStatus, String, Color)] = [
-        (.pending,     "clock",        .blue),
-        (.read,        "checkmark.circle", .green),
-        (.starred,     "star.fill",    .yellow),
-        (.skip,        "eye.slash",    .secondary)
-    ]
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                readerToolbar
-
-                Divider().padding(.horizontal, 20)
-
                 // MARK: Header Card
                 headerCard
 
@@ -76,18 +60,14 @@ struct PaperDetailView: View {
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                // Title
-                Text(paper.title)
-                    .font(.system(size: 22, weight: .bold, design: .serif))
-                    .lineSpacing(3)
-                    .foregroundColor(.primary)
-
-                Spacer(minLength: 8)
-
-                collectionMenu
-                pdfButton
-            }
+            // Title — max 3 lines; full title via tooltip
+            Text(paper.title)
+                .font(.system(size: 22, weight: .bold, design: .serif))
+                .lineSpacing(3)
+                .lineLimit(3)
+                .truncationMode(.tail)
+                .foregroundColor(.primary)
+                .help(paper.title)
 
             // Authors
             if !paper.authors.isEmpty {
@@ -170,39 +150,44 @@ struct PaperDetailView: View {
 
     private var metaCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Row 1: Score | Venue | Date | Citations | Topics
-            HStack(spacing: 8) {
-                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
-
+            // Row 1: Venue | Score | Citations | Date | Topics | … | 📁 📄
+            HStack(spacing: 6) {
                 if !paper.venueAbbr.isEmpty {
                     DetailTag(
                         title: paper.venueAbbr,
                         color: metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)),
-                        fontSize: 11
+                        fontSize: 11,
+                        icon: "building.2"
                     )
                     .help(venueDisplayName.isEmpty ? paper.venueAbbr : venueDisplayName)
                 }
 
+                ScoreTagView(score: paper.score, color: metadata.tierColor(paper.tier))
+                    .help("Score \(String(format: "%.0f", paper.score))  ·  Tier \(paper.tier)")
+
+                CitationBadgeView(count: paper.citedByCount)
+                    .help("\(paper.citedByCount) citation\(paper.citedByCount == 1 ? "" : "s")")
+
                 if !paper.publicationDate.isEmpty {
                     DetailInlineMeta(icon: "calendar", value: paper.publicationDate)
-                }
-
-                if paper.citedByCount > 0 {
-                    DetailInlineMeta(
-                        icon: "quote.bubble",
-                        value: "\(paper.citedByCount) citation\(paper.citedByCount == 1 ? "" : "s")"
-                    )
+                        .help("Published \(paper.publicationDate)")
                 }
 
                 if !topics.isEmpty {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         ForEach(topics, id: \.self) { topic in
                             DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                                .help(topic)
                         }
                     }
                 }
 
                 Spacer(minLength: 0)
+
+                HStack(spacing: 6) {
+                    collectionMenu
+                    pdfButton
+                }
             }
 
             // Row 2: Full venue name
@@ -265,62 +250,6 @@ struct PaperDetailView: View {
             .filter { !$0.isEmpty }
     }
 
-    // MARK: - Status Bar
-
-    private var readerToolbar: some View {
-        HStack {
-            Spacer(minLength: 0)
-            HStack(spacing: 8) {
-                navigationButton(systemName: "chevron.left", enabled: canGoPrevious, action: onPrevious)
-                statusBar
-                navigationButton(systemName: "chevron.right", enabled: canGoNext, action: onNext)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
-    }
-
-    private func navigationButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        NavigationButton(systemName: systemName, enabled: enabled, action: action)
-    }
-
-    private var statusBar: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(statuses.enumerated()), id: \.offset) { index, item in
-                let (status, icon, color) = item
-                let isActive = paper.status == status
-
-                Button {
-                    onStatusChange(paper, status)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: icon)
-                            .font(.system(size: 11, weight: .semibold))
-                        Text(statusLabel(for: status))
-                            .font(.system(size: 12, weight: isActive ? .bold : .medium))
-                    }
-                    .frame(width: 82)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(isActive ? color.opacity(0.18) : Color.clear)
-                    .foregroundColor(isActive ? color : .secondary)
-                    .cornerRadius(6)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(isActive ? color.opacity(0.4) : Color.gray.opacity(0.25), lineWidth: isActive ? 1.5 : 0.5)
-                    )
-                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isActive)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-
-    private func statusLabel(for status: PaperStatus) -> String {
-        status.displayName
-    }
-
     private var tagSection: some View {
         VStack(alignment: .leading, spacing: 9) {
             HStack {
@@ -334,6 +263,7 @@ struct PaperDetailView: View {
                         .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.borderless)
+                .help("Add a tag to this paper")
             }
 
             if paper.tags.isEmpty {
@@ -396,6 +326,7 @@ struct PaperDetailView: View {
                         .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .help(showingTranslation ? "Switch to original abstract" : "Show translated abstract")
                 } else if !paper.abstract.isEmpty {
                     Button {
                         showingTranslation = true
@@ -414,6 +345,7 @@ struct PaperDetailView: View {
                         .cornerRadius(6)
                     }
                     .buttonStyle(.plain)
+                    .help("Translate abstract via AI")
                 }
             }
 
@@ -729,20 +661,64 @@ private struct FlowLayout: Layout {
     }
 }
 
+/// Score tag with icon — used only in the detail meta card.
+/// Distinct from the list's ScoreBadgeView: adds a star icon so the score
+/// number is visually distinguishable from the citation count.
+private struct ScoreTagView: View {
+    let score: Double
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "star.fill")
+            Text(String(format: "%.0f", score))
+        }
+        .font(.system(size: 9, weight: .bold))   // unified → SF Symbol aligns to text baseline
+        .padding(.horizontal, 6)
+        .frame(height: 20)
+        .background(color.opacity(0.15))
+        .foregroundColor(color)
+        .cornerRadius(4)
+    }
+}
+
+private struct CitationBadgeView: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "quote.bubble")
+            Text("\(count)")
+        }
+        .font(.system(size: 9, weight: .bold))   // unified
+        .padding(.horizontal, 6)
+        .frame(height: 20)
+        .background(Color.secondary.opacity(0.10))
+        .foregroundColor(.secondary)
+        .cornerRadius(4)
+    }
+}
+
 private struct DetailTag: View {
     let title: String
     let color: Color
     let fontSize: CGFloat
+    var icon: String? = nil
 
     var body: some View {
-        Text(title)
-            .font(.system(size: fontSize, weight: .bold))
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(color.opacity(0.12))
-            .foregroundColor(color)
-            .cornerRadius(4)
-            .lineLimit(1)
+        HStack(spacing: 3) {
+            if let icon {
+                Image(systemName: icon)
+            }
+            Text(title)
+                .lineLimit(1)
+        }
+        .font(.system(size: fontSize, weight: .bold))
+        .padding(.horizontal, 7)
+        .frame(height: 20)
+        .background(color.opacity(0.12))
+        .foregroundColor(color)
+        .cornerRadius(4)
     }
 }
 
@@ -759,7 +735,7 @@ private struct DetailInlineMeta: View {
         }
         .foregroundColor(.secondary)
         .padding(.horizontal, 7)
-        .padding(.vertical, 3)
+        .frame(height: 20)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(4)
     }
@@ -831,33 +807,3 @@ private struct DetailExternalLinkLine: View {
     }
 }
 
-private struct NavigationButton: View {
-    let systemName: String
-    let enabled: Bool
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12, weight: .semibold))
-                .frame(width: 28, height: 28)
-                .background(Color.secondary.opacity(backgroundOpacity))
-                .foregroundColor(enabled ? .primary.opacity(0.75) : .secondary.opacity(0.45))
-                .cornerRadius(7)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7)
-                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(!enabled)
-        .onHover { isHovering = $0 }
-    }
-
-    private var backgroundOpacity: Double {
-        if !enabled { return 0.04 }
-        return isHovering ? 0.16 : 0.10
-    }
-}
