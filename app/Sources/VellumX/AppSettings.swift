@@ -37,7 +37,6 @@ struct VenuePref: Codable, Identifiable, Equatable {
 /// `MetadataStore` in the database; rarely-changed values (citation curve, base
 /// URLs) come from `AppConfig.builtin`.
 ///
-/// The API key is sensitive and stored in the Keychain, not here.
 @MainActor
 @Observable
 final class AppSettings {
@@ -84,17 +83,6 @@ final class AppSettings {
     private(set) var configVersion: Int = 0
 
     private let url: URL
-    private static func apiKeyAccount(for provider: TranslationProvider) -> String {
-        switch provider {
-        case .deepseek:
-            return "deepseek-api-key"
-        case .openai:
-            return "openai-api-key"
-        case .anthropic:
-            return "anthropic-api-key"
-        }
-    }
-
     /// On-disk location of settings.json (the editable developer config).
     var settingsFileURL: URL { url }
 
@@ -138,8 +126,8 @@ final class AppSettings {
         language           = stored?.language ?? "en"
         translateEnabled   = stored?.translateEnabled ?? d.translate.enabled
         apiProvider        = selectedProvider
-        apiBaseURL         = nonEmpty(stored?.apiBaseURL, fallback: nonEmpty(stored?.deepSeekBaseURL, fallback: d.translate.base_url))
-        apiModel           = nonEmpty(stored?.apiModel, fallback: nonEmpty(stored?.deepSeekModel, fallback: d.translate.model))
+        apiBaseURL         = nonEmpty(stored?.apiBaseURL, fallback: d.translate.base_url)
+        apiModel           = nonEmpty(stored?.apiModel, fallback: d.translate.model)
         targetLanguage     = nonEmpty(stored?.targetLanguage, fallback: d.translate.target_language)
         dailyCount         = stored?.dailyCount ?? d.recommendation.daily_count
         qualitySlots       = stored?.qualitySlots ?? d.recommendation.quality_slots
@@ -150,12 +138,17 @@ final class AppSettings {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        // Prefer the value persisted in settings.json.  If it's absent (first launch
-        // after upgrading from the Keychain-backed build), pull from Keychain once and
-        // immediately flush to settings.json so the Keychain is never touched again.
-        // NOTE: didSet does not fire during init, so save() is called explicitly.
+        // API key lives in settings.json (field `apiKey`).  If absent, attempt a
+        // one-time migration from the old Keychain-backed storage.
+        // NOTE: didSet does not fire during init, so save() is called explicitly below.
+        let keychainAccount: String
+        switch selectedProvider {
+        case .deepseek:  keychainAccount = "deepseek-api-key"
+        case .openai:    keychainAccount = "openai-api-key"
+        case .anthropic: keychainAccount = "anthropic-api-key"
+        }
         let storedKey = stored?.apiKey.flatMap { $0.isEmpty ? nil : $0 }
-        apiKey = storedKey ?? Keychain.get(Self.apiKeyAccount(for: selectedProvider)) ?? ""
+        apiKey = storedKey ?? Keychain.get(keychainAccount) ?? ""
 
         // Materialise settings.json on first run, or flush if we just migrated from Keychain.
         if !FileManager.default.fileExists(atPath: url.path) || storedKey == nil {
@@ -171,8 +164,6 @@ final class AppSettings {
         var apiProvider: TranslationProvider?
         var apiBaseURL: String?
         var apiModel: String?
-        var deepSeekBaseURL: String?
-        var deepSeekModel: String?
         var targetLanguage: String?
         var dailyCount: Int?
         var qualitySlots: Int?
@@ -187,9 +178,8 @@ final class AppSettings {
 
         enum CodingKeys: String, CodingKey {
             case storageDirectory, menuBarEnabled, language, translateEnabled
-            case apiProvider, apiBaseURL, apiModel
-            case deepSeekBaseURL, deepSeekModel
-            case targetLanguage, dailyCount, qualitySlots, highScoreThreshold
+            case apiProvider, apiBaseURL, apiModel, targetLanguage
+            case dailyCount, qualitySlots, highScoreThreshold
             case recentDays, openAlexMailto, perPage, defaultDays
             case defaultMaxResults, topicFilter, apiKey
         }
@@ -205,8 +195,6 @@ final class AppSettings {
             apiProvider: apiProvider,
             apiBaseURL: apiBaseURL,
             apiModel: apiModel,
-            deepSeekBaseURL: nil,
-            deepSeekModel: nil,
             targetLanguage: targetLanguage,
             dailyCount: dailyCount,
             qualitySlots: qualitySlots,
