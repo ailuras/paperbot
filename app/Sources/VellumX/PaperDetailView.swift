@@ -109,6 +109,54 @@ struct PaperDetailView: View {
         .help(paper.pdfUrl?.isEmpty == false ? "Open PDF" : "Resolve PDF")
     }
 
+    private var citeMenu: some View {
+        Menu {
+            Button(L10n.t(.copyBibtex)) {
+                copyToPasteboard(CitationExporter.bibtex(for: paper))
+                statusMessage = L10n.t(.copiedBibtex)
+            }
+            Button(L10n.t(.copyRIS)) {
+                copyToPasteboard(CitationExporter.ris(for: paper))
+                statusMessage = L10n.t(.copiedRIS)
+            }
+            Divider()
+            Button(L10n.t(.saveBib)) { saveBibFile() }
+        } label: {
+            Image(systemName: "text.quote")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .background(Color.secondary.opacity(0.10))
+                .foregroundStyle(.primary.opacity(0.75))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7)
+                        .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
+                )
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .help(L10n.t(.cite))
+    }
+
+    private func copyToPasteboard(_ text: String) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(text, forType: .string)
+    }
+
+    private func saveBibFile() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "\(CitationExporter.citeKey(for: paper)).bib"
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try CitationExporter.bibtex(for: paper).write(to: url, atomically: true, encoding: .utf8)
+            statusMessage = L10n.t(.savedBib)
+        } catch {
+            statusMessage = "Save failed: \(error.localizedDescription)"
+        }
+    }
+
     private var collectionMenu: some View {
         let allCollections = PaperStore.shared.allCollections
         let isInAny = !paper.collectionIds.isEmpty
@@ -185,6 +233,7 @@ struct PaperDetailView: View {
                 Spacer(minLength: 0)
 
                 HStack(spacing: 6) {
+                    citeMenu
                     collectionMenu
                     pdfButton
                 }

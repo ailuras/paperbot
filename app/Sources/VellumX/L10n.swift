@@ -37,6 +37,8 @@ enum L10n {
         // Menu bar
         case noRecommendations, runRecommendEngine, todaysTopPicks
         case openPDF, markRead, markStarred, markSkip, cancelRecommendation, openInVellumX, openVellumX, quit
+        // Citation export
+        case cite, copyBibtex, copyRIS, saveBib, copiedBibtex, copiedRIS, savedBib
     }
 
     @MainActor
@@ -165,6 +167,14 @@ enum L10n {
         case .openInVellumX:      return ("Open in VellumX", "在 VellumX 中打开")
         case .openVellumX:        return ("Open VellumX", "打开 VellumX")
         case .quit:               return ("Quit", "退出")
+
+        case .cite:               return ("Cite", "引用")
+        case .copyBibtex:         return ("Copy BibTeX", "复制 BibTeX")
+        case .copyRIS:            return ("Copy RIS", "复制 RIS")
+        case .saveBib:            return ("Save .bib…", "保存 .bib…")
+        case .copiedBibtex:       return ("BibTeX copied to clipboard", "BibTeX 已复制到剪贴板")
+        case .copiedRIS:          return ("RIS copied to clipboard", "RIS 已复制到剪贴板")
+        case .savedBib:           return ("Saved BibTeX file", "已保存 BibTeX 文件")
         }
     }
 }
