@@ -333,6 +333,7 @@ class PaperStore {
         var inserted = 0
         var updated = 0
 
+        sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
         for paper in newPapers {
             let paperId = existingPaperId(for: paper) ?? paper.id
             var authorsJson = ""
@@ -355,6 +356,7 @@ class PaperStore {
                 upsertPaperPdfCache(paperId: paperId, paper: paper)
             }
         }
+        sqlite3_exec(db, "COMMIT", nil, nil, nil)
 
         loadPapers()
         return (inserted, updated)
