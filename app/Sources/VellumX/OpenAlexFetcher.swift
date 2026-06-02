@@ -54,7 +54,8 @@ struct OpenAlexWork: Decodable {
     var abstractInvertedIndex: [String: [Int]]?
     var primaryLocation: OpenAlexLocation?
     var openAccess: OpenAlexOpenAccess?
-    
+    var relatedWorks: [String]?
+
     enum CodingKeys: String, CodingKey {
         case id, doi, title, authorships
         case displayName = "display_name"
@@ -64,6 +65,7 @@ struct OpenAlexWork: Decodable {
         case abstractInvertedIndex = "abstract_inverted_index"
         case primaryLocation = "primary_location"
         case openAccess = "open_access"
+        case relatedWorks = "related_works"
     }
 }
 
@@ -334,5 +336,122 @@ class OpenAlexFetcher {
         
         let merged = dedupeAndMergeTracks(papers: allPapers)
         return (merged, totalRaw, merged.count, failures.map(\.trackName))
+    }
+
+    // MARK: - Related papers (on-demand; used by the detail view)
+
+    /// OpenAlex `select` field set for list/single fetches that feed `parseWork`.
+    private static let displayFields =
+        "id,doi,title,display_name,authorships,publication_year,publication_date,cited_by_count,abstract_inverted_index,primary_location,open_access"
+
+    /// OpenAlex work IDs are full URLs (`https://openalex.org/W123`); filters and
+    /// the single-work endpoint take the bare `W123`.
+    static func stripOpenAlexId(_ id: String) -> String {
+        if let slash = id.lastIndex(of: "/") {
+            return String(id[id.index(after: slash)...])
+        }
+        return id
+    }
+
+    private func makeRequest(url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
+        var userAgent = "VellumX/1.0"
+        if !config.openalex.mailto.isEmpty {
+            userAgent += " (mailto:\(config.openalex.mailto))"
+        }
+        request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
+        return request
+    }
+
+    private func decodeWorks(from data: Data) -> [OpenAlexWork] {
+        (try? JSONDecoder().decode(OpenAlexResponse.self, from: data))?.results ?? []
+    }
+
+    /// Fetches a single work, including its `related_works` ID list.
+    private func fetchWork(id: String) async -> OpenAlexWork? {
+        let bare = Self.stripOpenAlexId(id)
+        var components = URLComponents(string: "\(config.openalex.base_url)/\(bare)")
+        var items = [URLQueryItem(name: "select", value: "\(Self.displayFields),related_works")]
+        if !config.openalex.mailto.isEmpty {
+            items.append(URLQueryItem(name: "mailto", value: config.openalex.mailto))
+        }
+        components?.queryItems = items
+        guard let url = components?.url else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            return try JSONDecoder().decode(OpenAlexWork.self, from: data)
+        } catch {
+            print("OpenAlex fetchWork failed: \(error)")
+            return nil
+        }
+    }
+
+    /// Batch-fetches works by ID (chunked ≤50 per request via the `openalex_id`
+    /// OR filter), parses them, and returns `Paper`s in the requested order.
+    private func fetchWorksByIds(_ ids: [String]) async -> [Paper] {
+        guard !ids.isEmpty else { return [] }
+        let bareIds = ids.map(Self.stripOpenAlexId)
+        var byId: [String: Paper] = [:]
+
+        for start in stride(from: 0, to: bareIds.count, by: 50) {
+            let chunk = Array(bareIds[start..<min(start + 50, bareIds.count)])
+            var components = URLComponents(string: config.openalex.base_url)
+            var items = [
+                URLQueryItem(name: "filter", value: "openalex_id:\(chunk.joined(separator: "|"))"),
+                URLQueryItem(name: "per_page", value: "50"),
+                URLQueryItem(name: "select", value: Self.displayFields)
+            ]
+            if !config.openalex.mailto.isEmpty {
+                items.append(URLQueryItem(name: "mailto", value: config.openalex.mailto))
+            }
+            components?.queryItems = items
+            guard let url = components?.url else { continue }
+            do {
+                let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { continue }
+                for work in decodeWorks(from: data) {
+                    byId[Self.stripOpenAlexId(work.id)] = parseWork(work, track: "")
+                }
+            } catch {
+                print("OpenAlex fetchWorksByIds failed: \(error)")
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+
+        // Preserve the input order (related_works is relevance-ordered).
+        return bareIds.compactMap { byId[$0] }
+    }
+
+    /// Similar papers: the target work's `related_works`, scored and ordered.
+    func fetchSimilar(workId: String, limit: Int = 25) async -> [Paper] {
+        guard let work = await fetchWork(id: workId),
+              let related = work.relatedWorks, !related.isEmpty else { return [] }
+        return await fetchWorksByIds(Array(related.prefix(limit)))
+    }
+
+    /// Papers citing the target work, most-cited first.
+    func fetchCitedBy(workId: String, limit: Int = 25) async -> [Paper] {
+        let bare = Self.stripOpenAlexId(workId)
+        var components = URLComponents(string: config.openalex.base_url)
+        var items = [
+            URLQueryItem(name: "filter", value: "cites:\(bare)"),
+            URLQueryItem(name: "sort", value: "cited_by_count:desc"),
+            URLQueryItem(name: "per_page", value: String(min(limit, 200))),
+            URLQueryItem(name: "select", value: Self.displayFields)
+        ]
+        if !config.openalex.mailto.isEmpty {
+            items.append(URLQueryItem(name: "mailto", value: config.openalex.mailto))
+        }
+        components?.queryItems = items
+        guard let url = components?.url else { return [] }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+            return decodeWorks(from: data).map { parseWork($0, track: "") }
+        } catch {
+            print("OpenAlex fetchCitedBy failed: \(error)")
+            return []
+        }
     }
 }

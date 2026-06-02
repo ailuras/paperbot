@@ -45,6 +45,11 @@ struct PaperDetailView: View {
 
                 // MARK: System Memo
                 systemMemoSection
+
+                Divider().padding(.horizontal, 20)
+
+                // MARK: Related Papers (lazy — fetched only when scrolled into view)
+                RelatedPapersSection(workId: paper.id)
             }
             .padding(.vertical, 16)
         }

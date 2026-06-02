@@ -39,6 +39,9 @@ enum L10n {
         case openPDF, markRead, markStarred, markSkip, cancelRecommendation, openInVellumX, openVellumX, quit
         // Citation export
         case cite, copyBibtex, copyRIS, saveBib, copiedBibtex, copiedRIS, savedBib
+        // Related papers
+        case relatedPapers, similarPapers, citedBy, addToLibrary, addedToLibrary
+        case loadingRelated, noRelated
     }
 
     @MainActor
@@ -175,6 +178,14 @@ enum L10n {
         case .copiedBibtex:       return ("BibTeX copied to clipboard", "BibTeX 已复制到剪贴板")
         case .copiedRIS:          return ("RIS copied to clipboard", "RIS 已复制到剪贴板")
         case .savedBib:           return ("Saved BibTeX file", "已保存 BibTeX 文件")
+
+        case .relatedPapers:      return ("Related Papers", "相关论文")
+        case .similarPapers:      return ("Similar", "相似")
+        case .citedBy:            return ("Cited by", "被引用")
+        case .addToLibrary:       return ("Add to library", "加入库")
+        case .addedToLibrary:     return ("In library", "已在库")
+        case .loadingRelated:     return ("Loading related papers…", "正在加载相关论文…")
+        case .noRelated:          return ("No related papers found.", "未找到相关论文。")
         }
     }
 }
