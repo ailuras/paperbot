@@ -54,10 +54,12 @@ final class AppSettings {
     var translateEnabled: Bool { didSet { save() } }
     var apiProvider: TranslationProvider {
         didSet {
-            save()
             if oldValue != apiProvider {
-                apiKey = Keychain.get(Self.apiKeyAccount(for: apiProvider)) ?? ""
+                // Read from settings.json (already loaded); no Keychain access needed.
+                // The key for the new provider will be empty until the user enters it.
+                apiKey = ""
             }
+            save()
         }
     }
     var apiBaseURL: String { didSet { save() } }
@@ -148,13 +150,15 @@ final class AppSettings {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
-        // Prefer the value persisted in settings.json; fall back to Keychain once
-        // for migration from the old storage, then the next save() will persist it.
-        apiKey = stored?.apiKey ?? Keychain.get(Self.apiKeyAccount(for: selectedProvider)) ?? ""
+        // Prefer the value persisted in settings.json.  If it's absent (first launch
+        // after upgrading from the Keychain-backed build), pull from Keychain once and
+        // immediately flush to settings.json so the Keychain is never touched again.
+        // NOTE: didSet does not fire during init, so save() is called explicitly.
+        let storedKey = stored?.apiKey.flatMap { $0.isEmpty ? nil : $0 }
+        apiKey = storedKey ?? Keychain.get(Self.apiKeyAccount(for: selectedProvider)) ?? ""
 
-        // settings.json is the editable developer config: materialize it with
-        // defaults the first time so every knob is visible and hand-editable.
-        if !FileManager.default.fileExists(atPath: url.path) {
+        // Materialise settings.json on first run, or flush if we just migrated from Keychain.
+        if !FileManager.default.fileExists(atPath: url.path) || storedKey == nil {
             save()
         }
     }
