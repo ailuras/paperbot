@@ -11,6 +11,10 @@ struct ContentView: View {
     @State private var selectedSidebarItem: SidebarItem? = .recommended
     @State private var selectedCollectionId: String? = nil
     @State private var searchKeyword: String = ""
+    /// Debounced mirror of `searchKeyword` — drives the actual filtering so a
+    /// burst of keystrokes triggers at most one `applyFilters` pass.
+    @State private var debouncedSearch: String = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var sortByScore: Bool = false
 
     // Topic is single-select; Fields/Tier are multi-select (in the toolbar
@@ -53,7 +57,7 @@ struct ContentView: View {
             excludedTags: excludedTags,
             fields: selectedFields,
             tiers: selectedTiers,
-            search: searchKeyword,
+            search: debouncedSearch,
             sortByScore: sortByScore
         )
     }
@@ -233,6 +237,14 @@ struct ContentView: View {
             focusRequestedPaper()
         }
         .onChange(of: filterInputs) { applyFilters() }
+        .onChange(of: searchKeyword) { _, new in
+            searchDebounceTask?.cancel()
+            searchDebounceTask = Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                if Task.isCancelled { return }
+                debouncedSearch = new
+            }
+        }
         .onChange(of: windowOpener.requestedPaperId) { focusRequestedPaper() }
         .onChange(of: selectedSidebarItem) { _, new in
             if new != nil { selectedCollectionId = nil }
@@ -328,6 +340,7 @@ struct ContentView: View {
         selectedFields = []
         selectedTiers = []
         searchKeyword = ""
+        debouncedSearch = ""
 
         // If the paper belongs to any collection, switch to the first one.
         if let firstCollectionId = paper.collectionIds.first,
@@ -416,13 +429,14 @@ struct ContentView: View {
             }
         }
 
-        // 2. Filter by search keyword
-        if !searchKeyword.isEmpty {
-            let kw = searchKeyword.lowercased()
-            result = result.filter {
-                $0.title.lowercased().contains(kw) ||
-                $0.abstract.lowercased().contains(kw) ||
-                $0.authors.joined(separator: " ").lowercased().contains(kw)
+        // 2. Filter by search keyword. Tokens are AND-matched against each
+        // paper's cached lowercased `searchText` (title, abstract, authors,
+        // venue, tags, note) — no per-keystroke re-lowercasing of abstracts.
+        let tokens = debouncedSearch.lowercased().split(separator: " ").map(String.init)
+        if !tokens.isEmpty {
+            result = result.filter { paper in
+                let hay = paper.searchText
+                return tokens.allSatisfy { hay.contains($0) }
             }
         }
 

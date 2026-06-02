@@ -52,14 +52,14 @@ enum PaperStatus: String, Codable, CaseIterable {
 final class Paper: Identifiable {
     var id: String
     var doi: String?
-    var title: String
-    var authors: [String]
+    var title: String      { didSet { _searchText = nil } }
+    var authors: [String]  { didSet { _searchText = nil } }
     var publicationDate: String
     var publicationYear: Int?
-    var venue: String
-    var venueAbbr: String
+    var venue: String      { didSet { _searchText = nil } }
+    var venueAbbr: String  { didSet { _searchText = nil } }
     var citedByCount: Int
-    var abstract: String
+    var abstract: String   { didSet { _searchText = nil } }
     var landingPageUrl: String
     var pdfUrl: String?
     var track: String
@@ -70,10 +70,24 @@ final class Paper: Identifiable {
     var isRecommended: Bool
     var recommendedAt: Date?
     var recommendationReason: String
-    var tags: [String]
+    var tags: [String]     { didSet { _searchText = nil } }
     var collectionIds: [String]
-    var note: String
+    var note: String       { didSet { _searchText = nil } }
     var abstractZh: String
+
+    /// Lazily-built, lowercased concatenation of the searchable fields. Cached
+    /// so per-keystroke filtering doesn't re-lowercase long abstracts for every
+    /// paper; invalidated automatically whenever a searchable field is mutated
+    /// (including in-place tag/note edits via `PaperStore`).
+    private var _searchText: String?
+    var searchText: String {
+        if let cached = _searchText { return cached }
+        let blob = ([title, abstract, venue, venueAbbr, note] + authors + tags)
+            .joined(separator: " ")
+            .lowercased()
+        _searchText = blob
+        return blob
+    }
 
     init(
         id: String, doi: String? = nil, title: String,
