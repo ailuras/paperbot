@@ -3,7 +3,6 @@ import Foundation
 struct TrackConfig {
     var query: String
     var keywords: [String]
-    var color: String?
 }
 
 struct ScoringTier {
@@ -205,7 +204,7 @@ class ConfigManager {
         }
         if !metadata.topics.isEmpty {
             cfg.tracks = Dictionary(uniqueKeysWithValues: metadata.topics.map {
-                ($0.name, TrackConfig(query: $0.query, keywords: $0.keywords, color: nil))
+                ($0.name, TrackConfig(query: $0.query, keywords: $0.keywords))
             })
         }
         return cfg

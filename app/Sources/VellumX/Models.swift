@@ -55,7 +55,7 @@ enum PaperStatus: String, Codable, CaseIterable {
 }
 
 /// Lightweight in-memory paper DTO used by the UI layer.
-/// Persistence is handled by `PersistedPaper` via SwiftData.
+/// Persistence is handled by `PaperStore` via SQLite.
 final class Paper: Identifiable {
     var id: String
     var doi: String?
@@ -73,7 +73,6 @@ final class Paper: Identifiable {
     var score: Double
     var tier: Int
     var status: PaperStatus
-    var changedAt: Date
     var isRecommended: Bool
     var recommendedAt: Date?
     var recommendationReason: String
@@ -104,7 +103,7 @@ final class Paper: Identifiable {
         abstract: String = "", landingPageUrl: String = "",
         pdfUrl: String? = nil, track: String = "",
         score: Double = 0.0, tier: Int = 0,
-        status: PaperStatus = .pending, changedAt: Date = Date(),
+        status: PaperStatus = .pending,
         isRecommended: Bool = false, recommendedAt: Date? = nil,
         recommendationReason: String = "",
         tags: [String] = [],
@@ -127,7 +126,6 @@ final class Paper: Identifiable {
         self.score = score
         self.tier = tier
         self.status = status
-        self.changedAt = changedAt
         self.isRecommended = isRecommended
         self.recommendedAt = recommendedAt
         self.recommendationReason = recommendationReason

@@ -135,23 +135,19 @@ class PaperStore {
             venue TEXT,
             cited_by_count INTEGER DEFAULT 0,
             abstract TEXT,
-            landing_page_url TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
+            landing_page_url TEXT
         );
 
         CREATE TABLE IF NOT EXISTS paper_cache (
             paper_id TEXT PRIMARY KEY,
             venue_abbr TEXT NOT NULL DEFAULT 'Others',
             score REAL NOT NULL DEFAULT 0,
-            tier INTEGER NOT NULL DEFAULT 0,
-            updated_at TEXT DEFAULT (datetime('now'))
+            tier INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS paper_states (
             paper_id TEXT PRIMARY KEY,
-            status TEXT NOT NULL DEFAULT 'pending',
-            changed_at TEXT DEFAULT (datetime('now'))
+            status TEXT NOT NULL DEFAULT 'pending'
         );
 
         CREATE TABLE IF NOT EXISTS paper_recommendations (
@@ -163,28 +159,24 @@ class PaperStore {
 
         CREATE TABLE IF NOT EXISTS paper_notes (
             paper_id TEXT PRIMARY KEY,
-            note TEXT NOT NULL DEFAULT '',
-            updated_at TEXT DEFAULT (datetime('now'))
+            note TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS paper_tags (
             paper_id TEXT NOT NULL,
             tag TEXT NOT NULL,
-            created_at TEXT DEFAULT (datetime('now')),
             PRIMARY KEY (paper_id, tag)
         );
 
         CREATE TABLE IF NOT EXISTS paper_translations (
             paper_id TEXT PRIMARY KEY,
-            abstract_zh TEXT,
-            updated_at TEXT DEFAULT (datetime('now'))
+            abstract_zh TEXT
         );
 
         CREATE TABLE IF NOT EXISTS paper_pdfs (
             paper_id TEXT PRIMARY KEY,
             pdf_url TEXT NOT NULL,
-            pdf_source TEXT,
-            resolved_at TEXT DEFAULT (datetime('now'))
+            pdf_source TEXT
         );
 
         CREATE TABLE IF NOT EXISTS paper_topics (
@@ -198,8 +190,7 @@ class PaperStore {
             name TEXT NOT NULL,
             color TEXT,
             icon TEXT,
-            parent_id TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
+            parent_id TEXT
         );
 
         CREATE TABLE IF NOT EXISTS collection_papers (
@@ -220,43 +211,42 @@ class PaperStore {
 
     func loadPapers() {
         let query = """
-        SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue,
-               COALESCE(pc.venue_abbr, 'Others') as venue_abbr,
-               p.cited_by_count, p.abstract, p.landing_page_url, f.pdf_url,
-               COALESCE(NULLIF((
-                   SELECT group_concat(topic_name, ', ')
-                   FROM (
-                       SELECT topic_name
-                       FROM paper_topics
-                       WHERE paper_id = p.id
-                           ORDER BY topic_name
-                   )
-               ), ''), '') as track,
-               COALESCE(pc.score, 0) as score, COALESCE(pc.tier, 0) as tier,
-               COALESCE(ps.status, 'pending') as status,
-               COALESCE(ps.changed_at, datetime('now')) as changed_at,
-               COALESCE(pr.is_active, 0) as is_recommended,
-               pr.recommended_at,
-               COALESCE(pr.recommendation_reason, '') as recommendation_reason,
-               COALESCE(NULLIF((
-                   SELECT group_concat(tag, ', ')
-                   FROM (
-                       SELECT tag
-                       FROM paper_tags
-                       WHERE paper_id = p.id
-                       ORDER BY lower(tag), tag
-                   )
-                ), ''), '') as tags,
-               COALESCE(NULLIF((
-                   SELECT group_concat(collection_id, ', ')
-                   FROM (
-                       SELECT cp2.collection_id
-                       FROM collection_papers cp2
-                       WHERE cp2.paper_id = p.id
-                       ORDER BY cp2.added_at, cp2.collection_id
-                   )
-               ), ''), '') as collections,
-                COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
+         SELECT p.id, p.doi, p.title, p.authors, p.publication_date, p.venue,
+                COALESCE(pc.venue_abbr, 'Others') as venue_abbr,
+                p.cited_by_count, p.abstract, p.landing_page_url, f.pdf_url,
+                COALESCE(NULLIF((
+                    SELECT group_concat(topic_name, ', ')
+                    FROM (
+                        SELECT topic_name
+                        FROM paper_topics
+                        WHERE paper_id = p.id
+                            ORDER BY topic_name
+                    )
+                ), ''), '') as track,
+                COALESCE(pc.score, 0) as score, COALESCE(pc.tier, 0) as tier,
+                COALESCE(ps.status, 'pending') as status,
+                COALESCE(pr.is_active, 0) as is_recommended,
+                pr.recommended_at,
+                COALESCE(pr.recommendation_reason, '') as recommendation_reason,
+                COALESCE(NULLIF((
+                    SELECT group_concat(tag, ', ')
+                    FROM (
+                        SELECT tag
+                        FROM paper_tags
+                        WHERE paper_id = p.id
+                        ORDER BY lower(tag), tag
+                    )
+                 ), ''), '') as tags,
+                COALESCE(NULLIF((
+                    SELECT group_concat(collection_id, ', ')
+                    FROM (
+                        SELECT cp2.collection_id
+                        FROM collection_papers cp2
+                        WHERE cp2.paper_id = p.id
+                        ORDER BY cp2.added_at, cp2.collection_id
+                    )
+                ), ''), '') as collections,
+                 COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
          FROM papers p
         LEFT JOIN paper_cache pc ON p.id = pc.paper_id
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
@@ -304,16 +294,14 @@ class PaperStore {
 
             let statusRaw = columnString(stmt, 14)
             let status = PaperStatus(rawValue: statusRaw) ?? .pending
-            let changedAtRaw = columnString(stmt, 15)
-            let changedAt = Self.parseSQLiteDate(changedAtRaw) ?? Date()
-            let isRecommended = sqlite3_column_int(stmt, 16) == 1
-            let recommendedAtRaw = columnOptionalString(stmt, 17)
+            let isRecommended = sqlite3_column_int(stmt, 15) == 1
+            let recommendedAtRaw = columnOptionalString(stmt, 16)
             let recommendedAt = recommendedAtRaw.flatMap(Self.parseSQLiteDate)
-            let recommendationReason = columnString(stmt, 18)
-            let tags = Self.splitCSV(columnString(stmt, 19))
-            let collectionIds = Self.splitCSV(columnString(stmt, 20))
-            let note = columnString(stmt, 21)
-            let abstractZh = columnString(stmt, 22)
+            let recommendationReason = columnString(stmt, 17)
+            let tags = Self.splitCSV(columnString(stmt, 18))
+            let collectionIds = Self.splitCSV(columnString(stmt, 19))
+            let note = columnString(stmt, 20)
+            let abstractZh = columnString(stmt, 21)
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -337,7 +325,6 @@ class PaperStore {
                 score: score,
                 tier: tier,
                 status: status,
-                changedAt: changedAt,
                 isRecommended: isRecommended,
                 recommendedAt: recommendedAt,
                 recommendationReason: recommendationReason,
@@ -419,8 +406,7 @@ class PaperStore {
         let sql = """
         UPDATE papers SET
             doi = ?, title = ?, authors = ?, publication_date = ?, venue = ?,
-            cited_by_count = ?, abstract = ?, landing_page_url = ?,
-            updated_at = datetime('now')
+            cited_by_count = ?, abstract = ?, landing_page_url = ?
         WHERE id = ?
         """
         var stmt: OpaquePointer?
@@ -475,13 +461,12 @@ class PaperStore {
             venues: MetadataStore.shared.venues
         )
         let updateSql = """
-        INSERT INTO paper_cache (paper_id, venue_abbr, score, tier, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        INSERT INTO paper_cache (paper_id, venue_abbr, score, tier)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(paper_id) DO UPDATE SET
             venue_abbr = excluded.venue_abbr,
             score = excluded.score,
-            tier = excluded.tier,
-            updated_at = datetime('now')
+            tier = excluded.tier
         """
 
         var stmt: OpaquePointer?
@@ -534,13 +519,12 @@ class PaperStore {
 
     private func upsertPaperCache(paperId: String, paper: Paper) {
         let sql = """
-        INSERT INTO paper_cache (paper_id, venue_abbr, score, tier, updated_at)
-        VALUES (?, ?, ?, ?, datetime('now'))
+        INSERT INTO paper_cache (paper_id, venue_abbr, score, tier)
+        VALUES (?, ?, ?, ?)
         ON CONFLICT(paper_id) DO UPDATE SET
             venue_abbr = excluded.venue_abbr,
             score = excluded.score,
-            tier = excluded.tier,
-            updated_at = datetime('now')
+            tier = excluded.tier
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
@@ -555,8 +539,8 @@ class PaperStore {
     private func upsertPaperPdfCache(paperId: String, paper: Paper) {
         guard let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty else { return }
         let sql = """
-        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
-        VALUES (?, ?, 'OpenAlex', datetime('now'))
+        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source)
+        VALUES (?, ?, 'OpenAlex')
         ON CONFLICT(paper_id) DO NOTHING
         """
         var stmt: OpaquePointer?
@@ -623,11 +607,10 @@ class PaperStore {
 
     func setPaperStatus(id: String, status: PaperStatus) {
         let sql = """
-        INSERT INTO paper_states (paper_id, status, changed_at)
-        VALUES (?, ?, datetime('now'))
+        INSERT INTO paper_states (paper_id, status)
+        VALUES (?, ?)
         ON CONFLICT(paper_id) DO UPDATE SET
-            status = excluded.status,
-            changed_at = datetime('now')
+            status = excluded.status
         """
 
         var stmt: OpaquePointer?
@@ -637,7 +620,6 @@ class PaperStore {
             if sqlite3_step(stmt) == SQLITE_DONE {
                 if let idx = papers.firstIndex(where: { $0.id == id }) {
                     papers[idx].status = status
-                    papers[idx].changedAt = Date()
                 }
                 paperVersion += 1
             }
@@ -692,11 +674,10 @@ class PaperStore {
 
     func setPaperNote(id: String, note: String) {
         let sql = """
-        INSERT INTO paper_notes (paper_id, note, updated_at)
-        VALUES (?, ?, datetime('now'))
+        INSERT INTO paper_notes (paper_id, note)
+        VALUES (?, ?)
         ON CONFLICT(paper_id) DO UPDATE SET
-            note = excluded.note,
-            updated_at = datetime('now')
+            note = excluded.note
         """
 
         var stmt: OpaquePointer?
@@ -754,11 +735,10 @@ class PaperStore {
 
     func setPaperTranslation(id: String, abstractZh: String) {
         let sql = """
-        INSERT INTO paper_translations (paper_id, abstract_zh, updated_at)
-        VALUES (?, ?, datetime('now'))
+        INSERT INTO paper_translations (paper_id, abstract_zh)
+        VALUES (?, ?)
         ON CONFLICT(paper_id) DO UPDATE SET
-            abstract_zh = excluded.abstract_zh,
-            updated_at = datetime('now')
+            abstract_zh = excluded.abstract_zh
         """
 
         var stmt: OpaquePointer?
@@ -777,12 +757,11 @@ class PaperStore {
 
     func setPaperPdf(id: String, pdfUrl: String, pdfSource: String) {
         let sql = """
-        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source, resolved_at)
-        VALUES (?, ?, ?, datetime('now'))
+        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source)
+        VALUES (?, ?, ?)
         ON CONFLICT(paper_id) DO UPDATE SET
             pdf_url = excluded.pdf_url,
-            pdf_source = excluded.pdf_source,
-            resolved_at = datetime('now')
+            pdf_source = excluded.pdf_source
         """
 
         var stmt: OpaquePointer?

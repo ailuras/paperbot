@@ -219,10 +219,6 @@ final class MetadataStore {
             sqlite3_free(errorMsg)
         }
 
-        // One-time cleanup of retired field values: the catch-all is now the
-        // absence of a custom field, not a stored venue field value.
-        sqlite3_exec(db, "UPDATE metadata_venue_rules SET field_name = NULL WHERE UPPER(TRIM(COALESCE(field_name, ''))) IN ('OT', 'OTHERS')", nil, nil, nil)
-        sqlite3_exec(db, "DELETE FROM metadata_fields WHERE UPPER(TRIM(COALESCE(name, ''))) = 'OT'", nil, nil, nil)
     }
 
     /// Populate the taxonomy with the built-in defaults the first time the

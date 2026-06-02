@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import SwiftUI
 
 /// One academic track: an OpenAlex search query plus the keywords used to keep
 /// only relevant results. Editable in Settings.
@@ -174,14 +173,6 @@ final class AppSettings {
         var defaultMaxResults: Int?
         var topicFilter: String?
         var apiKeys: [String: String]?
-
-        enum CodingKeys: String, CodingKey {
-            case storageDirectory, menuBarEnabled, language, translateEnabled
-            case apiProvider, apiBaseURL, apiModel, targetLanguage
-            case dailyCount, qualitySlots, highScoreThreshold
-            case recentDays, openAlexMailto, perPage, defaultDays
-            case defaultMaxResults, topicFilter, apiKeys
-        }
     }
 
     private func save() {
