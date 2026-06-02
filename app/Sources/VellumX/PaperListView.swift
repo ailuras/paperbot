@@ -5,38 +5,8 @@ struct PaperListView: View {
     @Binding var selectedPaperId: String?
     var metadata: MetadataStore
     let highlightsDailyRecommendations: Bool
-    let sortByScore: Bool
     let onCancelRecommendation: (Paper) -> Void
     let onSelectPaper: (String) -> Void
-
-    private let lastTodayId: String?
-
-    init(
-        papers: [Paper],
-        selectedPaperId: Binding<String?>,
-        metadata: MetadataStore,
-        highlightsDailyRecommendations: Bool,
-        sortByScore: Bool,
-        onCancelRecommendation: @escaping (Paper) -> Void,
-        onSelectPaper: @escaping (String) -> Void
-    ) {
-        self.papers = papers
-        self._selectedPaperId = selectedPaperId
-        self.metadata = metadata
-        self.highlightsDailyRecommendations = highlightsDailyRecommendations
-        self.sortByScore = sortByScore
-        self.onCancelRecommendation = onCancelRecommendation
-        self.onSelectPaper = onSelectPaper
-
-        if highlightsDailyRecommendations && !sortByScore {
-            let todayPapers = papers.filter {
-                $0.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
-            }
-            self.lastTodayId = todayPapers.last?.id
-        } else {
-            self.lastTodayId = nil
-        }
-    }
 
     var body: some View {
         List(selection: $selectedPaperId) {
@@ -44,13 +14,12 @@ struct PaperListView: View {
                 PaperRowView(
                     paper: paper,
                     metadata: metadata,
-                    isDailyRecommendation: highlightsDailyRecommendations,
-                    isLastToday: paper.id == lastTodayId
+                    isDailyRecommendation: highlightsDailyRecommendations
                 )
                 .tag(paper.id)
                 .listRowSeparator(.visible)
-                .listRowSeparatorTint(Color.primary.opacity(0.07))
-                .listRowInsets(EdgeInsets(top: 1, leading: 2, bottom: 1, trailing: 2))
+                .listRowSeparatorTint(Color.primary.opacity(0.08))
+                .listRowInsets(EdgeInsets(top: 4, leading: 2, bottom: 4, trailing: 2))
                 .contextMenu {
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
@@ -78,7 +47,6 @@ private struct PaperRowView: View {
     let paper: Paper
     var metadata: MetadataStore
     let isDailyRecommendation: Bool
-    let isLastToday: Bool
 
     private var venueColor: Color {
         metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr))
@@ -126,13 +94,6 @@ private struct PaperRowView: View {
             ? paper.status.iconColor.opacity(0.05)
             : Color.clear)
         .contentShape(Rectangle())
-        .overlay(alignment: .bottom) {
-            if isLastToday {
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.35))
-                    .frame(height: 1)
-            }
-        }
     }
 }
 

@@ -209,7 +209,6 @@ struct ContentView: View {
                 selectedPaperId: $selectedPaperId,
                 metadata: metadata,
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
-                sortByScore: sortByScore,
                 onCancelRecommendation: cancelRecommendation,
                 onSelectPaper: { lastViewedPaperId = $0 }
             )
