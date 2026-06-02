@@ -18,12 +18,22 @@ class PaperStore {
     static let shared = PaperStore()
 
     private var db: OpaquePointer?
+    private let databaseURLOverride: URL?
 
     var dbURL: URL {
-        AppSettings.shared.resolvedStorageDirectory.appendingPathComponent("vellumx.db")
+        if let databaseURLOverride { return databaseURLOverride }
+        return AppSettings.shared.resolvedStorageDirectory.appendingPathComponent("vellumx.db")
     }
 
     private init() {
+        databaseURLOverride = nil
+        openDatabase()
+        createTablesIfNeeded()
+        loadPapers()
+    }
+
+    init(databaseURL: URL) {
+        databaseURLOverride = databaseURL
         openDatabase()
         createTablesIfNeeded()
         loadPapers()
@@ -185,8 +195,10 @@ class PaperStore {
 
         CREATE TABLE IF NOT EXISTS collections (
             id TEXT PRIMARY KEY,
-            name TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
             color TEXT,
+            icon TEXT,
+            parent_id TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         );
 
@@ -203,6 +215,65 @@ class PaperStore {
             let error = errorMsg.map { String(cString: $0) } ?? "unknown error"
             print("Error creating tables: \(error)")
             sqlite3_free(errorMsg)
+        }
+        migrateCollectionsSchema()
+    }
+
+    /// Brings pre-existing `collections` tables up to the nested-folder schema:
+    /// adds the `icon`/`parent_id` columns and drops the legacy global-UNIQUE
+    /// on `name` (subfolders under different parents may share a name). Each
+    /// step is a no-op once already applied, so this is safe to run every launch.
+    private func migrateCollectionsSchema() {
+        ensureColumn("icon", "TEXT", inTable: "collections")
+        ensureColumn("parent_id", "TEXT", inTable: "collections")
+
+        // The legacy CREATE carried `name TEXT NOT NULL UNIQUE`. Detect it from
+        // the stored DDL and rebuild without the constraint, preserving rows.
+        var stmt: OpaquePointer?
+        var ddl = ""
+        if sqlite3_prepare_v2(db,
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='collections'",
+            -1, &stmt, nil) == SQLITE_OK, sqlite3_step(stmt) == SQLITE_ROW,
+           let c = sqlite3_column_text(stmt, 0) {
+            ddl = String(cString: c)
+        }
+        sqlite3_finalize(stmt)
+        guard ddl.uppercased().contains("UNIQUE") else { return }
+
+        let rebuild = """
+        BEGIN TRANSACTION;
+        CREATE TABLE collections_new (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            color TEXT,
+            icon TEXT,
+            parent_id TEXT,
+            created_at TEXT DEFAULT (datetime('now'))
+        );
+        INSERT INTO collections_new (id, name, color, icon, parent_id, created_at)
+            SELECT id, name, color, icon, parent_id, created_at FROM collections;
+        DROP TABLE collections;
+        ALTER TABLE collections_new RENAME TO collections;
+        COMMIT;
+        """
+        sqlite3_exec(db, rebuild, nil, nil, nil)
+    }
+
+    /// Adds `column` to `table` if it isn't already present (idempotent).
+    private func ensureColumn(_ column: String, _ type: String, inTable table: String) {
+        var stmt: OpaquePointer?
+        var exists = false
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(\(table))", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                if let c = sqlite3_column_text(stmt, 1), String(cString: c) == column {
+                    exists = true
+                    break
+                }
+            }
+        }
+        sqlite3_finalize(stmt)
+        if !exists {
+            sqlite3_exec(db, "ALTER TABLE \(table) ADD COLUMN \(column) \(type)", nil, nil, nil)
         }
     }
 
@@ -776,7 +847,7 @@ class PaperStore {
     // MARK: - Collections
 
     var allCollections: [PaperCollection] {
-        let sql = "SELECT id, name, color FROM collections ORDER BY lower(name), name"
+        let sql = "SELECT id, name, color, icon, parent_id FROM collections ORDER BY lower(name), name"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
@@ -786,38 +857,116 @@ class PaperStore {
             let id = String(cString: sqlite3_column_text(stmt, 0))
             let name = String(cString: sqlite3_column_text(stmt, 1))
             let color = sqlite3_column_text(stmt, 2).map { String(cString: $0) }
-            rows.append(PaperCollection(id: id, name: name, color: color))
+            let icon = sqlite3_column_text(stmt, 3).map { String(cString: $0) }
+            let parentId = sqlite3_column_text(stmt, 4).map { String(cString: $0) }
+            rows.append(PaperCollection(id: id, name: name, color: color, icon: icon, parentId: parentId))
         }
         return rows
     }
 
-    func createCollection(name: String, color: String? = nil) -> PaperCollection? {
+    @discardableResult
+    func createCollection(name: String, color: String? = nil,
+                          icon: String? = nil, parentId: String? = nil) -> PaperCollection? {
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return nil }
+
         let id = UUID().uuidString
-        let sql = "INSERT INTO collections (id, name, color) VALUES (?, ?, ?)"
+        let sql = "INSERT INTO collections (id, name, color, icon, parent_id) VALUES (?, ?, ?, ?, ?)"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
         sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
-        sqlite3_bind_text(stmt, 2, name, -1, SQLITE_TRANSIENT)
-        if let color {
-            sqlite3_bind_text(stmt, 3, color, -1, SQLITE_TRANSIENT)
-        } else {
-            sqlite3_bind_null(stmt, 3)
-        }
+        sqlite3_bind_text(stmt, 2, trimmedName, -1, SQLITE_TRANSIENT)
+        bindOptionalText(stmt, 3, color)
+        bindOptionalText(stmt, 4, icon)
+        bindOptionalText(stmt, 5, parentId)
         guard sqlite3_step(stmt) == SQLITE_DONE else { return nil }
         paperVersion += 1
-        return PaperCollection(id: id, name: name, color: color)
+        return PaperCollection(id: id, name: trimmedName, color: color, icon: icon, parentId: parentId)
     }
 
-    func deleteCollection(id: String) {
-        let sql = "DELETE FROM collections WHERE id = ?"
+    func renameCollection(id: String, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        updateCollectionColumn(id: id, column: "name", value: trimmed)
+    }
+
+    func setCollectionIcon(id: String, icon: String?) {
+        updateCollectionColumn(id: id, column: "icon", value: icon)
+    }
+
+    func setCollectionColor(id: String, color: String?) {
+        updateCollectionColumn(id: id, column: "color", value: color)
+    }
+
+    private func updateCollectionColumn(id: String, column: String, value: String?) {
+        // `column` is a fixed internal literal, never user input — safe to interpolate.
+        let sql = "UPDATE collections SET \(column) = ? WHERE id = ?"
         var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        bindOptionalText(stmt, 1, value)
+        sqlite3_bind_text(stmt, 2, id, -1, SQLITE_TRANSIENT)
+        if sqlite3_step(stmt) == SQLITE_DONE { paperVersion += 1 }
+    }
+
+    /// Returns `id` plus every descendant collection id (recursive), so a parent
+    /// folder can stand in for its whole subtree when filtering or deleting.
+    func collectionSubtreeIds(_ id: String) -> Set<String> {
+        let sql = """
+        WITH RECURSIVE sub(id) AS (
+            SELECT id FROM collections WHERE id = ?1
+            UNION ALL
+            SELECT c.id FROM collections c JOIN sub ON c.parent_id = sub.id
+        )
+        SELECT id FROM sub
+        """
+        var stmt: OpaquePointer?
+        var ids = Set<String>()
         if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) == SQLITE_DONE {
-                loadPapers()
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                ids.insert(String(cString: sqlite3_column_text(stmt, 0)))
             }
+        }
+        sqlite3_finalize(stmt)
+        return ids
+    }
+
+    /// Deletes the collection together with its whole subtree, dropping the
+    /// papers' memberships in those collections too (no orphaned rows left).
+    func deleteCollection(id: String) {
+        let purge = """
+        WITH RECURSIVE sub(id) AS (
+            SELECT id FROM collections WHERE id = ?1
+            UNION ALL
+            SELECT c.id FROM collections c JOIN sub ON c.parent_id = sub.id
+        )
+        DELETE FROM %TABLE% WHERE %COL% IN (SELECT id FROM sub)
+        """
+        sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
+        var succeeded = true
+        for (table, col) in [("collection_papers", "collection_id"), ("collections", "id")] {
+            let sql = purge.replacingOccurrences(of: "%TABLE%", with: table)
+                           .replacingOccurrences(of: "%COL%", with: col)
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                succeeded = false
+                break
+            }
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) != SQLITE_DONE { succeeded = false }
             sqlite3_finalize(stmt)
+        }
+        sqlite3_exec(db, succeeded ? "COMMIT" : "ROLLBACK", nil, nil, nil)
+        if succeeded { loadPapers() }
+    }
+
+    private func bindOptionalText(_ stmt: OpaquePointer?, _ index: Int32, _ value: String?) {
+        if let value {
+            sqlite3_bind_text(stmt, index, value, -1, SQLITE_TRANSIENT)
+        } else {
+            sqlite3_bind_null(stmt, index)
         }
     }
 

@@ -123,7 +123,7 @@ All variant builds share this same directory.
 ## Testing
 
 Unit tests live in [app/Tests/VellumXTests/](app/Tests/VellumXTests/) and cover
-the pure business-logic layer (73 test cases):
+the pure business-logic layer (76 test cases):
 
 | Suite | What it covers |
 |---|---|
@@ -131,6 +131,7 @@ the pure business-logic layer (73 test cases):
 | `RecommendEngineTests` | Pool selection, slot allocation, deduplication |
 | `PdfResolverTests` | DOI URL normalisation (`stripDoiPrefix`) |
 | `PaperStoreHelpersTests` | `splitCSV`, `normalizedTag`, `parseSQLiteDate` |
+| `PaperStoreCollectionsTests` | Collection schema migration, nested subtree membership |
 | `MetadataStoreHelpersTests` | Field/tier normalisation, default point values |
 | `CitationExporterTests` | Cite-key generation, BibTeX escaping/field output |
 

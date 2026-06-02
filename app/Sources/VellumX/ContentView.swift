@@ -377,9 +377,11 @@ struct ContentView: View {
     private func applyFilters() {
         var result = store.papers
 
-        // 0. Collection view takes priority over sidebar status
+        // 0. Collection view takes priority over sidebar status. A parent folder
+        //    stands in for its whole subtree, so include descendants' papers too.
         if let collectionId = selectedCollectionId {
-            result = result.filter { $0.collectionIds.contains(collectionId) }
+            let subtree = store.collectionSubtreeIds(collectionId)
+            result = result.filter { paper in paper.collectionIds.contains(where: subtree.contains) }
         }
 
         // 1. Filter by Sidebar selection

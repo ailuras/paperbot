@@ -12,6 +12,39 @@ struct SidebarView: View {
     let statusMessage: String
     let papers: [Paper]
 
+    @State private var expandedCollections: Set<String> = []
+    @State private var nameEdit: CollectionNameEdit?
+    @State private var nameText: String = ""
+    @State private var deleteTarget: PaperCollection?
+
+    /// Pending name-input dialog (rename / new subfolder / new root).
+    private enum CollectionNameEdit: Identifiable {
+        case rename(PaperCollection)
+        case newSubfolder(PaperCollection)
+        case newRoot
+        var id: String {
+            switch self {
+            case .rename(let c):      return "rename-\(c.id)"
+            case .newSubfolder(let c): return "sub-\(c.id)"
+            case .newRoot:            return "root"
+            }
+        }
+    }
+
+    /// Collections grouped by their parent id (roots are resolved separately).
+    private var childrenByParent: [String: [PaperCollection]] {
+        Dictionary(grouping: collections) { $0.parentId ?? "" }
+    }
+
+    /// Top-level folders: no parent, or a parent that no longer exists (orphans).
+    private var rootCollections: [PaperCollection] {
+        let ids = Set(collections.map(\.id))
+        return collections.filter { c in
+            guard let pid = c.parentId else { return true }
+            return !ids.contains(pid)
+        }
+    }
+
     var body: some View {
         List(selection: $selectedItem) {
             Section("Library") {
@@ -71,23 +104,58 @@ struct SidebarView: View {
                 }
             }
 
-            if !collections.isEmpty {
-                Section("Collections") {
-                    ForEach(collections) { collection in
-                        CollectionSidebarRow(
-                            collection: collection,
-                            isSelected: selectedCollectionId == collection.id
-                        ) {
-                            selectedCollectionId = (selectedCollectionId == collection.id) ? nil : collection.id
-                            if selectedCollectionId != nil {
-                                selectedItem = nil
-                            }
-                        }
+            Section {
+                ForEach(rootCollections) { collection in
+                    CollectionTreeRow(
+                        collection: collection,
+                        depth: 0,
+                        childrenByParent: childrenByParent,
+                        expanded: $expandedCollections,
+                        selectedCollectionId: selectedCollectionId,
+                        onSelect: selectCollection,
+                        onRename: { startRename($0) },
+                        onAddSubfolder: { startNewSubfolder($0) },
+                        onDelete: { deleteTarget = $0 }
+                    )
+                }
+            } header: {
+                HStack {
+                    Text("Collections")
+                    Spacer()
+                    Button {
+                        nameText = ""
+                        nameEdit = .newRoot
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 20, height: 18)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("New collection")
+                    .padding(.trailing, 8)
                 }
             }
         }
         .listStyle(.sidebar)
+        .alert(nameEditTitle, isPresented: Binding(
+            get: { nameEdit != nil },
+            set: { if !$0 { nameEdit = nil } }
+        )) {
+            TextField("Name", text: $nameText)
+            Button("Save", action: commitNameEdit)
+            Button("Cancel", role: .cancel) { nameText = "" }
+        }
+        .alert("Delete “\(deleteTarget?.name ?? "")”?", isPresented: Binding(
+            get: { deleteTarget != nil },
+            set: { if !$0 { deleteTarget = nil } }
+        ), presenting: deleteTarget) { target in
+            Button("Delete", role: .destructive) { confirmDelete(target) }
+            Button("Cancel", role: .cancel) { }
+        } message: { _ in
+            Text("This also deletes its subfolders. Your papers stay in the library.")
+        }
         .safeAreaInset(edge: .bottom) {
             if !statusMessage.isEmpty {
                 VStack(spacing: 0) {
@@ -130,6 +198,55 @@ struct SidebarView: View {
         } else {
             includedTags.insert(tag)
         }
+    }
+
+    // MARK: - Collections actions
+
+    private func selectCollection(_ collection: PaperCollection) {
+        selectedCollectionId = (selectedCollectionId == collection.id) ? nil : collection.id
+        if selectedCollectionId != nil { selectedItem = nil }
+    }
+
+    private func startRename(_ collection: PaperCollection) {
+        nameText = collection.name
+        nameEdit = .rename(collection)
+    }
+
+    private func startNewSubfolder(_ parent: PaperCollection) {
+        nameText = ""
+        nameEdit = .newSubfolder(parent)
+    }
+
+    private var nameEditTitle: String {
+        switch nameEdit {
+        case .rename:       return "Rename Collection"
+        case .newSubfolder: return "New Subfolder"
+        case .newRoot, .none: return "New Collection"
+        }
+    }
+
+    private func commitNameEdit() {
+        let text = nameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        defer { nameText = "" }
+        guard !text.isEmpty else { return }
+        switch nameEdit {
+        case .rename(let c):
+            PaperStore.shared.renameCollection(id: c.id, to: text)
+        case .newSubfolder(let parent):
+            PaperStore.shared.createCollection(name: text, parentId: parent.id)
+            expandedCollections.insert(parent.id)
+        case .newRoot, .none:
+            PaperStore.shared.createCollection(name: text)
+        }
+    }
+
+    private func confirmDelete(_ target: PaperCollection) {
+        // Clear the selection if it points anywhere inside the doomed subtree.
+        let subtree = PaperStore.shared.collectionSubtreeIds(target.id)
+        if let sel = selectedCollectionId, subtree.contains(sel) {
+            selectedCollectionId = nil
+        }
+        PaperStore.shared.deleteCollection(id: target.id)
     }
 }
 
@@ -189,31 +306,148 @@ private struct TagFilterChip: View {
     }
 }
 
-private struct CollectionSidebarRow: View {
+/// A curated palette of folder glyphs offered in the right-click "Icon" submenu.
+private enum CollectionIcon {
+    static let choices: [(symbol: String, label: String)] = [
+        ("folder", "Folder"), ("tray.full", "Tray"), ("book", "Book"),
+        ("graduationcap", "Academic"), ("doc.text", "Document"), ("bookmark", "Bookmark"),
+        ("star", "Star"), ("flag", "Flag"), ("tag", "Tag"),
+        ("lightbulb", "Idea"), ("paperclip", "Clip"), ("archivebox", "Archive"),
+    ]
+}
+
+/// One collection row plus its (lazily expanded) descendants. Recurses into
+/// itself for children, so the whole subtree renders as flat sidebar rows with
+/// growing indentation — a restrained, Finder-like look.
+private struct CollectionTreeRow: View {
     let collection: PaperCollection
-    let isSelected: Bool
-    let action: () -> Void
+    let depth: Int
+    let childrenByParent: [String: [PaperCollection]]
+    @Binding var expanded: Set<String>
+    let selectedCollectionId: String?
+    let onSelect: (PaperCollection) -> Void
+    let onRename: (PaperCollection) -> Void
+    let onAddSubfolder: (PaperCollection) -> Void
+    let onDelete: (PaperCollection) -> Void
+    @State private var isContextMenuPresented = false
+
+    private var children: [PaperCollection] { childrenByParent[collection.id] ?? [] }
+    private var hasChildren: Bool { !children.isEmpty }
+    private var isExpanded: Bool { expanded.contains(collection.id) }
+    private var isSelected: Bool { selectedCollectionId == collection.id }
+    private var showsSelectionFrame: Bool { isSelected && !isContextMenuPresented }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: "folder")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(collectionColor)
-                Text(collection.name)
-                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                Spacer()
+        row
+        if hasChildren && isExpanded {
+            ForEach(children) { child in
+                CollectionTreeRow(
+                    collection: child,
+                    depth: depth + 1,
+                    childrenByParent: childrenByParent,
+                    expanded: $expanded,
+                    selectedCollectionId: selectedCollectionId,
+                    onSelect: onSelect,
+                    onRename: onRename,
+                    onAddSubfolder: onAddSubfolder,
+                    onDelete: onDelete
+                )
             }
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(isSelected ? .primary : .secondary)
-        .background(isSelected ? Color.accentColor.opacity(0.12) : Color.clear)
-        .clipShape(RoundedRectangle(cornerRadius: 5))
     }
 
-    private var collectionColor: Color {
+    private var row: some View {
+        HStack(spacing: 5) {
+            disclosure
+            Button { onSelect(collection) } label: {
+                collectionLabel
+            }
+            .buttonStyle(.plain)
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, CGFloat(depth) * 14)
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(isSelected ? .primary : .secondary)
+        .background {
+            if showsSelectionFrame {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.07))
+            }
+        }
+        .overlay {
+            if showsSelectionFrame {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Color.accentColor.opacity(0.95), lineWidth: 1)
+            }
+        }
+        .padding(.trailing, 8)
+        .contextMenu { contextMenu }
+    }
+
+    private var collectionLabel: some View {
+        HStack(spacing: 6) {
+            Image(systemName: collection.icon ?? "folder")
+                .font(.system(size: 12))
+                .foregroundStyle(iconColor)
+                .frame(width: 18)
+            Text(collection.name)
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .contentShape(Rectangle())
+    }
+
+    private var disclosure: some View {
+        Group {
+            if hasChildren {
+                Button {
+                    if isExpanded { expanded.remove(collection.id) }
+                    else { expanded.insert(collection.id) }
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            } else {
+                Color.clear
+            }
+        }
+        .frame(width: 10)
+    }
+
+    @ViewBuilder private var contextMenu: some View {
+        Button("Rename…") { onRename(collection) }
+            .onAppear { isContextMenuPresented = true }
+            .onDisappear { isContextMenuPresented = false }
+        Button("New Subfolder…") { onAddSubfolder(collection) }
+        Menu("Icon") {
+            ForEach(CollectionIcon.choices, id: \.symbol) { choice in
+                Button {
+                    PaperStore.shared.setCollectionIcon(id: collection.id, icon: choice.symbol)
+                } label: {
+                    Label(choice.label, systemImage: choice.symbol)
+                }
+            }
+            Divider()
+            Button("Default") { PaperStore.shared.setCollectionIcon(id: collection.id, icon: nil) }
+        }
+        Menu("Color") {
+            ForEach(LabelColor.allCases) { c in
+                Button(c.title) { PaperStore.shared.setCollectionColor(id: collection.id, color: c.rawValue) }
+            }
+            Divider()
+            Button("Default") { PaperStore.shared.setCollectionColor(id: collection.id, color: nil) }
+        }
+        Divider()
+        Button("Delete", role: .destructive) { onDelete(collection) }
+    }
+
+    private var iconColor: Color {
         if let colorName = collection.color, let labelColor = LabelColor(rawValue: colorName) {
             return labelColor.color
         }
