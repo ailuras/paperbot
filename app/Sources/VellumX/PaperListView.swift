@@ -7,6 +7,8 @@ struct PaperListView: View {
     let highlightsDailyRecommendations: Bool
     let onCancelRecommendation: (Paper) -> Void
     let onSelectPaper: (String) -> Void
+    let onCopyBibtex: (Paper) -> Void
+    let onDeletePaper: (Paper) -> Void
 
     var body: some View {
         List(selection: $selectedPaperId) {
@@ -21,10 +23,21 @@ struct PaperListView: View {
                 .listRowSeparatorTint(Color.primary.opacity(0.08))
                 .listRowInsets(EdgeInsets(top: 4, leading: 2, bottom: 4, trailing: 2))
                 .contextMenu {
+                    Button {
+                        onCopyBibtex(paper)
+                    } label: {
+                        Label(L10n.t(.cite), systemImage: "doc.on.doc")
+                    }
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
                             onCancelRecommendation(paper)
                         }
+                    }
+                    Divider()
+                    Button(role: .destructive) {
+                        onDeletePaper(paper)
+                    } label: {
+                        Label(L10n.t(.cmdDeletePaper), systemImage: "trash")
                     }
                 }
             }

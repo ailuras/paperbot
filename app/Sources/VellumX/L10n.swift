@@ -50,6 +50,7 @@ enum L10n {
         case cmdMarkPending, cmdMarkStarred, cmdMarkRead, cmdMarkSkip
         case cmdAddTag
         case fetchConfirmTitle, fetchConfirmMessage
+        case cmdDeletePaper, delete, deleteConfirmTitle, deleteConfirmMessage
     }
 
     @MainActor
@@ -211,6 +212,12 @@ enum L10n {
         case .fetchConfirmMessage:
             return ("This contacts OpenAlex and may take a while.",
                     "这会联网请求 OpenAlex，可能需要一些时间。")
+        case .cmdDeletePaper:     return ("Delete Paper", "删除论文")
+        case .delete:             return ("Delete", "删除")
+        case .deleteConfirmTitle: return ("Delete this paper?", "删除这篇论文？")
+        case .deleteConfirmMessage:
+            return ("This permanently removes the paper and its notes, tags, and collection links.",
+                    "将永久删除该论文及其笔记、标签与 collection 关联。")
         }
     }
 }

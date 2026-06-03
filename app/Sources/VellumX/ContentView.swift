@@ -42,6 +42,8 @@ struct ContentView: View {
     @State private var statusMessage: String = ""
     /// Drives the confirmation dialog shown before the slow OpenAlex fetch.
     @State private var showFetchConfirm: Bool = false
+    /// The paper awaiting delete confirmation (nil = no dialog).
+    @State private var paperPendingDeletion: Paper?
 
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
@@ -214,7 +216,9 @@ struct ContentView: View {
                 metadata: metadata,
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
                 onCancelRecommendation: cancelRecommendation,
-                onSelectPaper: { lastViewedPaperId = $0 }
+                onSelectPaper: { lastViewedPaperId = $0 },
+                onCopyBibtex: copyBibtex,
+                onDeletePaper: { paperPendingDeletion = $0 }
             )
         } detail: {
             if let paper = selectedPaper {
@@ -336,6 +340,15 @@ struct ContentView: View {
             Button(L10n.t(.cmdFetch)) { performFetch() }
         } message: {
             Text(L10n.t(.fetchConfirmMessage))
+        }
+        .alert(L10n.t(.deleteConfirmTitle), isPresented: Binding(
+            get: { paperPendingDeletion != nil },
+            set: { if !$0 { paperPendingDeletion = nil } }
+        ), presenting: paperPendingDeletion) { paper in
+            Button(L10n.t(.delete), role: .destructive) { deletePaper(paper) }
+            Button(L10n.t(.cancel), role: .cancel) {}
+        } message: { _ in
+            Text(L10n.t(.deleteConfirmMessage))
         }
     }
 
@@ -561,6 +574,23 @@ struct ContentView: View {
     private func cancelRecommendation(_ paper: Paper) {
         store.setPaperRecommended(id: paper.id, isRecommended: false)
         applyFilters()
+    }
+
+    private func copyBibtex(_ paper: Paper) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(CitationExporter.bibtex(for: paper), forType: .string)
+        statusMessage = L10n.t(.copiedBibtex)
+    }
+
+    private func deletePaper(_ paper: Paper) {
+        let wasSelected = lastViewedPaperId == paper.id
+        store.deletePaper(id: paper.id)
+        applyFilters()
+        if wasSelected {
+            selectedPaperId = nil
+            lastViewedPaperId = nil
+        }
     }
 
     private func addPaperTag(_ paper: Paper, tag: String) {

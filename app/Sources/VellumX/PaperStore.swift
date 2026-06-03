@@ -897,6 +897,39 @@ class PaperStore {
         if succeeded { loadPapers() }
     }
 
+    /// Permanently delete a paper and every associated row (cache, state,
+    /// recommendation, note, tags, translation, pdf, topics, collection links).
+    func deletePaper(id: String) {
+        let tables: [(table: String, column: String)] = [
+            ("collection_papers", "paper_id"),
+            ("paper_topics", "paper_id"),
+            ("paper_pdfs", "paper_id"),
+            ("paper_translations", "paper_id"),
+            ("paper_tags", "paper_id"),
+            ("paper_notes", "paper_id"),
+            ("paper_recommendations", "paper_id"),
+            ("paper_states", "paper_id"),
+            ("paper_cache", "paper_id"),
+            ("papers", "id"),
+        ]
+        sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
+        var succeeded = true
+        for (table, column) in tables {
+            let sql = "DELETE FROM \(table) WHERE \(column) = ?"
+            var stmt: OpaquePointer?
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
+                succeeded = false
+                break
+            }
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            if sqlite3_step(stmt) != SQLITE_DONE { succeeded = false }
+            sqlite3_finalize(stmt)
+            if !succeeded { break }
+        }
+        sqlite3_exec(db, succeeded ? "COMMIT" : "ROLLBACK", nil, nil, nil)
+        if succeeded { loadPapers() }
+    }
+
     private func bindOptionalText(_ stmt: OpaquePointer?, _ index: Int32, _ value: String?) {
         if let value {
             sqlite3_bind_text(stmt, index, value, -1, SQLITE_TRANSIENT)
