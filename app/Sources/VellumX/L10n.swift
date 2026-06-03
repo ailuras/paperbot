@@ -52,6 +52,7 @@ enum L10n {
         case fetchConfirmTitle, fetchConfirmMessage
         case cmdDeletePaper, delete, deleteConfirmTitle, deleteConfirmMessage
         case cmdUpdatePaper
+        case cmdSetStatus, cmdAddToCollection, batchSelected
     }
 
     @MainActor
@@ -213,6 +214,9 @@ enum L10n {
         case .fetchConfirmMessage:
             return ("This contacts OpenAlex and may take a while.",
                     "这会联网请求 OpenAlex，可能需要一些时间。")
+        case .cmdSetStatus:       return ("Set Status", "设置状态")
+        case .cmdAddToCollection: return ("Add to Collection", "加入 Collection")
+        case .batchSelected:      return ("papers selected", "篇已选")
         case .cmdUpdatePaper:     return ("Update from OpenAlex", "从 OpenAlex 更新")
         case .cmdDeletePaper:     return ("Delete Paper", "删除论文")
         case .delete:             return ("Delete", "删除")

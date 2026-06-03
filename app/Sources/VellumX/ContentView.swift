@@ -45,6 +45,10 @@ struct ContentView: View {
     @State private var showFetchConfirm: Bool = false
     /// Papers awaiting delete confirmation (empty = no dialog).
     @State private var papersPendingDeletion: [Paper] = []
+    /// Batch "add tag" prompt: target papers + entered text.
+    @State private var tagPromptTargets: [Paper] = []
+    @State private var showTagPrompt = false
+    @State private var newBatchTag = ""
 
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
@@ -234,11 +238,24 @@ struct ContentView: View {
                 onSelectionChange: handleSelectionChange,
                 onCopyBibtex: copyBibtex,
                 onUpdatePaper: updatePaper,
-                onDeletePaper: { papersPendingDeletion = $0 }
+                onDeletePaper: { papersPendingDeletion = $0 },
+                onSetStatus: setStatus,
+                onAddToCollection: addToCollection,
+                onRequestAddTag: requestAddTag,
+                collections: store.allCollections
             )
         } detail: {
             if selectedPaperIds.count > 1 {
-                MultiSelectionPlaceholder(count: selectedPaperIds.count)
+                BatchActionsView(
+                    papers: selectedPapers,
+                    collections: store.allCollections,
+                    onCopyBibtex: { copyBibtex(selectedPapers) },
+                    onSetStatus: { setStatus(selectedPapers, $0) },
+                    onAddToCollection: { addToCollection(selectedPapers, $0) },
+                    onAddTag: { requestAddTag(selectedPapers) },
+                    onUpdate: { updatePaper(selectedPapers) },
+                    onDelete: { papersPendingDeletion = selectedPapers }
+                )
             } else if let paper = selectedPaper {
                 PaperDetailView(
                     paper: paper,
@@ -367,6 +384,14 @@ struct ContentView: View {
             Button(L10n.t(.cancel), role: .cancel) {}
         } message: {
             Text(L10n.t(.deleteConfirmMessage))
+        }
+        .alert("Add Tag", isPresented: $showTagPrompt) {
+            TextField("Tag", text: $newBatchTag)
+            Button("Add") {
+                addTag(tagPromptTargets, newBatchTag)
+                newBatchTag = ""
+            }
+            Button(L10n.t(.cancel), role: .cancel) { newBatchTag = "" }
         }
     }
 
@@ -652,6 +677,32 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - Batch actions (operate on a set of papers)
+
+    private func setStatus(_ papers: [Paper], _ status: PaperStatus) {
+        for paper in papers { store.setPaperStatus(id: paper.id, status: status) }
+        applyFilters()
+    }
+
+    private func addToCollection(_ papers: [Paper], _ collectionId: String) {
+        for paper in papers { store.addPaperToCollection(paperId: paper.id, collectionId: collectionId) }
+        applyFilters()
+    }
+
+    private func addTag(_ papers: [Paper], _ tag: String) {
+        let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        for paper in papers { store.addPaperTag(id: paper.id, tag: trimmed) }
+        applyFilters()
+    }
+
+    private func requestAddTag(_ papers: [Paper]) {
+        guard !papers.isEmpty else { return }
+        tagPromptTargets = papers
+        newBatchTag = ""
+        showTagPrompt = true
+    }
+
     private func addPaperTag(_ paper: Paper, tag: String) {
         store.addPaperTag(id: paper.id, tag: tag)
         applyFilters()
@@ -802,13 +853,20 @@ struct ScoreBadgeView: View {
     }
 }
 
-// MARK: - Multi-selection placeholder (shown when >1 paper is selected)
+// MARK: - Batch actions panel (shown when >1 paper is selected)
 
-private struct MultiSelectionPlaceholder: View {
-    let count: Int
+private struct BatchActionsView: View {
+    let papers: [Paper]
+    let collections: [PaperCollection]
+    let onCopyBibtex: () -> Void
+    let onSetStatus: (PaperStatus) -> Void
+    let onAddToCollection: (String) -> Void
+    let onAddTag: () -> Void
+    let onUpdate: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             Spacer()
             Image(systemName: "checklist")
                 .font(.system(size: 44, weight: .light))
@@ -819,12 +877,43 @@ private struct MultiSelectionPlaceholder: View {
                         endPoint: .bottomTrailing
                     )
                 )
-            Text("\(count) papers selected")
+            Text("\(papers.count) \(L10n.t(.batchSelected))")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.primary.opacity(0.85))
-            Text("Right-click the list for batch actions")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+
+            VStack(spacing: 8) {
+                Button(action: onCopyBibtex) {
+                    Label(L10n.t(.cite), systemImage: "doc.on.doc").frame(maxWidth: .infinity)
+                }
+                Menu {
+                    ForEach(PaperStatus.allCases, id: \.self) { status in
+                        Button(status.displayName) { onSetStatus(status) }
+                    }
+                } label: {
+                    Label(L10n.t(.cmdSetStatus), systemImage: "flag").frame(maxWidth: .infinity)
+                }
+                if !collections.isEmpty {
+                    Menu {
+                        ForEach(collections) { collection in
+                            Button(collection.name) { onAddToCollection(collection.id) }
+                        }
+                    } label: {
+                        Label(L10n.t(.cmdAddToCollection), systemImage: "folder").frame(maxWidth: .infinity)
+                    }
+                }
+                Button(action: onAddTag) {
+                    Label(L10n.t(.cmdAddTag), systemImage: "tag").frame(maxWidth: .infinity)
+                }
+                Button(action: onUpdate) {
+                    Label(L10n.t(.cmdUpdatePaper), systemImage: "arrow.clockwise").frame(maxWidth: .infinity)
+                }
+                Button(role: .destructive, action: onDelete) {
+                    Label(L10n.t(.cmdDeletePaper), systemImage: "trash").frame(maxWidth: .infinity)
+                }
+            }
+            .frame(width: 240)
+            .controlSize(.large)
+
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

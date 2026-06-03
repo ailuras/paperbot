@@ -10,6 +10,10 @@ struct PaperListView: View {
     let onCopyBibtex: ([Paper]) -> Void
     let onUpdatePaper: ([Paper]) -> Void
     let onDeletePaper: ([Paper]) -> Void
+    let onSetStatus: ([Paper], PaperStatus) -> Void
+    let onAddToCollection: ([Paper], String) -> Void
+    let onRequestAddTag: ([Paper]) -> Void
+    let collections: [PaperCollection]
 
     var body: some View {
         List(selection: $selectedPaperIds) {
@@ -39,6 +43,27 @@ struct PaperListView: View {
                         onUpdatePaper(targets)
                     } label: {
                         Label(L10n.t(.cmdUpdatePaper) + suffix, systemImage: "arrow.clockwise")
+                    }
+                    Menu {
+                        ForEach(PaperStatus.allCases, id: \.self) { status in
+                            Button(status.displayName) { onSetStatus(targets, status) }
+                        }
+                    } label: {
+                        Label(L10n.t(.cmdSetStatus), systemImage: "flag")
+                    }
+                    if !collections.isEmpty {
+                        Menu {
+                            ForEach(collections) { collection in
+                                Button(collection.name) { onAddToCollection(targets, collection.id) }
+                            }
+                        } label: {
+                            Label(L10n.t(.cmdAddToCollection), systemImage: "folder")
+                        }
+                    }
+                    Button {
+                        onRequestAddTag(targets)
+                    } label: {
+                        Label(L10n.t(.cmdAddTag), systemImage: "tag")
                     }
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
