@@ -93,7 +93,7 @@ struct MenuBarContentView: View {
     var store: PaperStore
     let closePopover: () -> Void
 
-    private static let popoverWidth: CGFloat = 340
+    private static let popoverWidth: CGFloat = 360
 
     private var recommendedPapers: [Paper] {
         store.papers.filter { paper in
@@ -101,12 +101,16 @@ struct MenuBarContentView: View {
         }
     }
 
+    private var dateString: String {
+        Date().formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            Divider()
+            Divider().opacity(0.6)
             content
-            Divider()
+            Divider().opacity(0.6)
             footer
         }
         .frame(width: Self.popoverWidth)
@@ -115,14 +119,26 @@ struct MenuBarContentView: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(spacing: 8) {
-            Image(nsImage: MenuBarController.icon)
-                .resizable()
-                .frame(width: 15, height: 15)
-                .opacity(0.7)
-            Text(L10n.t(.todaysTopPicks))
-                .font(.system(size: 13, weight: .semibold))
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.15))
+                Image(systemName: "sparkles")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .frame(width: 28, height: 28)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(L10n.t(.todaysTopPicks))
+                    .font(.system(size: 13, weight: .semibold))
+                Text(dateString)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
+
             if !recommendedPapers.isEmpty {
                 Text("\(recommendedPapers.count)")
                     .font(.system(size: 11, weight: .semibold))
@@ -133,7 +149,8 @@ struct MenuBarContentView: View {
             }
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
     }
 
     // MARK: - Content
@@ -144,9 +161,10 @@ struct MenuBarContentView: View {
             emptyState
         } else {
             ScrollView {
-                LazyVStack(spacing: 2) {
-                    ForEach(recommendedPapers) { paper in
+                LazyVStack(spacing: 1) {
+                    ForEach(Array(recommendedPapers.enumerated()), id: \.element.id) { index, paper in
                         MenuBarPaperRow(
+                            rank: index + 1,
                             paper: paper,
                             onStar: { setStatus(paper, .starred) },
                             onRead: { setStatus(paper, .read) },
@@ -165,18 +183,22 @@ struct MenuBarContentView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 22))
-                .foregroundStyle(.secondary)
+        VStack(spacing: 12) {
+            ZStack {
+                Circle().fill(Color.accentColor.opacity(0.12)).frame(width: 52, height: 52)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
             Text(L10n.t(.noRecommendations))
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
             Button(L10n.t(.runRecommendEngine)) { runRecommendEngine() }
                 .controlSize(.small)
+                .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
+        .padding(.vertical, 30)
     }
 
     // MARK: - Footer
@@ -259,6 +281,7 @@ struct MenuBarContentView: View {
 /// PDF actions on the right. Low-frequency actions (Skip, open in app) live in
 /// the right-click context menu.
 private struct MenuBarPaperRow: View {
+    let rank: Int
     let paper: Paper
     let onStar: () -> Void
     let onRead: () -> Void
@@ -274,21 +297,41 @@ private struct MenuBarPaperRow: View {
         let venue = paper.venueAbbr.isEmpty ? paper.venue : paper.venueAbbr
         if !venue.isEmpty { parts.append(venue) }
         if paper.citedByCount > 0 { parts.append("\(paper.citedByCount) cites") }
+        if let year = paper.publicationYear {
+            parts.append(String(year))
+        } else if !paper.publicationDate.isEmpty {
+            parts.append(paper.publicationDate)
+        }
         return parts.joined(separator: " · ")
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 8) {
+        HStack(alignment: .top, spacing: 9) {
+            Text("\(rank)")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isHovering ? Color.accentColor : .secondary)
+                .frame(width: 20, height: 20)
+                .background(
+                    Circle().fill(isHovering ? Color.accentColor.opacity(0.14)
+                                              : Color.primary.opacity(0.05))
+                )
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(paper.title)
                     .font(.system(size: 12.5, weight: .medium))
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                if !meta.isEmpty {
-                    Text(meta)
-                        .font(.system(size: 10.5))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                HStack(spacing: 5) {
+                    if paper.score > 0 {
+                        ScoreBadgeView(score: paper.score,
+                                       color: MetadataStore.shared.tierColor(paper.tier))
+                    }
+                    if !meta.isEmpty {
+                        Text(meta)
+                            .font(.system(size: 10.5))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -301,12 +344,13 @@ private struct MenuBarPaperRow: View {
                 MenuBarActionButton(systemName: "doc.text", color: .accentColor,
                                     help: L10n.t(.openPDF), action: onOpenPdf)
             }
-            .opacity(isHovering ? 1 : 0.55)
+            .opacity(isHovering ? 1 : 0)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.vertical, 7)
         .background(
-            RoundedRectangle(cornerRadius: 7)
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
         )
         .contentShape(Rectangle())
@@ -345,3 +389,4 @@ private struct MenuBarActionButton: View {
         .help(help)
     }
 }
+
