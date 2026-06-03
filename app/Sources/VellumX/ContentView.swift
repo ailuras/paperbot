@@ -40,6 +40,8 @@ struct ContentView: View {
     @State private var isTranslating: Bool = false
     @State private var isResolvingPdf: Bool = false
     @State private var statusMessage: String = ""
+    /// Drives the confirmation dialog shown before the slow OpenAlex fetch.
+    @State private var showFetchConfirm: Bool = false
 
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
@@ -329,6 +331,12 @@ struct ContentView: View {
         }
         // Publish the runnable actions to the menu-bar commands (AppCommands).
         .focusedSceneValue(\.paperActions, paperActions)
+        .alert(L10n.t(.fetchConfirmTitle), isPresented: $showFetchConfirm) {
+            Button(L10n.t(.cancel), role: .cancel) {}
+            Button(L10n.t(.cmdFetch)) { performFetch() }
+        } message: {
+            Text(L10n.t(.fetchConfirmMessage))
+        }
     }
 
     /// Snapshot of menu-bar command actions for the current state. Optional
@@ -576,11 +584,16 @@ struct ContentView: View {
     }
 
     private func fetchPapers() {
-        let config = ConfigManager.shared.effectiveConfig
-        guard !config.tracks.isEmpty else {
+        guard !ConfigManager.shared.effectiveConfig.tracks.isEmpty else {
             statusMessage = "No tracks configured — add one in Settings ▸ Papers"
             return
         }
+        // Fetching contacts OpenAlex and can be slow; confirm before running.
+        showFetchConfirm = true
+    }
+
+    private func performFetch() {
+        let config = ConfigManager.shared.effectiveConfig
         isFetching = true
         statusMessage = "Fetching OpenAlex papers..."
 

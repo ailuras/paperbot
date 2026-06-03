@@ -49,6 +49,7 @@ enum L10n {
         case cmdFetch, cmdRecommend
         case cmdMarkPending, cmdMarkStarred, cmdMarkRead, cmdMarkSkip
         case cmdAddTag
+        case fetchConfirmTitle, fetchConfirmMessage
     }
 
     @MainActor
@@ -206,6 +207,10 @@ enum L10n {
         case .cmdMarkRead:        return ("Mark as Read", "标记为已读")
         case .cmdMarkSkip:        return ("Mark as Skipped", "标记为已跳过")
         case .cmdAddTag:          return ("Add Tag…", "添加标签…")
+        case .fetchConfirmTitle:  return ("Fetch New Papers?", "获取新论文？")
+        case .fetchConfirmMessage:
+            return ("This contacts OpenAlex and may take a while.",
+                    "这会联网请求 OpenAlex，可能需要一些时间。")
         }
     }
 }
