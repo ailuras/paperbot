@@ -241,7 +241,6 @@ struct ContentView: View {
                 onDeletePaper: { papersPendingDeletion = $0 },
                 onSetStatus: setStatus,
                 onAddToCollection: addToCollection,
-                onRequestAddTag: requestAddTag,
                 collections: store.allCollections
             )
         } detail: {
@@ -865,58 +864,141 @@ private struct BatchActionsView: View {
     let onUpdate: () -> Void
     let onDelete: () -> Void
 
+    @State private var showStatus = false
+    @State private var showCollection = false
+
+    private let panelWidth: CGFloat = 240
+
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 22) {
             Spacer()
-            Image(systemName: "checklist")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.secondary.opacity(0.5), .accentColor.opacity(0.3)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-            Text("\(papers.count) \(L10n.t(.batchSelected))")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary.opacity(0.85))
-
-            VStack(spacing: 8) {
-                Button(action: onCopyBibtex) {
-                    Label(L10n.t(.cite), systemImage: "doc.on.doc").frame(maxWidth: .infinity)
-                }
-                Menu {
-                    ForEach(PaperStatus.allCases, id: \.self) { status in
-                        Button(status.displayName) { onSetStatus(status) }
-                    }
-                } label: {
-                    Label(L10n.t(.cmdSetStatus), systemImage: "flag").frame(maxWidth: .infinity)
-                }
-                if !collections.isEmpty {
-                    Menu {
-                        ForEach(collections) { collection in
-                            Button(collection.name) { onAddToCollection(collection.id) }
-                        }
-                    } label: {
-                        Label(L10n.t(.cmdAddToCollection), systemImage: "folder").frame(maxWidth: .infinity)
-                    }
-                }
-                Button(action: onAddTag) {
-                    Label(L10n.t(.cmdAddTag), systemImage: "tag").frame(maxWidth: .infinity)
-                }
-                Button(action: onUpdate) {
-                    Label(L10n.t(.cmdUpdatePaper), systemImage: "arrow.clockwise").frame(maxWidth: .infinity)
-                }
-                Button(role: .destructive, action: onDelete) {
-                    Label(L10n.t(.cmdDeletePaper), systemImage: "trash").frame(maxWidth: .infinity)
-                }
-            }
-            .frame(width: 240)
-            .controlSize(.large)
-
+            header
+            actions
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(NSColor.textBackgroundColor))
+    }
+
+    private var header: some View {
+        VStack(spacing: 10) {
+            ZStack {
+                Circle().fill(Color.accentColor.opacity(0.12)).frame(width: 56, height: 56)
+                Image(systemName: "checklist")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+            }
+            Text("\(papers.count) \(L10n.t(.batchSelected))")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.85))
+        }
+    }
+
+    private var actions: some View {
+        VStack(spacing: 8) {
+            pillButton(L10n.t(.cite), "doc.on.doc", action: onCopyBibtex)
+
+            pillButton(L10n.t(.cmdSetStatus), "flag", chevron: true) { showStatus = true }
+                .popover(isPresented: $showStatus, arrowEdge: .trailing) {
+                    popoverList {
+                        ForEach(PaperStatus.allCases, id: \.self) { status in
+                            popoverRow(status.displayName, status.iconName) {
+                                onSetStatus(status)
+                                showStatus = false
+                            }
+                        }
+                    }
+                }
+
+            if !collections.isEmpty {
+                pillButton(L10n.t(.cmdAddToCollection), "folder", chevron: true) { showCollection = true }
+                    .popover(isPresented: $showCollection, arrowEdge: .trailing) {
+                        popoverList {
+                            ForEach(collections) { collection in
+                                popoverRow(collection.name, collection.icon ?? "folder") {
+                                    onAddToCollection(collection.id)
+                                    showCollection = false
+                                }
+                            }
+                        }
+                    }
+            }
+
+            pillButton(L10n.t(.cmdAddTag), "tag", action: onAddTag)
+            pillButton(L10n.t(.cmdUpdatePaper), "arrow.clockwise", action: onUpdate)
+
+            Divider().padding(.vertical, 4)
+
+            pillButton(L10n.t(.cmdDeletePaper), "trash", role: .destructive, action: onDelete)
+        }
+        .frame(width: panelWidth)
+    }
+
+    private func pillButton(_ title: String, _ icon: String,
+                            role: ButtonRole? = nil,
+                            chevron: Bool = false,
+                            action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            Label(title, systemImage: icon)
+                .overlay(alignment: .trailing) {
+                    if chevron {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+        }
+        .buttonStyle(BatchPillButtonStyle(destructive: role == .destructive))
+    }
+
+    private func popoverList<C: View>(@ViewBuilder _ content: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 2) { content() }
+            .padding(6)
+            .frame(minWidth: 170)
+    }
+
+    private func popoverRow(_ title: String, _ icon: String,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 8)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Full-width pill button used in the batch actions panel, with hover and
+/// pressed feedback so every row (including the popover triggers) matches.
+private struct BatchPillButtonStyle: ButtonStyle {
+    var destructive = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        Pill(configuration: configuration, destructive: destructive)
+    }
+
+    private struct Pill: View {
+        let configuration: ButtonStyle.Configuration
+        let destructive: Bool
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(destructive ? Color.red : Color.primary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 9)
+                .padding(.horizontal, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.primary.opacity(
+                            configuration.isPressed ? 0.16 : (hovering ? 0.11 : 0.07)
+                        ))
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .onHover { hovering = $0 }
+        }
     }
 }

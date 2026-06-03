@@ -12,7 +12,6 @@ struct PaperListView: View {
     let onDeletePaper: ([Paper]) -> Void
     let onSetStatus: ([Paper], PaperStatus) -> Void
     let onAddToCollection: ([Paper], String) -> Void
-    let onRequestAddTag: ([Paper]) -> Void
     let collections: [PaperCollection]
 
     var body: some View {
@@ -59,11 +58,6 @@ struct PaperListView: View {
                         } label: {
                             Label(L10n.t(.cmdAddToCollection), systemImage: "folder")
                         }
-                    }
-                    Button {
-                        onRequestAddTag(targets)
-                    } label: {
-                        Label(L10n.t(.cmdAddTag), systemImage: "tag")
                     }
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
