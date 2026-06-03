@@ -6,6 +6,8 @@
     <string>com.ailuras.vellumx</string>
     <key>CFBundleName</key>
     <string>VellumX</string>
+    <key>CFBundleDisplayName</key>
+    <string>VellumX</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -16,5 +18,7 @@
     <string>VellumX</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
+    <key>VellumXApplicationSupportName</key>
+    <string>VellumX</string>
 </dict>
 </plist>

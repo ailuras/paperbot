@@ -79,8 +79,8 @@ enum L10n {
 
         case .translationSection: return ("Translation", "翻译")
         case .enableTranslation:  return ("Enable abstract translation", "启用摘要翻译")
-        case .apiKeyHint:         return ("The API key is saved in settings.json (~/Library/Application Support/VellumX/).",
-                                          "API Key 保存在 settings.json（~/Library/Application Support/VellumX/）中。")
+        case .apiKeyHint:         return ("The API key is saved in this app variant's settings.json.",
+                                          "API Key 保存在当前 app 变体的 settings.json 中。")
         case .model:              return ("Model", "模型")
         case .targetLanguage:     return ("Target language", "目标语言")
         case .provider:           return ("Provider", "提供商")

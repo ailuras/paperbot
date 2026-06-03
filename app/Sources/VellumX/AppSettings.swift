@@ -29,8 +29,8 @@ struct VenuePref: Codable, Identifiable, Equatable {
     var exact: Bool?
 }
 
-/// App-wide user settings, persisted as JSON under Application Support
-/// (`~/Library/Application Support/VellumX/settings.json`). This is the thin
+/// App-wide user settings, persisted as JSON under this app variant's
+/// Application Support directory. This is the thin
 /// config file: only global preferences and tuning knobs live here. The paper
 /// taxonomy (tracks, venues, fields, tiers, label colors) is owned by
 /// `MetadataStore` in the database; rarely-changed values (citation curve, base
@@ -105,14 +105,22 @@ final class AppSettings {
     /// location. Kept local (not iCloud Drive) on purpose — the WAL-mode SQLite
     /// store has `-wal`/`-shm` sidecar files that iCloud would sync out of step
     /// with the main file and corrupt. Users can still point elsewhere.
+    static var applicationSupportName: String {
+        if let value = Bundle.main.object(forInfoDictionaryKey: "VellumXApplicationSupportName") as? String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return "VellumX"
+    }
+
     static var defaultStorageDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/VellumX")
+            .appendingPathComponent("Library/Application Support")
+            .appendingPathComponent(applicationSupportName)
     }
 
     init(filename: String = "settings.json") {
-        let dir = FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/VellumX")
+        let dir = Self.defaultStorageDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         self.url = dir.appendingPathComponent(filename)
 

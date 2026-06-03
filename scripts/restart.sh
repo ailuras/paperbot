@@ -1,39 +1,30 @@
 #!/bin/bash
-# Stop the running VellumX variant for the current branch, rebuild, and relaunch.
+# Stop the running VellumX variant, test, rebuild, and relaunch.
 #
-# Usage: scripts/restart.sh [debug|release]   (default: debug)
+# Usage: scripts/restart.sh [debug|release] [variant]   (default: debug)
 set -euo pipefail
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
+source "$REPO/scripts/lib/vellumx-build.sh"
 
-# Derive variant from branch — same logic as app/build-app.sh.
-BRANCH="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
-if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ] || [ -z "$BRANCH" ]; then
-    VARIANT=""
-else
-    VARIANT="$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]\{1,\}/-/g; s/^-//; s/-$//')"
-fi
-
-APP_NAME="${VARIANT:+VellumX-$VARIANT}"
-APP_NAME="${APP_NAME:-VellumX}"
-BUNDLE_ID="${VARIANT:+com.ailuras.vellumx.$VARIANT}"
-BUNDLE_ID="${BUNDLE_ID:-com.ailuras.vellumx}"
-APP_PATH="$REPO/app/${APP_NAME}.app"
 CONFIG="${1:-debug}"
+VARIANT_ARG="${2:-}"
+VARIANT="$(vellumx_detect_variant "$REPO" "$VARIANT_ARG")"
+APP_NAME="$(vellumx_app_name "$VARIANT")"
+BUNDLE_ID="$(vellumx_bundle_id "$VARIANT")"
+APP_PATH="$REPO/app/${APP_NAME}.app"
 
-echo "branch: ${BRANCH:-<none>}  →  $APP_NAME ($CONFIG)"
-
-# Graceful quit via bundle ID, then hard-kill any survivor.
-echo "[1/3] stopping $APP_NAME..."
+echo "[1/4] stopping $APP_NAME"
 osascript -e "tell application id \"$BUNDLE_ID\" to quit" 2>/dev/null || true
 sleep 0.8
 pkill -f "${APP_NAME}.app/Contents/MacOS" 2>/dev/null || true
 
-echo "[2/4] testing..."
+echo "[2/4] testing"
 (cd "$REPO/app" && swift test)
 
-echo "[3/4] building..."
-"$REPO/app/build-app.sh" "$CONFIG"
+echo "[3/4] building"
+"$REPO/app/build-app.sh" "$CONFIG" "$VARIANT"
 
-echo "[4/4] launching $APP_PATH (right screen)"
-defaults write com.ailuras.vellumx launchOnRightScreen -bool true
-open "$APP_PATH"
+echo "[4/4] launching $APP_PATH"
+defaults write "$BUNDLE_ID" launchOnRightScreen -bool true
+open -n "$APP_PATH"
