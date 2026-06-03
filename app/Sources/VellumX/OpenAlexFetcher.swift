@@ -389,7 +389,8 @@ class OpenAlexFetcher {
 
     /// Batch-fetches works by ID (chunked ≤50 per request via the `openalex_id`
     /// OR filter), parses them, and returns `Paper`s in the requested order.
-    private func fetchWorksByIds(_ ids: [String]) async -> [Paper] {
+    /// Public so single-item and batch "update from OpenAlex" can reuse it.
+    func fetchWorksByIds(_ ids: [String]) async -> [Paper] {
         guard !ids.isEmpty else { return [] }
         let bareIds = ids.map(Self.stripOpenAlexId)
         var byId: [String: Paper] = [:]

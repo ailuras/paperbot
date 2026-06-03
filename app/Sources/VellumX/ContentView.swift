@@ -218,6 +218,7 @@ struct ContentView: View {
                 onCancelRecommendation: cancelRecommendation,
                 onSelectPaper: { lastViewedPaperId = $0 },
                 onCopyBibtex: copyBibtex,
+                onUpdatePaper: updatePaper,
                 onDeletePaper: { paperPendingDeletion = $0 }
             )
         } detail: {
@@ -590,6 +591,29 @@ struct ContentView: View {
         if wasSelected {
             selectedPaperId = nil
             lastViewedPaperId = nil
+        }
+    }
+
+    /// Refresh a single paper's metadata from OpenAlex, keeping all user state.
+    private func updatePaper(_ paper: Paper) {
+        // Preserve the original track: fetchWorksByIds parses with track "",
+        // and addOrUpdate's replaceTopics would otherwise wipe this paper's topics.
+        let originalTrack = paper.track
+        statusMessage = "Updating from OpenAlex..."
+
+        Task {
+            let fetcher = OpenAlexFetcher(
+                config: ConfigManager.shared.effectiveConfig,
+                venues: metadata.venues
+            )
+            guard let refreshed = await fetcher.fetchWorksByIds([paper.id]).first else {
+                statusMessage = "Update failed — no result from OpenAlex."
+                return
+            }
+            refreshed.track = originalTrack
+            _ = store.addOrUpdate(papers: [refreshed])
+            applyFilters()
+            statusMessage = "Updated \"\(refreshed.title)\""
         }
     }
 

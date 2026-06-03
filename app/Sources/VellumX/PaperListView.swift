@@ -8,6 +8,7 @@ struct PaperListView: View {
     let onCancelRecommendation: (Paper) -> Void
     let onSelectPaper: (String) -> Void
     let onCopyBibtex: (Paper) -> Void
+    let onUpdatePaper: (Paper) -> Void
     let onDeletePaper: (Paper) -> Void
 
     var body: some View {
@@ -27,6 +28,11 @@ struct PaperListView: View {
                         onCopyBibtex(paper)
                     } label: {
                         Label(L10n.t(.cite), systemImage: "doc.on.doc")
+                    }
+                    Button {
+                        onUpdatePaper(paper)
+                    } label: {
+                        Label(L10n.t(.cmdUpdatePaper), systemImage: "arrow.clockwise")
                     }
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
