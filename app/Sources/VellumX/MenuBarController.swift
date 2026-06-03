@@ -277,9 +277,9 @@ struct MenuBarContentView: View {
     }
 }
 
-/// A single recommendation row: title + meta on the left, inline Star / Read /
-/// PDF actions on the right. Low-frequency actions (Skip, open in app) live in
-/// the right-click context menu.
+/// A single recommendation row. The whole card is a button that opens the
+/// paper's detail in the main window; star / read / PDF and other quick actions
+/// live in the right-click context menu.
 private struct MenuBarPaperRow: View {
     let rank: Int
     let paper: Paper
@@ -306,87 +306,64 @@ private struct MenuBarPaperRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 9) {
-            Text("\(rank)")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(isHovering ? Color.accentColor : .secondary)
-                .frame(width: 20, height: 20)
-                .background(
-                    Circle().fill(isHovering ? Color.accentColor.opacity(0.14)
-                                              : Color.primary.opacity(0.05))
-                )
+        Button(action: onOpenInApp) {
+            HStack(alignment: .top, spacing: 9) {
+                Text("\(rank)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(isHovering ? Color.accentColor : .secondary)
+                    .frame(width: 20, height: 20)
+                    .background(
+                        Circle().fill(isHovering ? Color.accentColor.opacity(0.14)
+                                                  : Color.primary.opacity(0.05))
+                    )
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(paper.title)
-                    .font(.system(size: 12.5, weight: .medium))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                HStack(spacing: 5) {
-                    if paper.score > 0 {
-                        ScoreBadgeView(score: paper.score,
-                                       color: MetadataStore.shared.tierColor(paper.tier))
-                    }
-                    if !meta.isEmpty {
-                        Text(meta)
-                            .font(.system(size: 10.5))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(paper.title)
+                        .font(.system(size: 12.5, weight: .medium))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                    HStack(spacing: 5) {
+                        if paper.score > 0 {
+                            ScoreBadgeView(score: paper.score,
+                                           color: MetadataStore.shared.tierColor(paper.tier))
+                        }
+                        if !meta.isEmpty {
+                            Text(meta)
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 2) {
-                MenuBarActionButton(systemName: "star", color: .yellow,
-                                    help: L10n.t(.markStarred), action: onStar)
-                MenuBarActionButton(systemName: "checkmark.circle", color: .green,
-                                    help: L10n.t(.markRead), action: onRead)
-                MenuBarActionButton(systemName: "doc.text", color: .accentColor,
-                                    help: L10n.t(.openPDF), action: onOpenPdf)
+                // Hover affordance: the whole card opens the paper's detail.
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .opacity(isHovering ? 1 : 0)
+                    .padding(.top, 4)
             }
-            .opacity(isHovering ? 1 : 0)
-            .animation(.easeOut(duration: 0.12), value: isHovering)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(isHovering ? Color.primary.opacity(0.06) : Color.clear)
         )
-        .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .contextMenu {
-            Button(L10n.t(.openInVellumX), action: onOpenInApp)
-            Button(L10n.t(.cancelRecommendation), action: onCancelRecommendation)
+            Button { onStar() } label: { Label(L10n.t(.markStarred), systemImage: "star") }
+            Button { onRead() } label: { Label(L10n.t(.markRead), systemImage: "checkmark.circle") }
+            Button { onOpenPdf() } label: { Label(L10n.t(.openPDF), systemImage: "doc.text") }
             Divider()
-            Button(L10n.t(.markSkip), action: onSkip)
+            Button { onOpenInApp() } label: { Label(L10n.t(.openInVellumX), systemImage: "macwindow") }
+            Button { onCancelRecommendation() } label: { Label(L10n.t(.cancelRecommendation), systemImage: "xmark.circle") }
+            Divider()
+            Button { onSkip() } label: { Label(L10n.t(.markSkip), systemImage: "eye.slash") }
         }
-    }
-}
-
-/// Small square icon button used for the inline row actions.
-private struct MenuBarActionButton: View {
-    let systemName: String
-    let color: Color
-    let help: String
-    let action: () -> Void
-
-    @State private var isHovering = false
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isHovering ? color : .secondary)
-                .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 5)
-                        .fill(isHovering ? color.opacity(0.16) : Color.clear)
-                )
-        }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
-        .help(help)
     }
 }
 
