@@ -42,6 +42,13 @@ enum L10n {
         // Related papers
         case relatedPapers, similarPapers, citedBy, addToLibrary, addedToLibrary
         case loadingRelated, noRelated
+        // Menu commands (keyboard shortcuts)
+        case menuView, menuPaper
+        case cmdAllPapers, cmdRecommended, cmdPending, cmdStarred, cmdRead, cmdSkipped
+        case cmdPrevPaper, cmdNextPaper
+        case cmdFetch, cmdRecommend
+        case cmdMarkPending, cmdMarkStarred, cmdMarkRead, cmdMarkSkip
+        case cmdAddTag
     }
 
     @MainActor
@@ -181,6 +188,24 @@ enum L10n {
         case .addedToLibrary:     return ("In library", "已在库")
         case .loadingRelated:     return ("Loading related papers…", "正在加载相关论文…")
         case .noRelated:          return ("No related papers found.", "未找到相关论文。")
+
+        case .menuView:           return ("View", "视图")
+        case .menuPaper:          return ("Paper", "论文")
+        case .cmdAllPapers:       return ("All Papers", "全部论文")
+        case .cmdRecommended:     return ("Recommended", "推荐")
+        case .cmdPending:         return ("Pending", "待读")
+        case .cmdStarred:         return ("Starred", "已标星")
+        case .cmdRead:            return ("Read", "已读")
+        case .cmdSkipped:         return ("Skipped", "已跳过")
+        case .cmdPrevPaper:       return ("Previous Paper", "上一篇")
+        case .cmdNextPaper:       return ("Next Paper", "下一篇")
+        case .cmdFetch:           return ("Fetch New Papers", "获取新论文")
+        case .cmdRecommend:       return ("Generate Recommendations", "生成推荐")
+        case .cmdMarkPending:     return ("Mark as Pending", "标记为待读")
+        case .cmdMarkStarred:     return ("Mark as Starred", "标记为已标星")
+        case .cmdMarkRead:        return ("Mark as Read", "标记为已读")
+        case .cmdMarkSkip:        return ("Mark as Skipped", "标记为已跳过")
+        case .cmdAddTag:          return ("Add Tag…", "添加标签…")
         }
     }
 }

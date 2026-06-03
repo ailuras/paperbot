@@ -51,6 +51,7 @@ struct VellumXApp: App {
                     MainWindowOpener.shared.openAction = { openWindow(id: "main") }
                 }
         }
+        .commands { AppCommands() }
 
         Settings {
             SettingsRootView()

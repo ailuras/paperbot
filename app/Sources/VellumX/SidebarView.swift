@@ -48,7 +48,7 @@ struct SidebarView: View {
     var body: some View {
         List(selection: $selectedItem) {
             Section("Library") {
-                ForEach([SidebarItem.recommended, .pending, .starred, .read, .skipped, .all], id: \.self) { item in
+                ForEach([SidebarItem.recommended, .pending, .read, .starred, .skipped, .all], id: \.self) { item in
                     NavigationLink(value: item) {
                         HStack {
                             Label {

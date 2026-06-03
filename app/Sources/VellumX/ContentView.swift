@@ -31,6 +31,8 @@ struct ContentView: View {
     @State private var selectedPaperId: String?
     /// Last paper actually opened; retained when the list selection clears.
     @State private var lastViewedPaperId: String?
+    /// Bumped by the Add Tag command to ask the detail view to open its prompt.
+    @State private var addTagSignal: Int = 0
 
     // Async execution states
     @State private var isFetching: Bool = false
@@ -225,7 +227,8 @@ struct ContentView: View {
                     onAddTag: addPaperTag,
                     onRemoveTag: removePaperTag,
                     onAddToCollection: addPaperToCollection,
-                    onRemoveFromCollection: removePaperFromCollection
+                    onRemoveFromCollection: removePaperFromCollection,
+                    addTagSignal: addTagSignal
                 )
             } else {
                 EmptyDetailView()
@@ -261,7 +264,6 @@ struct ContentView: View {
                         }
                     }
                     .disabled(isFetching || isRecommending)
-                    .keyboardShortcut("r", modifiers: .command)
                     .accessibilityLabel("Fetch new papers")
                     .help("Fetch new papers from OpenAlex")
 
@@ -273,7 +275,6 @@ struct ContentView: View {
                         }
                     }
                     .disabled(isFetching || isRecommending)
-                    .keyboardShortcut("t", modifiers: .command)
                     .accessibilityLabel("Generate recommendations")
                     .help("Generate daily paper recommendations")
 
@@ -326,6 +327,34 @@ struct ContentView: View {
                 }
             }
         }
+        // Publish the runnable actions to the menu-bar commands (AppCommands).
+        .focusedSceneValue(\.paperActions, paperActions)
+    }
+
+    /// Snapshot of menu-bar command actions for the current state. Optional
+    /// closures encode disabled state; `selectedSidebarItem`'s own `.onChange`
+    /// clears the collection selection. Kept out of `body` so the type-checker
+    /// doesn't have to solve these closures inside the view tree.
+    private var paperActions: PaperActions {
+        let busy = isFetching || isRecommending
+        let selectView: (SidebarItem) -> Void = { selectedSidebarItem = $0 }
+        let selectPrevious: (() -> Void)? = canGoPrevious ? { selectPreviousPaper() } : nil
+        let selectNext: (() -> Void)? = canGoNext ? { selectNextPaper() } : nil
+        let setStatus: ((PaperStatus) -> Void)? = selectedPaper.map { paper in
+            { updatePaperStatus(paper, status: $0) }
+        }
+        let addTag: (() -> Void)? = selectedPaper == nil ? nil : { addTagSignal += 1 }
+        let fetch: (() -> Void)? = busy ? nil : { fetchPapers() }
+        let recommend: (() -> Void)? = busy ? nil : { recommendPapers() }
+        return PaperActions(
+            selectView: selectView,
+            selectPrevious: selectPrevious,
+            selectNext: selectNext,
+            setStatus: setStatus,
+            addTag: addTag,
+            fetch: fetch,
+            recommend: recommend
+        )
     }
 
     /// Reveal and select a paper requested from outside the window (e.g. the

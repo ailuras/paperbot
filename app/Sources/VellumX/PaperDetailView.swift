@@ -17,6 +17,8 @@ struct PaperDetailView: View {
     let onRemoveTag: (Paper, String) -> Void
     let onAddToCollection: (Paper, String) -> Void
     let onRemoveFromCollection: (Paper, String) -> Void
+    /// Incremented by the Add Tag keyboard command to open the tag prompt.
+    let addTagSignal: Int
 
     @FocusState private var noteFocused: Bool
     @State private var showCollectionPopover = false
@@ -60,6 +62,7 @@ struct PaperDetailView: View {
             Button("Add") { commitNewTag() }
             Button("Cancel", role: .cancel) { newTagName = "" }
         }
+        .onChange(of: addTagSignal) { _, _ in showAddTagPrompt = true }
     }
 
     // MARK: - Header Card
@@ -634,9 +637,19 @@ struct EmptyDetailView: View {
             .foregroundStyle(.secondary.opacity(0.75))
             .multilineTextAlignment(.center)
 
-            HStack(spacing: 16) {
-                ShortcutHint(key: "⌘R", action: "Fetch")
-                ShortcutHint(key: "⌘T", action: "Recommend")
+            VStack(spacing: 8) {
+                HStack(spacing: 16) {
+                    ShortcutHint(key: "⌘R", action: "Fetch")
+                    ShortcutHint(key: "⌘T", action: "Recommend")
+                }
+                HStack(spacing: 16) {
+                    ShortcutHint(key: "⌘1–6", action: "Switch views")
+                    ShortcutHint(key: "⌘↑ ⌘↓", action: "Prev / Next")
+                }
+                HStack(spacing: 16) {
+                    ShortcutHint(key: "⌥⌘1–4", action: "Set status")
+                    ShortcutHint(key: "⌘⇧T", action: "Add tag")
+                }
             }
             .padding(.top, 8)
 
