@@ -43,8 +43,8 @@ struct ContentView: View {
     @State private var statusMessage: String = ""
     /// Drives the confirmation dialog shown before the slow OpenAlex fetch.
     @State private var showFetchConfirm: Bool = false
-    /// The paper awaiting delete confirmation (nil = no dialog).
-    @State private var paperPendingDeletion: Paper?
+    /// Papers awaiting delete confirmation (empty = no dialog).
+    @State private var papersPendingDeletion: [Paper] = []
 
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
@@ -96,6 +96,15 @@ struct ContentView: View {
     /// Papers currently multi-selected, in list order.
     private var selectedPapers: [Paper] {
         filteredPapers.filter { selectedPaperIds.contains($0.id) }
+    }
+
+    /// Count-aware title for the delete confirmation dialog.
+    private var deleteConfirmTitle: String {
+        let n = papersPendingDeletion.count
+        guard n > 1 else { return L10n.t(.deleteConfirmTitle) }
+        return AppSettings.shared.language == "zh"
+            ? "删除选中的 \(n) 篇论文？"
+            : "Delete \(n) papers?"
     }
 
     private var selectedPaperIndex: Int? {
@@ -225,7 +234,7 @@ struct ContentView: View {
                 onSelectionChange: handleSelectionChange,
                 onCopyBibtex: copyBibtex,
                 onUpdatePaper: updatePaper,
-                onDeletePaper: { paperPendingDeletion = $0 }
+                onDeletePaper: { papersPendingDeletion = $0 }
             )
         } detail: {
             if selectedPaperIds.count > 1 {
@@ -350,13 +359,13 @@ struct ContentView: View {
         } message: {
             Text(L10n.t(.fetchConfirmMessage))
         }
-        .alert(L10n.t(.deleteConfirmTitle), isPresented: Binding(
-            get: { paperPendingDeletion != nil },
-            set: { if !$0 { paperPendingDeletion = nil } }
-        ), presenting: paperPendingDeletion) { paper in
-            Button(L10n.t(.delete), role: .destructive) { deletePaper(paper) }
+        .alert(deleteConfirmTitle, isPresented: Binding(
+            get: { !papersPendingDeletion.isEmpty },
+            set: { if !$0 { papersPendingDeletion = [] } }
+        )) {
+            Button(L10n.t(.delete), role: .destructive) { deletePapers(papersPendingDeletion) }
             Button(L10n.t(.cancel), role: .cancel) {}
-        } message: { _ in
+        } message: {
             Text(L10n.t(.deleteConfirmMessage))
         }
     }
@@ -594,43 +603,52 @@ struct ContentView: View {
         }
     }
 
-    private func copyBibtex(_ paper: Paper) {
+    private func copyBibtex(_ papers: [Paper]) {
+        guard !papers.isEmpty else { return }
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setString(CitationExporter.bibtex(for: paper), forType: .string)
-        statusMessage = L10n.t(.copiedBibtex)
+        pb.setString(CitationExporter.bibtex(for: papers), forType: .string)
+        statusMessage = papers.count == 1
+            ? L10n.t(.copiedBibtex)
+            : "Copied \(papers.count) BibTeX entries"
     }
 
-    private func deletePaper(_ paper: Paper) {
-        let wasSelected = lastViewedPaperId == paper.id
-        store.deletePaper(id: paper.id)
+    private func deletePapers(_ papers: [Paper]) {
+        guard !papers.isEmpty else { return }
+        let ids = Set(papers.map(\.id))
+        let removedOpen = lastViewedPaperId.map(ids.contains) ?? false
+        store.deletePapers(ids: Array(ids))
+        selectedPaperIds.subtract(ids)
         applyFilters()
-        if wasSelected {
-            selectedPaperIds = []
-            lastViewedPaperId = nil
-        }
+        if removedOpen { lastViewedPaperId = nil }
     }
 
-    /// Refresh a single paper's metadata from OpenAlex, keeping all user state.
-    private func updatePaper(_ paper: Paper) {
-        // Preserve the original track: fetchWorksByIds parses with track "",
-        // and addOrUpdate's replaceTopics would otherwise wipe this paper's topics.
-        let originalTrack = paper.track
-        statusMessage = "Updating from OpenAlex..."
+    /// Refresh papers' metadata from OpenAlex, keeping all user state.
+    private func updatePaper(_ papers: [Paper]) {
+        guard !papers.isEmpty else { return }
+        // Preserve each paper's track: fetchWorksByIds parses with track "",
+        // and addOrUpdate's replaceTopics would otherwise wipe their topics.
+        let trackById = Dictionary(papers.map { ($0.id, $0.track) }, uniquingKeysWith: { a, _ in a })
+        statusMessage = papers.count == 1
+            ? "Updating from OpenAlex..."
+            : "Updating \(papers.count) papers from OpenAlex..."
 
         Task {
             let fetcher = OpenAlexFetcher(
                 config: ConfigManager.shared.effectiveConfig,
                 venues: metadata.venues
             )
-            guard let refreshed = await fetcher.fetchWorksByIds([paper.id]).first else {
+            let refreshed = await fetcher.fetchWorksByIds(papers.map(\.id))
+            guard !refreshed.isEmpty else {
                 statusMessage = "Update failed — no result from OpenAlex."
                 return
             }
-            refreshed.track = originalTrack
-            _ = store.addOrUpdate(papers: [refreshed])
+            for r in refreshed { r.track = trackById[r.id] ?? r.track }
+            _ = store.addOrUpdate(papers: refreshed)
             applyFilters()
-            statusMessage = "Updated \"\(refreshed.title)\""
+            statusMessage = refreshed.count == 1
+                ? "Updated \"\(refreshed[0].title)\""
+                : "Updated \(refreshed.count) papers"
         }
     }
 

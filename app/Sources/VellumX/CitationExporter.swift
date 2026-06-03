@@ -56,6 +56,11 @@ enum CitationExporter {
         return "@article{\(citeKey(for: paper)),\n\(body)\n}"
     }
 
+    /// BibTeX for several papers, one entry per paper, in input order.
+    static func bibtex(for papers: [Paper]) -> String {
+        papers.map { bibtex(for: $0) }.joined(separator: "\n\n")
+    }
+
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.

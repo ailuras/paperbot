@@ -7,9 +7,9 @@ struct PaperListView: View {
     let highlightsDailyRecommendations: Bool
     let onCancelRecommendation: (Paper) -> Void
     let onSelectionChange: (Set<String>) -> Void
-    let onCopyBibtex: (Paper) -> Void
-    let onUpdatePaper: (Paper) -> Void
-    let onDeletePaper: (Paper) -> Void
+    let onCopyBibtex: ([Paper]) -> Void
+    let onUpdatePaper: ([Paper]) -> Void
+    let onDeletePaper: ([Paper]) -> Void
 
     var body: some View {
         List(selection: $selectedPaperIds) {
@@ -24,15 +24,21 @@ struct PaperListView: View {
                 .listRowSeparatorTint(Color.primary.opacity(0.08))
                 .listRowInsets(EdgeInsets(top: 4, leading: 2, bottom: 4, trailing: 2))
                 .contextMenu {
+                    // Finder-style: act on the whole selection if this row is in
+                    // it, otherwise just this row.
+                    let targets = selectedPaperIds.contains(paper.id)
+                        ? papers.filter { selectedPaperIds.contains($0.id) }
+                        : [paper]
+                    let suffix = targets.count > 1 ? " (\(targets.count))" : ""
                     Button {
-                        onCopyBibtex(paper)
+                        onCopyBibtex(targets)
                     } label: {
-                        Label(L10n.t(.cite), systemImage: "doc.on.doc")
+                        Label(L10n.t(.cite) + suffix, systemImage: "doc.on.doc")
                     }
                     Button {
-                        onUpdatePaper(paper)
+                        onUpdatePaper(targets)
                     } label: {
-                        Label(L10n.t(.cmdUpdatePaper), systemImage: "arrow.clockwise")
+                        Label(L10n.t(.cmdUpdatePaper) + suffix, systemImage: "arrow.clockwise")
                     }
                     if highlightsDailyRecommendations {
                         Button(L10n.t(.cancelRecommendation)) {
@@ -41,9 +47,9 @@ struct PaperListView: View {
                     }
                     Divider()
                     Button(role: .destructive) {
-                        onDeletePaper(paper)
+                        onDeletePaper(targets)
                     } label: {
-                        Label(L10n.t(.cmdDeletePaper), systemImage: "trash")
+                        Label(L10n.t(.cmdDeletePaper) + suffix, systemImage: "trash")
                     }
                 }
             }

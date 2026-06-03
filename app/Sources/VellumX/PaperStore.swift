@@ -897,9 +897,11 @@ class PaperStore {
         if succeeded { loadPapers() }
     }
 
-    /// Permanently delete a paper and every associated row (cache, state,
-    /// recommendation, note, tags, translation, pdf, topics, collection links).
-    func deletePaper(id: String) {
+    /// Permanently delete one or more papers and every associated row (cache,
+    /// state, recommendation, note, tags, translation, pdf, topics, collection
+    /// links) in a single transaction, with one reload at the end.
+    func deletePapers(ids: [String]) {
+        guard !ids.isEmpty else { return }
         let tables: [(table: String, column: String)] = [
             ("collection_papers", "paper_id"),
             ("paper_topics", "paper_id"),
@@ -912,16 +914,19 @@ class PaperStore {
             ("paper_cache", "paper_id"),
             ("papers", "id"),
         ]
+        let placeholders = ids.map { _ in "?" }.joined(separator: ",")
         sqlite3_exec(db, "BEGIN IMMEDIATE TRANSACTION", nil, nil, nil)
         var succeeded = true
         for (table, column) in tables {
-            let sql = "DELETE FROM \(table) WHERE \(column) = ?"
+            let sql = "DELETE FROM \(table) WHERE \(column) IN (\(placeholders))"
             var stmt: OpaquePointer?
             guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else {
                 succeeded = false
                 break
             }
-            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            for (offset, id) in ids.enumerated() {
+                sqlite3_bind_text(stmt, Int32(offset + 1), id, -1, SQLITE_TRANSIENT)
+            }
             if sqlite3_step(stmt) != SQLITE_DONE { succeeded = false }
             sqlite3_finalize(stmt)
             if !succeeded { break }
