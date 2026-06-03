@@ -28,7 +28,8 @@ struct ContentView: View {
     @State private var showSortOptions = false
 
     // Selection state
-    @State private var selectedPaperId: String?
+    /// Multi-selection of paper IDs (⌘/⇧ click). count==1 drives the detail view.
+    @State private var selectedPaperIds: Set<String> = []
     /// Last paper actually opened; retained when the list selection clears.
     @State private var lastViewedPaperId: String?
     /// Bumped by the Add Tag command to ask the detail view to open its prompt.
@@ -90,6 +91,11 @@ struct ContentView: View {
     var selectedPaper: Paper? {
         guard let id = lastViewedPaperId else { return nil }
         return store.papers.first(where: { $0.id == id })
+    }
+
+    /// Papers currently multi-selected, in list order.
+    private var selectedPapers: [Paper] {
+        filteredPapers.filter { selectedPaperIds.contains($0.id) }
     }
 
     private var selectedPaperIndex: Int? {
@@ -212,17 +218,19 @@ struct ContentView: View {
         } content: {
             PaperListView(
                 papers: filteredPapers,
-                selectedPaperId: $selectedPaperId,
+                selectedPaperIds: $selectedPaperIds,
                 metadata: metadata,
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
                 onCancelRecommendation: cancelRecommendation,
-                onSelectPaper: { lastViewedPaperId = $0 },
+                onSelectionChange: handleSelectionChange,
                 onCopyBibtex: copyBibtex,
                 onUpdatePaper: updatePaper,
                 onDeletePaper: { paperPendingDeletion = $0 }
             )
         } detail: {
-            if let paper = selectedPaper {
+            if selectedPaperIds.count > 1 {
+                MultiSelectionPlaceholder(count: selectedPaperIds.count)
+            } else if let paper = selectedPaper {
                 PaperDetailView(
                     paper: paper,
                     isTranslating: $isTranslating,
@@ -403,7 +411,7 @@ struct ContentView: View {
         }
 
         applyFilters()
-        selectedPaperId = id
+        selectedPaperIds = [id]
         lastViewedPaperId = id
         windowOpener.requestedPaperId = nil
     }
@@ -519,7 +527,7 @@ struct ContentView: View {
     private func selectPaper(at index: Int) {
         guard filteredPapers.indices.contains(index) else { return }
         let id = filteredPapers[index].id
-        selectedPaperId = id
+        selectedPaperIds = [id]
         lastViewedPaperId = id
     }
 
@@ -550,10 +558,10 @@ struct ContentView: View {
 
         applyFilters()
         if let nextId, filteredPapers.contains(where: { $0.id == nextId }) {
-            selectedPaperId = nextId
+            selectedPaperIds = [nextId]
             lastViewedPaperId = nextId
         } else {
-            selectedPaperId = nil
+            selectedPaperIds = []
             lastViewedPaperId = nil
         }
     }
@@ -577,6 +585,15 @@ struct ContentView: View {
         applyFilters()
     }
 
+    /// When exactly one row is selected, open it in the detail pane. Multi- or
+    /// zero-selection leaves `lastViewedPaperId` so the detail pane can show the
+    /// batch placeholder or keep the last opened paper.
+    private func handleSelectionChange(_ ids: Set<String>) {
+        if ids.count == 1, let id = ids.first {
+            lastViewedPaperId = id
+        }
+    }
+
     private func copyBibtex(_ paper: Paper) {
         let pb = NSPasteboard.general
         pb.clearContents()
@@ -589,7 +606,7 @@ struct ContentView: View {
         store.deletePaper(id: paper.id)
         applyFilters()
         if wasSelected {
-            selectedPaperId = nil
+            selectedPaperIds = []
             lastViewedPaperId = nil
         }
     }
@@ -764,5 +781,35 @@ struct ScoreBadgeView: View {
             .background(color.opacity(0.15))
             .foregroundStyle(color)
             .clipShape(RoundedRectangle(cornerRadius: 4))
+    }
+}
+
+// MARK: - Multi-selection placeholder (shown when >1 paper is selected)
+
+private struct MultiSelectionPlaceholder: View {
+    let count: Int
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "checklist")
+                .font(.system(size: 44, weight: .light))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.secondary.opacity(0.5), .accentColor.opacity(0.3)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+            Text("\(count) papers selected")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.primary.opacity(0.85))
+            Text("Right-click the list for batch actions")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(NSColor.textBackgroundColor))
     }
 }

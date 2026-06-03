@@ -2,17 +2,17 @@ import SwiftUI
 
 struct PaperListView: View {
     let papers: [Paper]
-    @Binding var selectedPaperId: String?
+    @Binding var selectedPaperIds: Set<String>
     var metadata: MetadataStore
     let highlightsDailyRecommendations: Bool
     let onCancelRecommendation: (Paper) -> Void
-    let onSelectPaper: (String) -> Void
+    let onSelectionChange: (Set<String>) -> Void
     let onCopyBibtex: (Paper) -> Void
     let onUpdatePaper: (Paper) -> Void
     let onDeletePaper: (Paper) -> Void
 
     var body: some View {
-        List(selection: $selectedPaperId) {
+        List(selection: $selectedPaperIds) {
             ForEach(papers) { paper in
                 PaperRowView(
                     paper: paper,
@@ -49,8 +49,8 @@ struct PaperListView: View {
             }
         }
         .listStyle(.inset)
-        .onChange(of: selectedPaperId) { _, newValue in
-            if let newValue { onSelectPaper(newValue) }
+        .onChange(of: selectedPaperIds) { _, ids in
+            onSelectionChange(ids)
         }
         .overlay {
             if papers.isEmpty {
