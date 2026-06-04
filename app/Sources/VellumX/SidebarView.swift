@@ -11,7 +11,6 @@ struct SidebarView: View {
     var metadata: MetadataStore
     let papers: [Paper]
 
-    @State private var nc = NotificationCenter.shared
     @State private var expandedCollections: Set<String> = []
 
     /// Collections grouped by their parent id (roots are resolved separately).
@@ -121,11 +120,6 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            if !nc.statusMessage.isEmpty {
-                StatusBar(message: nc.statusMessage, type: nc.statusType)
-            }
-        }
     }
 
     private func paperCount(for item: SidebarItem) -> Int {

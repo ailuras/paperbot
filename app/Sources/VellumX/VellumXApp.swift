@@ -51,6 +51,9 @@ struct VellumXApp: App {
                 .overlay(alignment: .bottomTrailing) {
                     ToastContainer()
                 }
+                .safeAreaInset(edge: .bottom) {
+                    GlobalStatusBar()
+                }
                 .onAppear {
                     MainWindowOpener.shared.openAction = { openWindow(id: "main") }
                 }

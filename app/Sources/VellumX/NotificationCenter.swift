@@ -57,9 +57,9 @@ final class NotificationCenter {
 
     func showToast(_ message: String, type: ToastType = .success, duration: TimeInterval = 2.5) {
         let toast = ToastItem(message: message, type: type, duration: duration)
-        toasts.append(toast)
+        toasts.insert(toast, at: 0)
         if toasts.count > maxToasts {
-            toasts.removeFirst(toasts.count - maxToasts)
+            toasts.removeLast(toasts.count - maxToasts)
         }
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
@@ -247,6 +247,9 @@ struct ToastView: View {
             insertion: .opacity.combined(with: .offset(y: 12)),
             removal: .opacity.combined(with: .offset(y: 8))
         ))
+        .onTapGesture {
+            onDismiss()
+        }
     }
 }
 
@@ -292,5 +295,19 @@ struct StatusBar: View {
             .padding(.vertical, 7)
         }
         .background(Color(NSColor.controlBackgroundColor))
+    }
+}
+
+// MARK: - GlobalStatusBar
+
+struct GlobalStatusBar: View {
+    @State private var nc = NotificationCenter.shared
+
+    var body: some View {
+        Group {
+            if !nc.statusMessage.isEmpty {
+                StatusBar(message: nc.statusMessage, type: nc.statusType)
+            }
+        }
     }
 }
