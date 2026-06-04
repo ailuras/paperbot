@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SidebarView: View {
+    @Environment(\.openSettings) private var openSettings
     @Binding var selectedItem: SidebarItem?
     @Binding var selectedCollectionId: String?
     @Binding var selectedTopic: String?
@@ -54,15 +55,30 @@ struct SidebarView: View {
                 }
             }
 
-            if !metadata.topics.isEmpty {
-                Section("Topics") {
-                    ForEach(metadata.topics.map(\.name), id: \.self) { name in
-                        FilterRow(title: name, colorKey: "topic:\(name)",
-                                  defaultColor: .purple,
-                                  isSelected: selectedTopic == name) {
-                            selectedTopic = (selectedTopic == name) ? nil : name
-                        }
+            Section {
+                ForEach(metadata.topics.map(\.name), id: \.self) { name in
+                    FilterRow(title: name, colorKey: "topic:\(name)",
+                              defaultColor: .purple,
+                              isSelected: selectedTopic == name) {
+                        selectedTopic = (selectedTopic == name) ? nil : name
                     }
+                }
+            } header: {
+                HStack {
+                    Text("Topics")
+                    Spacer()
+                    Button {
+                        openTracksSettings()
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 20, height: 18)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help("Edit tracks in Settings")
+                    .padding(.trailing, 8)
                 }
             }
 
@@ -120,6 +136,12 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+    }
+
+    /// Jump straight to the Rules tab (which hosts the tracks editor).
+    private func openTracksSettings() {
+        SettingsRouter.shared.selectedTab = .rules
+        openSettings()
     }
 
     private func paperCount(for item: SidebarItem) -> Int {
