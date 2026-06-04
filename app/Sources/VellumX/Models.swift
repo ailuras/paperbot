@@ -39,7 +39,7 @@ enum PaperStatus: String, Codable, CaseIterable {
         switch self {
         case .pending:     return "clock"
         case .read:        return "checkmark.circle"
-        case .starred:     return "star.fill"
+        case .starred:     return "star"
         case .skip:        return "eye.slash"
         }
     }
