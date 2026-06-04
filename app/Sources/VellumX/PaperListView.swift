@@ -20,12 +20,13 @@ struct PaperListView: View {
                 PaperRowView(
                     paper: paper,
                     metadata: metadata,
-                    isDailyRecommendation: highlightsDailyRecommendations
+                    isDailyRecommendation: highlightsDailyRecommendations,
+                    isSelected: selectedPaperIds.contains(paper.id)
                 )
                 .tag(paper.id)
-                .listRowSeparator(.visible)
-                .listRowSeparatorTint(Color.primary.opacity(0.08))
-                .listRowInsets(EdgeInsets(top: 4, leading: 2, bottom: 4, trailing: 2))
+                .listRowSeparator(.hidden)
+                .listRowInsets(EdgeInsets(top: 3, leading: 9, bottom: 3, trailing: 9))
+                .listRowBackground(Color.clear)
                 .contextMenu {
                     // Finder-style: act on the whole selection if this row is in
                     // it, otherwise just this row.
@@ -73,7 +74,8 @@ struct PaperListView: View {
                 }
             }
         }
-        .listStyle(.inset)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .onChange(of: selectedPaperIds) { _, ids in
             onSelectionChange(ids)
         }
@@ -91,53 +93,92 @@ private struct PaperRowView: View {
     let paper: Paper
     var metadata: MetadataStore
     let isDailyRecommendation: Bool
+    let isSelected: Bool
+
+    @State private var isHovering = false
+
+    private let cornerRadius: CGFloat = 9
 
     private var venueColor: Color {
         metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr))
     }
 
     private var isTodayRecommended: Bool {
-        guard let recommendedAt = paper.recommendedAt else { return false }
+        guard isDailyRecommendation, let recommendedAt = paper.recommendedAt else { return false }
         return Calendar.current.isDateInToday(recommendedAt)
+    }
+
+    /// First few authors, then "et al." so the subtitle stays one line.
+    private var authorsSummary: String {
+        guard !paper.authors.isEmpty else { return "" }
+        if paper.authors.count <= 3 { return paper.authors.joined(separator: ", ") }
+        return paper.authors.prefix(3).joined(separator: ", ") + " et al."
     }
 
     var body: some View {
         HStack(spacing: 0) {
-            // Status-colored accent bar for today's picks
-            if isDailyRecommendation && isTodayRecommended {
+            // Status-colored left edge marks today's picks; clipped to the card.
+            if isTodayRecommended {
                 Rectangle()
                     .fill(paper.status.iconColor)
                     .frame(width: 3)
-                    .padding(.vertical, 6)
             }
 
-            HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(paper.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
                     .foregroundStyle(.primary)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                Spacer(minLength: 8)
+                if !authorsSummary.isEmpty {
+                    Text(authorsSummary)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
 
-                VStack(alignment: .trailing, spacing: 5) {
-                    HStack(spacing: 4) {
+                HStack(spacing: 6) {
+                    if !paper.venueAbbr.isEmpty {
                         PaperTagView(title: paper.venueAbbr, color: venueColor)
-                        ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
                     }
+                    ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+                    Spacer(minLength: 8)
                     Text(paper.publicationDate)
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
+                .padding(.top, 1)
             }
-            .padding(.leading, isDailyRecommendation && isTodayRecommended ? 2 : 5)
-            .padding(.trailing, 8)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        // Subtle status-tinted background for today's recommended cards
-        .background(isDailyRecommendation && isTodayRecommended
-            ? paper.status.iconColor.opacity(0.05)
-            : Color.clear)
+        .background(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(fillColor)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(borderColor, lineWidth: isSelected ? 1.5 : 0.8)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+    }
+
+    private var fillColor: Color {
+        if isSelected { return Color.accentColor.opacity(0.10) }
+        if isTodayRecommended { return paper.status.iconColor.opacity(0.06) }
+        let base = Color(nsColor: .controlBackgroundColor)
+        return isHovering ? base.opacity(0.7) : base.opacity(0.45)
+    }
+
+    private var borderColor: Color {
+        if isSelected { return Color.accentColor.opacity(0.9) }
+        if isTodayRecommended { return paper.status.iconColor.opacity(0.45) }
+        return Color.gray.opacity(isHovering ? 0.32 : 0.18)
     }
 }
 
