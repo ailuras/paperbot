@@ -4,8 +4,14 @@ import AppKit
 struct GeneralSettingsTab: View {
     @State private var store = PaperStore.shared
     @State private var settings = AppSettings.shared
+    @Environment(\.settingsAlerts) private var alerts
 
     private var currentDir: URL { settings.resolvedStorageDirectory }
+
+    private var fileURL: URL { settings.settingsFileURL }
+    private var settingsFileExists: Bool {
+        FileManager.default.fileExists(atPath: fileURL.path)
+    }
 
     var body: some View {
         Form {
@@ -35,6 +41,25 @@ struct GeneralSettingsTab: View {
                 Text(L10n.t(.menuBarHint))
                     .font(.caption).foregroundStyle(.secondary)
             }
+
+            Section(L10n.t(.settingsFile)) {
+                LabeledContent(L10n.t(.path)) {
+                    Text(fileURL.path)
+                        .lineLimit(1).truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button(L10n.t(.open)) { NSWorkspace.shared.open(fileURL) }
+                        .disabled(!settingsFileExists)
+                    Button(L10n.t(.revealInFinder)) {
+                        NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+                    }
+                    .disabled(!settingsFileExists)
+                }
+                Text(L10n.t(.settingsFileHint))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -52,7 +77,7 @@ struct GeneralSettingsTab: View {
 
     private func presentStorageConfirm(dir: URL) {
         if dir.standardizedFileURL == currentDir.standardizedFileURL { return }
-        NotificationCenter.shared.present(AlertItem(
+        alerts?.present(AlertItem(
             title: L10n.t(.changeStorageTitle),
             message: L10n.t(.migratePrompt),
             actions: [

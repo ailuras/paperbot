@@ -5,7 +5,7 @@ import Observation
 /// other parts of the UI can deep-link to (e.g. the sidebar's "edit tracks"
 /// button jumps to `.rules`).
 enum SettingsTab: Hashable {
-    case general, api, papers, rules, configFile
+    case general, api, papers, rules
 }
 
 /// Lets non-Settings views request a specific Settings tab before opening the
@@ -18,11 +18,14 @@ final class SettingsRouter {
 }
 
 /// The standard macOS Settings window (⌘,), organized into tabs:
-/// General (storage, menu bar, language), API (translation), Papers
-/// (recommendation + OpenAlex params), Rules (tracks, venues, tiers,
-/// citation scoring – all DB-persisted), and Config File.
+/// General (storage, settings file, menu bar, language), API (translation),
+/// Papers (recommendation + OpenAlex params), and Rules (tracks, venues, tiers,
+/// citation scoring – all DB-persisted).
 struct SettingsRootView: View {
     @State private var router = SettingsRouter.shared
+    /// Settings-window-local alert channel so confirmations show on this window
+    /// rather than pulling focus to the main window.
+    @State private var alerts = LocalAlertCenter()
 
     var body: some View {
         TabView(selection: $router.selectedTab) {
@@ -38,11 +41,10 @@ struct SettingsRootView: View {
             RulesSettingsTab()
                 .tabItem { Label(L10n.t(.rules), systemImage: "list.bullet.rectangle") }
                 .tag(SettingsTab.rules)
-            ConfigFileTab()
-                .tabItem { Label(L10n.t(.configFile), systemImage: "doc.badge.gearshape") }
-                .tag(SettingsTab.configFile)
         }
         .frame(width: 620, height: 560)
+        .environment(\.settingsAlerts, alerts)
+        .localAlertHost(alerts)
     }
 }
 

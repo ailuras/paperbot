@@ -6,7 +6,7 @@ import Foundation
 enum L10n {
     enum Key {
         // Tabs
-        case general, api, papers, rules, configFile
+        case general, api, papers, rules
         // General
         case storageLocation, currentLocation, change, restoreDefault, storageHint
         case interface, showInMenuBar, language, menuBarHint
@@ -75,7 +75,6 @@ enum L10n {
         case .api:                return ("API", "API")
         case .papers:             return ("Papers", "论文")
         case .rules:              return ("Rules", "学术规则")
-        case .configFile:         return ("Settings File", "设置文件")
 
         case .storageLocation:    return ("Storage Location", "存储位置")
         case .currentLocation:    return ("Current location", "当前位置")

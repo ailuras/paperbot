@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct RulesSettingsTab: View {
     @State private var metadata = MetadataStore.shared
+    @Environment(\.settingsAlerts) private var alerts
 
     var body: some View {
         ScrollView {
@@ -76,7 +77,7 @@ struct RulesSettingsTab: View {
                     Spacer()
 
                     Button(role: .destructive) {
-                        NotificationCenter.shared.present(AlertItem(
+                        alerts?.present(AlertItem(
                             title: L10n.t(.usePresetTitle),
                             message: L10n.t(.usePresetMessage),
                             actions: [
@@ -203,12 +204,13 @@ private struct AddRuleButton: View {
 /// Trash button that always asks for confirmation before deleting. `name`, when
 /// present, is shown in the prompt title so the user knows exactly what goes.
 private struct RuleDeleteButton: View {
+    @Environment(\.settingsAlerts) private var alerts
     var name: String? = nil
     let perform: () -> Void
 
     var body: some View {
         Button {
-            confirmRuleDelete(name: name, perform: perform)
+            confirmRuleDelete(on: alerts, name: name, perform: perform)
         } label: {
             Image(systemName: "trash")
                 .font(.system(size: 12))
@@ -220,12 +222,12 @@ private struct RuleDeleteButton: View {
 }
 
 @MainActor
-private func confirmRuleDelete(name: String?, perform: @escaping () -> Void) {
+private func confirmRuleDelete(on alerts: LocalAlertCenter?, name: String?, perform: @escaping () -> Void) {
     let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     let title = trimmed.isEmpty
         ? L10n.t(.deleteRuleTitle)
         : L10n.pick("Delete \"\(trimmed)\"?", "删除 “\(trimmed)”？")
-    NotificationCenter.shared.present(AlertItem(
+    alerts?.present(AlertItem(
         title: title,
         message: L10n.t(.deleteRuleMessage),
         actions: [
@@ -451,6 +453,7 @@ struct TracksEditor: View {
 // MARK: - VenuesEditor
 
 struct VenuesEditor: View {
+    @Environment(\.settingsAlerts) private var alerts
     @Binding var venues: [VenuePref]
     /// Selectable field options (custom fields + the built-in "Others", last).
     let availableFields: [String]
@@ -518,8 +521,26 @@ struct VenuesEditor: View {
                 presentNewFieldPrompt(for: venue.wrappedValue.id)
             } label: { Label(L10n.t(.newField), systemImage: "plus") }
         } label: {
-            Text(current).lineLimit(1)
+            // Fill the column so every field box is the same width and looks
+            // like a uniform popup button (the default Menu hugs its text).
+            HStack(spacing: 4) {
+                Text(current).lineLimit(1)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, minHeight: 21)
+            .background(Color(NSColor.controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.gray.opacity(0.25), lineWidth: 0.5)
+            )
         }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
     }
 
     @ViewBuilder
@@ -535,12 +556,13 @@ struct VenuesEditor: View {
 
     private func presentNewFieldPrompt(for venueID: UUID) {
         newFieldVenueID = venueID
-        NotificationCenter.shared.present(AlertItem(
+        let center = alerts
+        center?.present(AlertItem(
             title: L10n.t(.newField),
             message: nil,
             actions: [
                 .confirm(L10n.t(.confirm), action: {
-                    let name = NotificationCenter.shared.currentAlert?.textFieldValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    let name = center?.currentAlert?.textFieldValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     self.commitNewField(name: name)
                 }),
                 .cancel(L10n.t(.cancel), action: { self.newFieldVenueID = nil })

@@ -151,25 +151,50 @@ enum StatusType {
     }
 }
 
-// MARK: - UnifiedAlert Modifier
+// MARK: - LocalAlertCenter
 
-struct UnifiedAlertModifier: ViewModifier {
-    @State private var nc = NotificationCenter.shared
+/// A window-scoped alert presenter. The global `NotificationCenter` alert host
+/// lives on the main window, so alerts triggered from another window (the
+/// Settings window) would be presented on — and pull focus to — the main
+/// window, leaving the originating window buried. A window that owns one of
+/// these and installs `.localAlertHost(_:)` keeps its own confirmations on
+/// itself.
+@MainActor
+@Observable
+final class LocalAlertCenter {
+    var currentAlert: AlertItem? {
+        didSet { alertIsPresented = currentAlert != nil }
+    }
+    var alertIsPresented = false
+
+    func present(_ alert: AlertItem) { currentAlert = alert }
+    func dismiss() { currentAlert = nil }
+}
+
+// MARK: - Alert Host
+
+/// Shared rendering for an `AlertItem` channel. Both the global main-window host
+/// and any window-local host (Settings) bind their state into this so the alert
+/// look and action handling stay identical.
+private struct AlertHost: ViewModifier {
+    @Binding var current: AlertItem?
+    @Binding var isPresented: Bool
+    let onResolve: () -> Void
 
     func body(content: Content) -> some View {
         content
-            .alert(nc.currentAlert?.title ?? "", isPresented: $nc.alertIsPresented, presenting: nc.currentAlert) { item in
+            .alert(current?.title ?? "", isPresented: $isPresented, presenting: current) { item in
                 if let label = item.textFieldLabel {
                     TextField(label, text: Binding(
-                        get: { nc.currentAlert?.textFieldValue ?? "" },
-                        set: { nc.currentAlert?.textFieldValue = $0 }
+                        get: { current?.textFieldValue ?? "" },
+                        set: { current?.textFieldValue = $0 }
                     ))
                 }
                 ForEach(0..<item.actions.count, id: \.self) { idx in
-                    Button(role: buttonRole(for: item.actions[idx])) {
-                        handleAction(item.actions[idx])
+                    Button(role: Self.role(item.actions[idx])) {
+                        run(item.actions[idx])
                     } label: {
-                        Text(actionLabel(item.actions[idx]))
+                        Text(Self.label(item.actions[idx]))
                     }
                 }
             } message: { item in
@@ -179,7 +204,16 @@ struct UnifiedAlertModifier: ViewModifier {
             }
     }
 
-    private func actionLabel(_ action: AlertAction) -> String {
+    private func run(_ action: AlertAction) {
+        switch action {
+        case .confirm(_, _, let action): action()
+        case .cancel(_, let action):     action?()
+        case .plain(_, let action):      action()
+        }
+        onResolve()
+    }
+
+    private static func label(_ action: AlertAction) -> String {
         switch action {
         case .confirm(let label, _, _): return label
         case .cancel(let label, _):     return label
@@ -187,30 +221,64 @@ struct UnifiedAlertModifier: ViewModifier {
         }
     }
 
-    private func buttonRole(for action: AlertAction) -> ButtonRole? {
+    private static func role(_ action: AlertAction) -> ButtonRole? {
         switch action {
-        case .confirm(_, let isDestructive, _):
-            return isDestructive ? .destructive : nil
-        case .cancel:
-            return .cancel
-        case .plain:
-            return nil
+        case .confirm(_, let isDestructive, _): return isDestructive ? .destructive : nil
+        case .cancel:                           return .cancel
+        case .plain:                            return nil
         }
     }
+}
 
-    private func handleAction(_ action: AlertAction) {
-        switch action {
-        case .confirm(_, _, let action): action()
-        case .cancel(_, let action):     action?()
-        case .plain(_, let action):      action()
-        }
-        nc.dismissAlert()
+// MARK: - Alert host modifiers
+
+struct UnifiedAlertModifier: ViewModifier {
+    @State private var nc = NotificationCenter.shared
+
+    func body(content: Content) -> some View {
+        content.modifier(AlertHost(
+            current: $nc.currentAlert,
+            isPresented: $nc.alertIsPresented,
+            onResolve: { nc.dismissAlert() }
+        ))
+    }
+}
+
+private struct LocalAlertHostModifier: ViewModifier {
+    @Bindable var center: LocalAlertCenter
+
+    func body(content: Content) -> some View {
+        content.modifier(AlertHost(
+            current: $center.currentAlert,
+            isPresented: $center.alertIsPresented,
+            onResolve: { center.dismiss() }
+        ))
     }
 }
 
 extension View {
     func unifiedAlert() -> some View {
         modifier(UnifiedAlertModifier())
+    }
+
+    /// Host a window-local alert channel (see `LocalAlertCenter`).
+    func localAlertHost(_ center: LocalAlertCenter) -> some View {
+        modifier(LocalAlertHostModifier(center: center))
+    }
+}
+
+// MARK: - Settings alert environment
+
+/// Lets Settings tabs present confirmations on the Settings window's own
+/// `LocalAlertCenter` instead of the global (main-window) host.
+private struct SettingsAlertsKey: EnvironmentKey {
+    static let defaultValue: LocalAlertCenter? = nil
+}
+
+extension EnvironmentValues {
+    var settingsAlerts: LocalAlertCenter? {
+        get { self[SettingsAlertsKey.self] }
+        set { self[SettingsAlertsKey.self] = newValue }
     }
 }
 
