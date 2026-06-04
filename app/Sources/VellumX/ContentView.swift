@@ -215,6 +215,7 @@ struct ContentView: View {
                 selectedPaperIds: $selectedPaperIds,
                 metadata: metadata,
                 highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
+                showsStatusMarker: (selectedSidebarItem == .recommended || selectedSidebarItem == .all) && selectedCollectionId == nil,
                 onCancelRecommendation: cancelRecommendation,
                 onSelectionChange: handleSelectionChange,
                 onCopyBibtex: copyBibtex,
@@ -541,12 +542,15 @@ struct ContentView: View {
         let shouldAdvance = statusListItem(selectedSidebarItem) != nil
 
         PaperStore.shared.setPaperStatus(id: paper.id, status: status)
+        // Always rebuild so the row reflects the new status immediately (the
+        // Paper is a class; mutating it in place doesn't re-render rows on its
+        // own). Advancing selection only applies in status-filtered views.
+        applyFilters()
 
         guard shouldAdvance,
               let selectedSidebarItem,
               !paperMatches(sidebarItem: selectedSidebarItem, status: status) else { return }
 
-        applyFilters()
         if let nextId, filteredPapers.contains(where: { $0.id == nextId }) {
             selectedPaperIds = [nextId]
             lastViewedPaperId = nextId
