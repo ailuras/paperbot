@@ -99,7 +99,7 @@ struct PaperDetailView: View {
         }
         .buttonStyle(.plain)
         .disabled(isResolvingPdf)
-        .help(paper.pdfUrl?.isEmpty == false ? "Open PDF" : "Resolve PDF")
+        .help(paper.pdfUrl?.isEmpty == false ? L10n.t(.openPDF) : L10n.pick("Resolve PDF", "解析 PDF"))
     }
 
     private var citeButton: some View {
@@ -127,7 +127,7 @@ struct PaperDetailView: View {
             Image(systemName: isInAny ? "folder.fill" : "folder").detailActionChrome()
         }
         .buttonStyle(.plain)
-        .help("Collections")
+        .help(L10n.pick("Manage collections", "管理 Collection"))
         .popover(isPresented: $showCollectionPopover, arrowEdge: .bottom) {
             CollectionPickerPopover(
                 paper: paper,
@@ -152,14 +152,14 @@ struct PaperDetailView: View {
                 }
 
                 ScoreTagView(score: paper.score, color: metadata.tierColor(paper.tier))
-                    .help("Score \(String(format: "%.0f", paper.score))  ·  Tier \(paper.tier)")
+                    .help(scoreHelp)
 
                 CitationBadgeView(count: paper.citedByCount)
-                    .help("\(paper.citedByCount) citation\(paper.citedByCount == 1 ? "" : "s")")
+                    .help(citationHelp)
 
                 if !paper.publicationDate.isEmpty {
                     DetailInlineMeta(icon: "calendar", value: paper.publicationDate)
-                        .help("Published \(paper.publicationDate)")
+                        .help(L10n.pick("Published \(paper.publicationDate)", "发表于 \(paper.publicationDate)"))
                 }
 
                 if !topics.isEmpty {
@@ -201,6 +201,16 @@ struct PaperDetailView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
         )
+    }
+
+    private var scoreHelp: String {
+        let score = String(format: "%.0f", paper.score)
+        return L10n.pick("Score \(score)  ·  Tier \(paper.tier)", "评分 \(score)  ·  等级 \(paper.tier)")
+    }
+
+    private var citationHelp: String {
+        let n = paper.citedByCount
+        return L10n.pick("\(n) citation\(n == 1 ? "" : "s")", "被引用 \(n) 次")
     }
 
     private var doiDisplay: String {
@@ -265,7 +275,7 @@ struct PaperDetailView: View {
                     )
                 }
                 .buttonStyle(.plain)
-                .help("Add a tag to this paper")
+                .help(L10n.pick("Add a tag to this paper", "为这篇论文添加标签"))
             }
 
             if paper.tags.isEmpty {
@@ -276,6 +286,7 @@ struct PaperDetailView: View {
                 FlowLayout(spacing: 7) {
                     ForEach(paper.tags, id: \.self) { tag in
                         PaperTagChip(title: "#\(tag)")
+                            .help(L10n.pick("Right-click to remove this tag", "右键以移除此标签"))
                             .contextMenu {
                                 Button("Remove Tag") {
                                     onRemoveTag(paper, tag)
@@ -336,7 +347,9 @@ struct PaperDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .help(showingTranslation ? "Switch to original abstract" : "Show translated abstract")
+                    .help(showingTranslation
+                          ? L10n.pick("Switch to original abstract", "切换到原文摘要")
+                          : L10n.pick("Show translated abstract", "显示译文摘要"))
                 } else if !paper.abstract.isEmpty {
                     Button {
                         onTranslate(paper)
@@ -354,7 +367,7 @@ struct PaperDetailView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
                     .buttonStyle(.plain)
-                    .help("Translate abstract via AI")
+                    .help(L10n.pick("Translate abstract via AI", "通过 AI 翻译摘要"))
                 }
             }
 
