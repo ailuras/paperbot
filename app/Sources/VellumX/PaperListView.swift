@@ -108,13 +108,6 @@ private struct PaperRowView: View {
         return Calendar.current.isDateInToday(recommendedAt)
     }
 
-    /// First few authors, then "et al." so the subtitle stays one line.
-    private var authorsSummary: String {
-        guard !paper.authors.isEmpty else { return "" }
-        if paper.authors.count <= 3 { return paper.authors.joined(separator: ", ") }
-        return paper.authors.prefix(3).joined(separator: ", ") + " et al."
-    }
-
     var body: some View {
         HStack(spacing: 0) {
             // Status-colored left edge marks today's picks; clipped to the card.
@@ -130,14 +123,6 @@ private struct PaperRowView: View {
                     .lineLimit(2)
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
-
-                if !authorsSummary.isEmpty {
-                    Text(authorsSummary)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                }
 
                 HStack(spacing: 6) {
                     if !paper.venueAbbr.isEmpty {
@@ -169,7 +154,7 @@ private struct PaperRowView: View {
     }
 
     private var fillColor: Color {
-        if isSelected { return Color.accentColor.opacity(0.10) }
+        // Selection is shown by the border only — no row/card background tint.
         if isTodayRecommended { return paper.status.iconColor.opacity(0.06) }
         let base = Color(nsColor: .controlBackgroundColor)
         return isHovering ? base.opacity(0.7) : base.opacity(0.45)
