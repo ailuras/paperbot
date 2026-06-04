@@ -47,6 +47,10 @@ struct VellumXApp: App {
         WindowGroup(id: "main") {
             ContentView()
                 .frame(minWidth: 900, minHeight: 550)
+                .unifiedAlert()
+                .overlay(alignment: .bottomTrailing) {
+                    ToastContainer()
+                }
                 .onAppear {
                     MainWindowOpener.shared.openAction = { openWindow(id: "main") }
                 }

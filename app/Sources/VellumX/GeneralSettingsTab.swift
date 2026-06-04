@@ -5,10 +5,6 @@ struct GeneralSettingsTab: View {
     @State private var store = PaperStore.shared
     @State private var settings = AppSettings.shared
 
-    @State private var pendingDir: URL?
-    @State private var resultMessage: String?
-    @State private var resultIsError = false
-
     private var currentDir: URL { settings.resolvedStorageDirectory }
 
     var body: some View {
@@ -23,13 +19,8 @@ struct GeneralSettingsTab: View {
                 HStack {
                     Button(L10n.t(.change)) { chooseFolder() }
                     if !settings.storageDirectory.isEmpty {
-                        Button(L10n.t(.restoreDefault)) { confirm(dir: AppSettings.defaultStorageDirectory) }
+                        Button(L10n.t(.restoreDefault)) { presentStorageConfirm(dir: AppSettings.defaultStorageDirectory) }
                     }
-                }
-                if let resultMessage {
-                    Text(resultMessage)
-                        .font(.caption)
-                        .foregroundStyle(resultIsError ? .red : .green)
                 }
                 Text(L10n.t(.storageHint))
                     .font(.caption).foregroundStyle(.secondary)
@@ -46,16 +37,6 @@ struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
-        .alert(L10n.t(.changeStorageTitle), isPresented: Binding(
-            get: { pendingDir != nil },
-            set: { if !$0 { pendingDir = nil } }
-        )) {
-            Button(L10n.t(.migrateDB)) { apply(migrate: true) }
-            Button(L10n.t(.switchOnly)) { apply(migrate: false) }
-            Button(L10n.t(.cancel), role: .cancel) { pendingDir = nil }
-        } message: {
-            Text(L10n.t(.migratePrompt))
-        }
     }
 
     private func chooseFolder() {
@@ -66,25 +47,32 @@ struct GeneralSettingsTab: View {
         panel.allowsMultipleSelection = false
         panel.prompt = L10n.t(.choose)
         panel.directoryURL = currentDir
-        if panel.runModal() == .OK, let dir = panel.url { confirm(dir: dir) }
+        if panel.runModal() == .OK, let dir = panel.url { presentStorageConfirm(dir: dir) }
     }
 
-    private func confirm(dir: URL) {
-        resultMessage = nil
+    private func presentStorageConfirm(dir: URL) {
         if dir.standardizedFileURL == currentDir.standardizedFileURL { return }
-        pendingDir = dir
+        NotificationCenter.shared.present(AlertItem(
+            title: L10n.t(.changeStorageTitle),
+            message: L10n.t(.migratePrompt),
+            actions: [
+                .confirm(L10n.t(.migrateDB), action: { apply(dir: dir, migrate: true) }),
+                .confirm(L10n.t(.switchOnly), action: { apply(dir: dir, migrate: false) }),
+                .cancel(L10n.t(.cancel))
+            ],
+            textFieldValue: nil, textFieldLabel: nil
+        ))
     }
 
-    private func apply(migrate: Bool) {
-        guard let dir = pendingDir else { return }
-        pendingDir = nil
+    private func apply(dir: URL, migrate: Bool) {
         switch store.relocate(to: dir, migrate: migrate) {
         case .ok(let db):
-            resultIsError = false
-            resultMessage = "\(L10n.t(.storageUpdated)) \(db.deletingLastPathComponent().path)"
+            NotificationCenter.shared.showToast(
+                "\(L10n.t(.storageUpdated)) \(db.deletingLastPathComponent().path)",
+                type: .success
+            )
         case .failed(let msg):
-            resultIsError = true
-            resultMessage = msg
+            NotificationCenter.shared.showToast(msg, type: .error)
         }
     }
 }

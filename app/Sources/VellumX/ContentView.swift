@@ -40,15 +40,6 @@ struct ContentView: View {
     @State private var isRecommending: Bool = false
     @State private var isTranslating: Bool = false
     @State private var isResolvingPdf: Bool = false
-    @State private var statusMessage: String = ""
-    /// Drives the confirmation dialog shown before the slow OpenAlex fetch.
-    @State private var showFetchConfirm: Bool = false
-    /// Papers awaiting delete confirmation (empty = no dialog).
-    @State private var papersPendingDeletion: [Paper] = []
-    /// Batch "add tag" prompt: target papers + entered text.
-    @State private var tagPromptTargets: [Paper] = []
-    @State private var showTagPrompt = false
-    @State private var newBatchTag = ""
 
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
@@ -100,15 +91,6 @@ struct ContentView: View {
     /// Papers currently multi-selected, in list order.
     private var selectedPapers: [Paper] {
         filteredPapers.filter { selectedPaperIds.contains($0.id) }
-    }
-
-    /// Count-aware title for the delete confirmation dialog.
-    private var deleteConfirmTitle: String {
-        let n = papersPendingDeletion.count
-        guard n > 1 else { return L10n.t(.deleteConfirmTitle) }
-        return AppSettings.shared.language == "zh"
-            ? "删除选中的 \(n) 篇论文？"
-            : "Delete \(n) papers?"
     }
 
     private var selectedPaperIndex: Int? {
@@ -225,7 +207,6 @@ struct ContentView: View {
                 tags: store.allTags,
                 collections: store.allCollections,
                 metadata: metadata,
-                statusMessage: statusMessage,
                 papers: store.papers
             )
         } content: {
@@ -238,7 +219,7 @@ struct ContentView: View {
                 onSelectionChange: handleSelectionChange,
                 onCopyBibtex: copyBibtex,
                 onUpdatePaper: updatePaper,
-                onDeletePaper: { papersPendingDeletion = $0 },
+                onDeletePaper: confirmDelete,
                 onSetStatus: setStatus,
                 onAddToCollection: addToCollection,
                 collections: store.allCollections
@@ -253,14 +234,13 @@ struct ContentView: View {
                     onAddToCollection: { addToCollection(selectedPapers, $0) },
                     onAddTag: { requestAddTag(selectedPapers) },
                     onUpdate: { updatePaper(selectedPapers) },
-                    onDelete: { papersPendingDeletion = selectedPapers }
+                    onDelete: { confirmDelete(selectedPapers) }
                 )
             } else if let paper = selectedPaper {
                 PaperDetailView(
                     paper: paper,
                     isTranslating: $isTranslating,
                     isResolvingPdf: $isResolvingPdf,
-                    statusMessage: $statusMessage,
                     onTranslate: translate,
                     onResolvePdf: resolvePdf,
                     onStatusChange: updatePaperStatus,
@@ -369,29 +349,6 @@ struct ContentView: View {
         }
         // Publish the runnable actions to the menu-bar commands (AppCommands).
         .focusedSceneValue(\.paperActions, paperActions)
-        .alert(L10n.t(.fetchConfirmTitle), isPresented: $showFetchConfirm) {
-            Button(L10n.t(.cancel), role: .cancel) {}
-            Button(L10n.t(.cmdFetch)) { performFetch() }
-        } message: {
-            Text(L10n.t(.fetchConfirmMessage))
-        }
-        .alert(deleteConfirmTitle, isPresented: Binding(
-            get: { !papersPendingDeletion.isEmpty },
-            set: { if !$0 { papersPendingDeletion = [] } }
-        )) {
-            Button(L10n.t(.delete), role: .destructive) { deletePapers(papersPendingDeletion) }
-            Button(L10n.t(.cancel), role: .cancel) {}
-        } message: {
-            Text(L10n.t(.deleteConfirmMessage))
-        }
-        .alert("Add Tag", isPresented: $showTagPrompt) {
-            TextField("Tag", text: $newBatchTag)
-            Button("Add") {
-                addTag(tagPromptTargets, newBatchTag)
-                newBatchTag = ""
-            }
-            Button(L10n.t(.cancel), role: .cancel) { newBatchTag = "" }
-        }
     }
 
     /// Snapshot of menu-bar command actions for the current state. Optional
@@ -632,9 +589,30 @@ struct ContentView: View {
         let pb = NSPasteboard.general
         pb.clearContents()
         pb.setString(CitationExporter.bibtex(for: papers), forType: .string)
-        statusMessage = papers.count == 1
-            ? L10n.t(.copiedBibtex)
-            : "Copied \(papers.count) BibTeX entries"
+        NotificationCenter.shared.showToast(
+            papers.count == 1
+                ? L10n.t(.copiedBibtex)
+                : "Copied \(papers.count) BibTeX entries",
+            type: .success
+        )
+    }
+
+    private func confirmDelete(_ papers: [Paper]) {
+        guard !papers.isEmpty else { return }
+        let title = papers.count == 1
+            ? L10n.t(.deleteConfirmTitle)
+            : (AppSettings.shared.language == "zh"
+                ? "删除选中的 \(papers.count) 篇论文？"
+                : "Delete \(papers.count) papers?")
+        NotificationCenter.shared.present(AlertItem(
+            title: title,
+            message: L10n.t(.deleteConfirmMessage),
+            actions: [
+                .confirm(L10n.t(.delete), isDestructive: true, action: { deletePapers(papers) }),
+                .cancel(L10n.t(.cancel))
+            ],
+            textFieldValue: nil, textFieldLabel: nil
+        ))
     }
 
     private func deletePapers(_ papers: [Paper]) {
@@ -653,9 +631,12 @@ struct ContentView: View {
         // Preserve each paper's track: fetchWorksByIds parses with track "",
         // and addOrUpdate's replaceTopics would otherwise wipe their topics.
         let trackById = Dictionary(papers.map { ($0.id, $0.track) }, uniquingKeysWith: { a, _ in a })
-        statusMessage = papers.count == 1
-            ? "Updating from OpenAlex..."
-            : "Updating \(papers.count) papers from OpenAlex..."
+        NotificationCenter.shared.setStatus(
+            papers.count == 1
+                ? "Updating from OpenAlex..."
+                : "Updating \(papers.count) papers from OpenAlex...",
+            type: .progress
+        )
 
         Task {
             let fetcher = OpenAlexFetcher(
@@ -664,15 +645,19 @@ struct ContentView: View {
             )
             let refreshed = await fetcher.fetchWorksByIds(papers.map(\.id))
             guard !refreshed.isEmpty else {
-                statusMessage = "Update failed — no result from OpenAlex."
+                NotificationCenter.shared.setStatus("Update failed — no result from OpenAlex.", type: .error)
                 return
             }
             for r in refreshed { r.track = trackById[r.id] ?? r.track }
             _ = store.addOrUpdate(papers: refreshed)
             applyFilters()
-            statusMessage = refreshed.count == 1
-                ? "Updated \"\(refreshed[0].title)\""
-                : "Updated \(refreshed.count) papers"
+            NotificationCenter.shared.showToast(
+                refreshed.count == 1
+                    ? "Updated \"\(refreshed[0].title)\""
+                    : "Updated \(refreshed.count) papers",
+                type: .success
+            )
+            NotificationCenter.shared.clearStatus()
         }
     }
 
@@ -697,9 +682,19 @@ struct ContentView: View {
 
     private func requestAddTag(_ papers: [Paper]) {
         guard !papers.isEmpty else { return }
-        tagPromptTargets = papers
-        newBatchTag = ""
-        showTagPrompt = true
+        NotificationCenter.shared.present(AlertItem(
+            title: L10n.t(.cmdAddTag),
+            message: nil,
+            actions: [
+                .confirm(L10n.t(.cmdAddTag), action: {
+                    let tag = NotificationCenter.shared.currentAlert?.textFieldValue ?? ""
+                    addTag(papers, tag)
+                }),
+                .cancel(L10n.t(.cancel))
+            ],
+            textFieldValue: "",
+            textFieldLabel: "Tag"
+        ))
     }
 
     private func addPaperTag(_ paper: Paper, tag: String) {
@@ -724,30 +719,41 @@ struct ContentView: View {
 
     private func fetchPapers() {
         guard !ConfigManager.shared.effectiveConfig.tracks.isEmpty else {
-            statusMessage = "No tracks configured — add one in Settings ▸ Papers"
+            NotificationCenter.shared.setStatus("No tracks configured — add one in Settings ▸ Papers", type: .error)
             return
         }
         // Fetching contacts OpenAlex and can be slow; confirm before running.
-        showFetchConfirm = true
+        NotificationCenter.shared.present(AlertItem(
+            title: L10n.t(.fetchConfirmTitle),
+            message: L10n.t(.fetchConfirmMessage),
+            actions: [
+                .confirm(L10n.t(.cmdFetch), action: performFetch),
+                .cancel(L10n.t(.cancel))
+            ],
+            textFieldValue: nil, textFieldLabel: nil
+        ))
     }
 
     private func performFetch() {
         let config = ConfigManager.shared.effectiveConfig
         isFetching = true
-        statusMessage = "Fetching OpenAlex papers..."
+        NotificationCenter.shared.setStatus("Fetching OpenAlex papers...", type: .progress)
 
         Task {
             do {
                 let fetcher = OpenAlexFetcher(config: config, venues: metadata.venues)
                 let result = try await fetcher.fetch()
                 let stats = store.addOrUpdate(papers: result.papers)
-                statusMessage = fetchStatusMessage(
+                let msg = fetchStatusMessage(
                     inserted: stats.inserted,
                     updated: stats.updated,
                     failedTracks: result.failedTracks
                 )
+                NotificationCenter.shared.showToast(msg, type: .success)
+                NotificationCenter.shared.clearStatus()
             } catch {
-                statusMessage = "Fetch failed: \(error.localizedDescription)"
+                NotificationCenter.shared.showToast("Fetch failed: \(error.localizedDescription)", type: .error)
+                NotificationCenter.shared.clearStatus()
             }
             isFetching = false
         }
@@ -762,7 +768,7 @@ struct ContentView: View {
     private func recommendPapers() {
         let config = ConfigManager.shared.effectiveConfig
         isRecommending = true
-        statusMessage = "Running recommendation engine..."
+        NotificationCenter.shared.setStatus("Running recommendation engine...", type: .progress)
 
         Task {
             let engine = RecommendEngine(config: config)
@@ -770,25 +776,29 @@ struct ContentView: View {
             for r in selected {
                 store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
             }
-            statusMessage = selected.isEmpty
-                ? "No new candidates to recommend."
-                : "Added \(selected.count) new recommendations!"
+            NotificationCenter.shared.showToast(
+                selected.isEmpty
+                    ? "No new candidates to recommend."
+                    : "Added \(selected.count) new recommendations!",
+                type: selected.isEmpty ? .info : .success
+            )
+            NotificationCenter.shared.clearStatus()
             isRecommending = false
         }
     }
 
     private func translate(paper: Paper) {
         guard settings.translateEnabled else {
-            statusMessage = "Translation is disabled — enable it in Settings ▸ API"
+            NotificationCenter.shared.showToast("Translation is disabled — enable it in Settings ▸ API", type: .warning)
             return
         }
         guard !paper.abstract.isEmpty else {
-            statusMessage = "No abstract available to translate"
+            NotificationCenter.shared.showToast("No abstract available to translate", type: .warning)
             return
         }
         isTranslating = true
         let provider = ConfigManager.shared.effectiveConfig.translate.provider
-        statusMessage = "Translating abstract via \(provider.displayName)..."
+        NotificationCenter.shared.setStatus("Translating abstract via \(provider.displayName)...", type: .progress)
         let config = ConfigManager.shared.effectiveConfig
 
         Task {
@@ -801,9 +811,11 @@ struct ContentView: View {
                 )
                 paper.abstractZh = abstractZh
                 PaperStore.shared.setPaperTranslation(id: paper.id, abstractZh: abstractZh)
-                statusMessage = "Abstract translated successfully!"
+                NotificationCenter.shared.showToast("Abstract translated successfully!", type: .success)
+                NotificationCenter.shared.clearStatus()
             } catch {
-                statusMessage = "Translation failed: \(error.localizedDescription)"
+                NotificationCenter.shared.showToast("Translation failed: \(error.localizedDescription)", type: .error)
+                NotificationCenter.shared.clearStatus()
             }
             isTranslating = false
         }
@@ -816,7 +828,7 @@ struct ContentView: View {
         }
 
         isResolvingPdf = true
-        statusMessage = "Resolving OpenAccess PDF..."
+        NotificationCenter.shared.setStatus("Resolving OpenAccess PDF...", type: .progress)
         let config = ConfigManager.shared.effectiveConfig
 
         Task {
@@ -825,10 +837,12 @@ struct ContentView: View {
                let url = URL(string: result.url) {
                 paper.pdfUrl = result.url
                 store.setPaperPdf(id: paper.id, pdfUrl: result.url, pdfSource: result.source)
-                statusMessage = "PDF resolved!"
+                NotificationCenter.shared.showToast("PDF resolved!", type: .success)
+                NotificationCenter.shared.clearStatus()
                 NSWorkspace.shared.open(url)
             } else {
-                statusMessage = "Could not resolve PDF for this paper"
+                NotificationCenter.shared.showToast("Could not resolve PDF for this paper", type: .error)
+                NotificationCenter.shared.clearStatus()
             }
             isResolvingPdf = false
         }

@@ -9,27 +9,10 @@ struct SidebarView: View {
     let tags: [String]
     let collections: [PaperCollection]
     var metadata: MetadataStore
-    let statusMessage: String
     let papers: [Paper]
 
+    @State private var nc = NotificationCenter.shared
     @State private var expandedCollections: Set<String> = []
-    @State private var nameEdit: CollectionNameEdit?
-    @State private var nameText: String = ""
-    @State private var deleteTarget: PaperCollection?
-
-    /// Pending name-input dialog (rename / new subfolder / new root).
-    private enum CollectionNameEdit: Identifiable {
-        case rename(PaperCollection)
-        case newSubfolder(PaperCollection)
-        case newRoot
-        var id: String {
-            switch self {
-            case .rename(let c):      return "rename-\(c.id)"
-            case .newSubfolder(let c): return "sub-\(c.id)"
-            case .newRoot:            return "root"
-            }
-        }
-    }
 
     /// Collections grouped by their parent id (roots are resolved separately).
     private var childrenByParent: [String: [PaperCollection]] {
@@ -115,7 +98,7 @@ struct SidebarView: View {
                         onSelect: selectCollection,
                         onRename: { startRename($0) },
                         onAddSubfolder: { startNewSubfolder($0) },
-                        onDelete: { deleteTarget = $0 }
+                        onDelete: { confirmDelete($0) }
                     )
                 }
             } header: {
@@ -123,8 +106,7 @@ struct SidebarView: View {
                     Text("Collections")
                     Spacer()
                     Button {
-                        nameText = ""
-                        nameEdit = .newRoot
+                        startNewRoot()
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 13, weight: .semibold))
@@ -139,36 +121,9 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .alert(nameEditTitle, isPresented: Binding(
-            get: { nameEdit != nil },
-            set: { if !$0 { nameEdit = nil } }
-        )) {
-            TextField("Name", text: $nameText)
-            Button("Save", action: commitNameEdit)
-            Button("Cancel", role: .cancel) { nameText = "" }
-        }
-        .alert("Delete “\(deleteTarget?.name ?? "")”?", isPresented: Binding(
-            get: { deleteTarget != nil },
-            set: { if !$0 { deleteTarget = nil } }
-        ), presenting: deleteTarget) { target in
-            Button("Delete", role: .destructive) { confirmDelete(target) }
-            Button("Cancel", role: .cancel) { }
-        } message: { _ in
-            Text("This also deletes its subfolders. Your papers stay in the library.")
-        }
         .safeAreaInset(edge: .bottom) {
-            if !statusMessage.isEmpty {
-                VStack(spacing: 0) {
-                    Divider()
-                    Text(statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .padding(.horizontal)
-                        .padding(.vertical, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .background(Color(NSColor.windowBackgroundColor))
+            if !nc.statusMessage.isEmpty {
+                StatusBar(message: nc.statusMessage, type: nc.statusType)
             }
         }
     }
@@ -208,45 +163,58 @@ struct SidebarView: View {
     }
 
     private func startRename(_ collection: PaperCollection) {
-        nameText = collection.name
-        nameEdit = .rename(collection)
-    }
-
-    private func startNewSubfolder(_ parent: PaperCollection) {
-        nameText = ""
-        nameEdit = .newSubfolder(parent)
-    }
-
-    private var nameEditTitle: String {
-        switch nameEdit {
-        case .rename:       return "Rename Collection"
-        case .newSubfolder: return "New Subfolder"
-        case .newRoot, .none: return "New Collection"
+        presentNamePrompt(title: "Rename Collection", initial: collection.name) { text in
+            PaperStore.shared.renameCollection(id: collection.id, to: text)
         }
     }
 
-    private func commitNameEdit() {
-        let text = nameText.trimmingCharacters(in: .whitespacesAndNewlines)
-        defer { nameText = "" }
-        guard !text.isEmpty else { return }
-        switch nameEdit {
-        case .rename(let c):
-            PaperStore.shared.renameCollection(id: c.id, to: text)
-        case .newSubfolder(let parent):
+    private func startNewSubfolder(_ parent: PaperCollection) {
+        presentNamePrompt(title: "New Subfolder", initial: "") { text in
             PaperStore.shared.createCollection(name: text, parentId: parent.id)
             expandedCollections.insert(parent.id)
-        case .newRoot, .none:
+        }
+    }
+
+    private func startNewRoot() {
+        presentNamePrompt(title: "New Collection", initial: "") { text in
             PaperStore.shared.createCollection(name: text)
         }
     }
 
+    private func presentNamePrompt(title: String, initial: String, action: @escaping (String) -> Void) {
+        NotificationCenter.shared.present(AlertItem(
+            title: title,
+            message: nil,
+            actions: [
+                .confirm("Save", action: {
+                    let text = NotificationCenter.shared.currentAlert?.textFieldValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    guard !text.isEmpty else { return }
+                    action(text)
+                }),
+                .cancel("Cancel")
+            ],
+            textFieldValue: initial,
+            textFieldLabel: "Name"
+        ))
+    }
+
     private func confirmDelete(_ target: PaperCollection) {
-        // Clear the selection if it points anywhere inside the doomed subtree.
-        let subtree = PaperStore.shared.collectionSubtreeIds(target.id)
-        if let sel = selectedCollectionId, subtree.contains(sel) {
-            selectedCollectionId = nil
-        }
-        PaperStore.shared.deleteCollection(id: target.id)
+        NotificationCenter.shared.present(AlertItem(
+            title: "Delete \"\(target.name)\"?",
+            message: "This also deletes its subfolders. Your papers stay in the library.",
+            actions: [
+                .confirm("Delete", isDestructive: true, action: {
+                    let subtree = PaperStore.shared.collectionSubtreeIds(target.id)
+                    if let sel = selectedCollectionId, subtree.contains(sel) {
+                        selectedCollectionId = nil
+                    }
+                    PaperStore.shared.deleteCollection(id: target.id)
+                }),
+                .cancel("Cancel")
+            ],
+            textFieldValue: nil,
+            textFieldLabel: nil
+        ))
     }
 }
 

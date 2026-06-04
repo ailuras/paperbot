@@ -8,7 +8,6 @@ struct PaperDetailView: View {
     private var metadata: MetadataStore { .shared }
     @Binding var isTranslating: Bool
     @Binding var isResolvingPdf: Bool
-    @Binding var statusMessage: String
 
     let onTranslate: (Paper) -> Void
     let onResolvePdf: (Paper) -> Void
@@ -22,8 +21,6 @@ struct PaperDetailView: View {
 
     @FocusState private var noteFocused: Bool
     @State private var showCollectionPopover = false
-    @State private var showAddTagPrompt = false
-    @State private var newTagName = ""
     @State private var showingTranslation: Bool = false
     @State private var lastPersistedNote: String = ""
 
@@ -57,12 +54,7 @@ struct PaperDetailView: View {
             .padding(.vertical, 16)
         }
         .background(Color(NSColor.textBackgroundColor))
-        .alert("Add Tag", isPresented: $showAddTagPrompt) {
-            TextField("Tag", text: $newTagName)
-            Button("Add") { commitNewTag() }
-            Button("Cancel", role: .cancel) { newTagName = "" }
-        }
-        .onChange(of: addTagSignal) { _, _ in showAddTagPrompt = true }
+        .onChange(of: addTagSignal) { _, _ in presentAddTagPrompt() }
     }
 
     // MARK: - Header Card
@@ -113,7 +105,7 @@ struct PaperDetailView: View {
     private var citeButton: some View {
         Button {
             copyToPasteboard(CitationExporter.bibtex(for: paper))
-            statusMessage = L10n.t(.copiedBibtex)
+            NotificationCenter.shared.showToast(L10n.t(.copiedBibtex), type: .success)
         } label: {
             Image(systemName: "text.quote").detailActionChrome()
         }
@@ -254,8 +246,7 @@ struct PaperDetailView: View {
                 SectionHeader(icon: "tag", title: "Tags")
                 Spacer()
                 Button {
-                    newTagName = ""
-                    showAddTagPrompt = true
+                    presentAddTagPrompt()
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "plus")
@@ -298,9 +289,20 @@ struct PaperDetailView: View {
         .padding(.vertical, 12)
     }
 
-    private func commitNewTag() {
-        defer { newTagName = "" }
-        onAddTag(paper, newTagName)
+    private func presentAddTagPrompt() {
+        NotificationCenter.shared.present(AlertItem(
+            title: L10n.t(.cmdAddTag),
+            message: nil,
+            actions: [
+                .confirm("Add", action: {
+                    let tag = NotificationCenter.shared.currentAlert?.textFieldValue ?? ""
+                    self.onAddTag(self.paper, tag)
+                }),
+                .cancel(L10n.t(.cancel))
+            ],
+            textFieldValue: "",
+            textFieldLabel: "Tag"
+        ))
     }
 
     // MARK: - Abstract Section

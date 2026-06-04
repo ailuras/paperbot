@@ -3,9 +3,6 @@ import UniformTypeIdentifiers
 
 struct RulesSettingsTab: View {
     @State private var metadata = MetadataStore.shared
-    @State private var venueRefreshMessage = ""
-    @State private var showPresetConfirm = false
-    @State private var importExportMessage = ""
 
     var body: some View {
         ScrollView {
@@ -32,15 +29,9 @@ struct RulesSettingsTab: View {
 
                             Spacer()
 
-                            if !venueRefreshMessage.isEmpty {
-                                Text(venueRefreshMessage)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
                             Button {
                                 let changed = PaperStore.shared.refreshVenueMetadata()
-                                venueRefreshMessage = "\(L10n.t(.venueChangesApplied)) \(changed)"
+                                NotificationCenter.shared.showToast("\(L10n.t(.venueChangesApplied)) \(changed)", type: .success)
                             } label: {
                                 Label(L10n.t(.applyVenueChanges), systemImage: "arrow.clockwise")
                             }
@@ -82,25 +73,20 @@ struct RulesSettingsTab: View {
 
                     Spacer()
 
-                    if !importExportMessage.isEmpty {
-                        Text(importExportMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
                     Button(role: .destructive) {
-                        showPresetConfirm = true
+                        NotificationCenter.shared.present(AlertItem(
+                            title: L10n.t(.usePresetTitle),
+                            message: L10n.t(.usePresetMessage),
+                            actions: [
+                                .confirm(L10n.t(.confirm), isDestructive: true, action: {
+                                    metadata.resetToPreset()
+                                }),
+                                .cancel(L10n.t(.cancel))
+                            ],
+                            textFieldValue: nil, textFieldLabel: nil
+                        ))
                     } label: {
                         Label(L10n.t(.usePreset), systemImage: "arrow.counterclockwise")
-                    }
-                    .alert(L10n.t(.usePresetTitle), isPresented: $showPresetConfirm) {
-                        Button(L10n.t(.cancel), role: .cancel) {}
-                        Button(L10n.t(.confirm), role: .destructive) {
-                            metadata.resetToPreset()
-                            importExportMessage = ""
-                        }
-                    } message: {
-                        Text(L10n.t(.usePresetMessage))
                     }
                 }
             }
@@ -118,9 +104,9 @@ struct RulesSettingsTab: View {
         do {
             let data = try Data(contentsOf: url)
             try metadata.importMetadata(from: data)
-            importExportMessage = L10n.t(.importSuccess)
+            NotificationCenter.shared.showToast(L10n.t(.importSuccess), type: .success)
         } catch {
-            importExportMessage = "\(L10n.t(.importFailed)) \(error.localizedDescription)"
+            NotificationCenter.shared.showToast("\(L10n.t(.importFailed)) \(error.localizedDescription)", type: .error)
         }
     }
 
@@ -133,9 +119,9 @@ struct RulesSettingsTab: View {
         do {
             let data = try metadata.exportMetadata()
             try data.write(to: url, options: .atomic)
-            importExportMessage = "Exported to \(url.lastPathComponent)"
+            NotificationCenter.shared.showToast("Exported to \(url.lastPathComponent)", type: .success)
         } catch {
-            importExportMessage = "\(L10n.t(.importFailed)) \(error.localizedDescription)"
+            NotificationCenter.shared.showToast("\(L10n.t(.importFailed)) \(error.localizedDescription)", type: .error)
         }
     }
 }
@@ -341,7 +327,6 @@ struct VenuesEditor: View {
 
     /// The venue currently having a brand-new field named via the prompt.
     @State private var newFieldVenueID: UUID?
-    @State private var newFieldName = ""
 
     private let othersField = MetadataStore.othersField
 
@@ -380,11 +365,6 @@ struct VenuesEditor: View {
             .buttonStyle(.borderless)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .alert(L10n.t(.newField), isPresented: newFieldPrompt) {
-            TextField(L10n.t(.name), text: $newFieldName)
-            Button(L10n.t(.confirm)) { commitNewField() }
-            Button(L10n.t(.cancel), role: .cancel) { newFieldVenueID = nil }
-        }
     }
 
     /// A field is "Others" (the catch-all) whenever no custom field is set.
@@ -407,8 +387,7 @@ struct VenuesEditor: View {
             }
             Divider()
             Button {
-                newFieldName = ""
-                newFieldVenueID = venue.wrappedValue.id
+                presentNewFieldPrompt(for: venue.wrappedValue.id)
             } label: { Label(L10n.t(.newField), systemImage: "plus") }
         } label: {
             Text(current).lineLimit(1)
@@ -426,16 +405,25 @@ struct VenuesEditor: View {
         }
     }
 
-    private var newFieldPrompt: Binding<Bool> {
-        Binding(
-            get: { newFieldVenueID != nil },
-            set: { if !$0 { newFieldVenueID = nil } }
-        )
+    private func presentNewFieldPrompt(for venueID: UUID) {
+        newFieldVenueID = venueID
+        NotificationCenter.shared.present(AlertItem(
+            title: L10n.t(.newField),
+            message: nil,
+            actions: [
+                .confirm(L10n.t(.confirm), action: {
+                    let name = NotificationCenter.shared.currentAlert?.textFieldValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    self.commitNewField(name: name)
+                }),
+                .cancel(L10n.t(.cancel), action: { self.newFieldVenueID = nil })
+            ],
+            textFieldValue: "",
+            textFieldLabel: L10n.t(.name)
+        ))
     }
 
-    private func commitNewField() {
+    private func commitNewField(name: String) {
         defer { newFieldVenueID = nil }
-        let name = newFieldName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty, name.caseInsensitiveCompare(othersField) != .orderedSame,
               let id = newFieldVenueID,
               let index = venues.firstIndex(where: { $0.id == id }) else { return }
