@@ -28,11 +28,16 @@ final class MetadataStore {
 
     var topics: [TrackPref] = [] { didSet { persistIfReady(saveTopics) } }
     var fields: [FieldPref] = [] { didSet { persistIfReady(saveFields) } }
-    var tiers: [TierPref] = [] { didSet { persistIfReady(saveTiers) } }
-    var venues: [VenuePref] = [] { didSet { persistIfReady(saveVenues) } }
-    var citationBreakpoints: [CitationBreakpoint] = [] { didSet { persistIfReady(saveScoring) } }
-    var maxCitationPoints: Int = 0 { didSet { persistIfReady(saveScoring) } }
+    var tiers: [TierPref] = [] { didSet { persistScoringRule(saveTiers) } }
+    var venues: [VenuePref] = [] { didSet { persistScoringRule(saveVenues) } }
+    var citationBreakpoints: [CitationBreakpoint] = [] { didSet { persistScoringRule(saveScoring) } }
+    var maxCitationPoints: Int = 0 { didSet { persistScoringRule(saveScoring) } }
     var metadataVersion: Int = 0
+
+    /// True when scoring-affecting rules (venues, tiers, citation curve) changed
+    /// since they were last applied to the library. Drives the Rules page's
+    /// "Apply Changes" button so it only lights up when a re-score is pending.
+    var rulesDirty = false
 
     private var db: OpaquePointer?
     private var isLoading = false
@@ -264,6 +269,20 @@ final class MetadataStore {
         guard !isLoading else { return }
         persist()
         metadataVersion += 1
+    }
+
+    /// Like `persistIfReady`, but also flags that the library needs re-scoring.
+    private func persistScoringRule(_ persist: () -> Void) {
+        guard !isLoading else { return }
+        persist()
+        metadataVersion += 1
+        rulesDirty = true
+    }
+
+    /// Cleared by the Rules page once `PaperStore.refreshVenueMetadata()` has
+    /// pushed the current rules onto the cached paper metadata.
+    func markRulesApplied() {
+        rulesDirty = false
     }
 
     private func saveTopics() {
@@ -625,6 +644,7 @@ final class MetadataStore {
         saveVenues()
         saveScoring()
         metadataVersion += 1
+        rulesDirty = true
     }
 
     func resetToPreset() {
@@ -643,6 +663,7 @@ final class MetadataStore {
         saveVenues()
         saveScoring()
         metadataVersion += 1
+        rulesDirty = true
     }
 
     // MARK: - Built-in default taxonomy (seeded once into an empty database)

@@ -24,7 +24,8 @@ enum L10n {
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
         case noVenues, abbr, matchPhrase, tier, addVenue, field, newField
-        case applyVenueChanges, venueChangesApplied, venueChangesHint
+        case venueChangesApplied
+        case applyChanges, applyChangesHint
         case tierSettings, tierRank, tierPointsValue, addTier
         case citationScoring, citationScoringHint
         case breakpointUpTo, pointsPerCitation, maxCitationPointsLabel
@@ -143,10 +144,10 @@ enum L10n {
         case .addVenue:           return ("Add Venue", "添加会议")
         case .field:              return ("Field", "领域")
         case .newField:           return ("New Field…", "新建领域…")
-        case .applyVenueChanges:  return ("Apply Venue Changes", "应用会议变更")
         case .venueChangesApplied:return ("Updated paper metadata:", "已更新论文元数据：")
-        case .venueChangesHint:   return ("Recomputes cached venue abbreviation, tier, and score for the current library.",
-                                          "重新计算当前论文库缓存的会议缩写、评级和分数。")
+        case .applyChanges:       return ("Apply Changes", "应用更改")
+        case .applyChangesHint:   return ("Recompute cached venue, tier, and score across the whole library to reflect your edited rules.",
+                                          "重新计算整个论文库缓存的会议、评级和分数，使其反映你修改后的规则。")
 
         case .tierSettings:       return ("Tier Settings", "等级设置")
         case .tierRank:           return ("Rank", "等级")

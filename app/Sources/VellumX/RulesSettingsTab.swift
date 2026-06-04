@@ -18,29 +18,6 @@ struct RulesSettingsTab: View {
                             icon: "building.2",
                             hint: L10n.t(.venuesHint)) {
                     VenuesEditor(venues: $metadata.venues, availableFields: metadata.allFields)
-
-                    Divider().padding(.vertical, 2)
-
-                    HStack(alignment: .center, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(L10n.t(.applyVenueChanges))
-                                .font(.subheadline.weight(.semibold))
-                            Text(L10n.t(.venueChangesHint))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            let changed = PaperStore.shared.refreshVenueMetadata()
-                            NotificationCenter.shared.showToast("\(L10n.t(.venueChangesApplied)) \(changed)", type: .success)
-                        } label: {
-                            Label(L10n.t(.applyVenueChanges), systemImage: "arrow.clockwise")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                    }
                 }
 
                 RuleSection(title: L10n.t(.tierSettings),
@@ -60,8 +37,22 @@ struct RulesSettingsTab: View {
 
                 Divider()
 
-                // Import / Export / Preset
+                // Apply (recompute library) | Import / Export / Preset
                 HStack(spacing: 12) {
+                    Button {
+                        let changed = PaperStore.shared.refreshVenueMetadata()
+                        metadata.markRulesApplied()
+                        NotificationCenter.shared.showToast("\(L10n.t(.venueChangesApplied)) \(changed)", type: .success)
+                    } label: {
+                        Label(L10n.t(.applyChanges), systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(!metadata.rulesDirty)
+                    .help(L10n.t(.applyChangesHint))
+
+                    Spacer()
+
                     Button {
                         importRules()
                     } label: {
@@ -73,8 +64,6 @@ struct RulesSettingsTab: View {
                     } label: {
                         Label(L10n.t(.exportRules), systemImage: "square.and.arrow.up")
                     }
-
-                    Spacer()
 
                     Button(role: .destructive) {
                         alerts?.present(AlertItem(
