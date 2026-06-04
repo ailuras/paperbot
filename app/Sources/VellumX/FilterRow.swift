@@ -25,12 +25,24 @@ struct FilterRow: View {
         metadata.color(forKey: colorKey, default: defaultColor)
     }
 
+    /// Only topics support a custom glyph; other label kinds keep the dot.
+    private var supportsIcon: Bool { colorKey.hasPrefix("topic:") }
+    private var icon: String? { supportsIcon ? metadata.iconName(forKey: colorKey) : nil }
+
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 8) {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 9))
-                    .foregroundStyle(color)
+                Group {
+                    if let icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 11))
+                    } else {
+                        Image(systemName: "circle.fill")
+                            .font(.system(size: 9))
+                    }
+                }
+                .foregroundStyle(color)
+                .frame(width: 16)
                 Text(title)
                     .foregroundStyle(.primary)
                 Spacer()
@@ -50,6 +62,19 @@ struct FilterRow: View {
                 }
                 Divider()
                 Button("Default") { metadata.setLabelColor(key: colorKey, colorName: nil) }
+            }
+            if supportsIcon {
+                Menu("Icon") {
+                    ForEach(SidebarGlyph.choices, id: \.symbol) { choice in
+                        Button {
+                            metadata.setLabelIcon(key: colorKey, icon: choice.symbol)
+                        } label: {
+                            Label(choice.label, systemImage: choice.symbol)
+                        }
+                    }
+                    Divider()
+                    Button("Default") { metadata.setLabelIcon(key: colorKey, icon: nil) }
+                }
             }
         }
     }

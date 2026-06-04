@@ -9,6 +9,8 @@ struct TrackPref: Codable, Identifiable, Equatable {
     var query: String
     var keywords: [String]
     var color: String? = nil
+    /// Optional SF Symbol shown in the sidebar instead of the default dot.
+    var icon: String? = nil
 }
 
 /// One venue rating used for scoring. `phrase` is matched (case-insensitive)

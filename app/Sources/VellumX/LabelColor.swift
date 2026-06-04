@@ -32,3 +32,17 @@ enum LabelColor: String, CaseIterable, Identifiable {
         return c.color
     }
 }
+
+/// A curated palette of SF Symbols offered wherever the sidebar lets the user
+/// pick a glyph (collections and topics). Kept in one place so both stay
+/// consistent.
+enum SidebarGlyph {
+    static let choices: [(symbol: String, label: String)] = [
+        ("folder", "Folder"), ("tray.full", "Tray"), ("book", "Book"),
+        ("graduationcap", "Academic"), ("doc.text", "Document"), ("bookmark", "Bookmark"),
+        ("star", "Star"), ("flag", "Flag"), ("tag", "Tag"),
+        ("lightbulb", "Idea"), ("paperclip", "Clip"), ("archivebox", "Archive"),
+        ("brain", "Brain"), ("function", "Function"), ("cpu", "Chip"),
+        ("network", "Network"), ("chart.bar", "Chart"), ("atom", "Science"),
+    ]
+}

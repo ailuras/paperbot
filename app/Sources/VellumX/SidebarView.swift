@@ -290,16 +290,6 @@ private struct TagFilterChip: View {
     }
 }
 
-/// A curated palette of folder glyphs offered in the right-click "Icon" submenu.
-private enum CollectionIcon {
-    static let choices: [(symbol: String, label: String)] = [
-        ("folder", "Folder"), ("tray.full", "Tray"), ("book", "Book"),
-        ("graduationcap", "Academic"), ("doc.text", "Document"), ("bookmark", "Bookmark"),
-        ("star", "Star"), ("flag", "Flag"), ("tag", "Tag"),
-        ("lightbulb", "Idea"), ("paperclip", "Clip"), ("archivebox", "Archive"),
-    ]
-}
-
 /// One collection row plus its (lazily expanded) descendants. Recurses into
 /// itself for children, so the whole subtree renders as flat sidebar rows with
 /// growing indentation — a restrained, Finder-like look.
@@ -410,7 +400,7 @@ private struct CollectionTreeRow: View {
             .onDisappear { isContextMenuPresented = false }
         Button("New Subfolder…") { onAddSubfolder(collection) }
         Menu("Icon") {
-            ForEach(CollectionIcon.choices, id: \.symbol) { choice in
+            ForEach(SidebarGlyph.choices, id: \.symbol) { choice in
                 Button {
                     PaperStore.shared.setCollectionIcon(id: collection.id, icon: choice.symbol)
                 } label: {
