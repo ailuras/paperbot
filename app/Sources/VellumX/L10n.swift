@@ -32,6 +32,8 @@ enum L10n {
         case importRules, exportRules, usePreset
         case usePresetTitle, usePresetMessage, confirm
         case importSuccess, importFailed
+        case tracksHint, venuesHint, tiersHint
+        case deleteRuleTitle, deleteRuleMessage
         // Settings file
         case path, open, revealInFinder, settingsFile, settingsFileHint
         // Menu bar
@@ -58,6 +60,13 @@ enum L10n {
     @MainActor
     static func t(_ key: Key) -> String {
         AppSettings.shared.language == "zh" ? pair(key).1 : pair(key).0
+    }
+
+    /// For strings that need runtime interpolation (numbers, names) and so can't
+    /// be a static `Key`. Picks the language the same way `t` does.
+    @MainActor
+    static func pick(_ en: String, _ zh: String) -> String {
+        AppSettings.shared.language == "zh" ? zh : en
     }
 
     private static func pair(_ key: Key) -> (String, String) {
@@ -162,6 +171,14 @@ enum L10n {
         case .confirm:            return ("Confirm", "确认")
         case .importSuccess:      return ("Rules imported successfully.", "规则导入成功。")
         case .importFailed:       return ("Import failed:", "导入失败：")
+        case .tracksHint:         return ("Search queries and keywords that decide what gets fetched and recommended.",
+                                          "决定抓取与推荐内容的搜索词和关键词。")
+        case .venuesHint:         return ("Match venue name patterns to a research field and quality tier.",
+                                          "将会议名称匹配规则映射到研究领域与质量评级。")
+        case .tiersHint:          return ("Points awarded to each quality tier when scoring a paper.",
+                                          "为论文评分时，各质量评级所得的分值。")
+        case .deleteRuleTitle:    return ("Delete this entry?", "删除此条目？")
+        case .deleteRuleMessage:  return ("This removes it from your academic rules.", "将把它从学术规则中移除。")
 
         case .path:               return ("Path", "路径")
         case .open:               return ("Open", "打开")

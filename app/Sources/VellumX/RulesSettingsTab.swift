@@ -6,53 +6,55 @@ struct RulesSettingsTab: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                GroupBox(L10n.t(.interestsTracks)) {
+            VStack(alignment: .leading, spacing: 18) {
+                RuleSection(title: L10n.t(.interestsTracks),
+                            icon: "scope",
+                            hint: L10n.t(.tracksHint)) {
                     TracksEditor(tracks: $metadata.topics)
-                        .padding(6)
                 }
 
-                GroupBox(L10n.t(.venueRatings)) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        VenuesEditor(venues: $metadata.venues, availableFields: metadata.allFields)
+                RuleSection(title: L10n.t(.venueRatings),
+                            icon: "building.2",
+                            hint: L10n.t(.venuesHint)) {
+                    VenuesEditor(venues: $metadata.venues, availableFields: metadata.allFields)
 
-                        Divider()
+                    Divider().padding(.vertical, 2)
 
-                        HStack(alignment: .center, spacing: 10) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L10n.t(.applyVenueChanges))
-                                    .font(.subheadline.weight(.semibold))
-                                Text(L10n.t(.venueChangesHint))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-
-                            Button {
-                                let changed = PaperStore.shared.refreshVenueMetadata()
-                                NotificationCenter.shared.showToast("\(L10n.t(.venueChangesApplied)) \(changed)", type: .success)
-                            } label: {
-                                Label(L10n.t(.applyVenueChanges), systemImage: "arrow.clockwise")
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.small)
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L10n.t(.applyVenueChanges))
+                                .font(.subheadline.weight(.semibold))
+                            Text(L10n.t(.venueChangesHint))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
+
+                        Spacer()
+
+                        Button {
+                            let changed = PaperStore.shared.refreshVenueMetadata()
+                            NotificationCenter.shared.showToast("\(L10n.t(.venueChangesApplied)) \(changed)", type: .success)
+                        } label: {
+                            Label(L10n.t(.applyVenueChanges), systemImage: "arrow.clockwise")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
                     }
-                    .padding(6)
                 }
 
-                GroupBox(L10n.t(.tierSettings)) {
+                RuleSection(title: L10n.t(.tierSettings),
+                            icon: "rosette",
+                            hint: L10n.t(.tiersHint)) {
                     TiersEditor(tiers: $metadata.tiers)
-                        .padding(6)
                 }
 
-                GroupBox(L10n.t(.citationScoring)) {
+                RuleSection(title: L10n.t(.citationScoring),
+                            icon: "quote.bubble",
+                            hint: L10n.t(.citationScoringHint)) {
                     CitationCurveEditor(
                         breakpoints: $metadata.citationBreakpoints,
                         maxPoints: $metadata.maxCitationPoints
                     )
-                    .padding(6)
                 }
 
                 Divider()
@@ -90,7 +92,7 @@ struct RulesSettingsTab: View {
                     }
                 }
             }
-            .padding()
+            .padding(20)
         }
     }
 
@@ -126,6 +128,114 @@ struct RulesSettingsTab: View {
     }
 }
 
+// MARK: - Shared section chrome
+
+/// A unified card for each rules group: an icon + title header, an optional
+/// one-line hint, then the editor content. Replaces the bare GroupBoxes so
+/// every section on this page shares one look.
+private struct RuleSection<Content: View>: View {
+    let title: String
+    let icon: String
+    var hint: String? = nil
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+            }
+
+            if let hint {
+                Text(hint)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.gray.opacity(0.18), lineWidth: 0.5)
+        )
+    }
+}
+
+/// Small-caps column header shared by the table-style editors.
+private struct RuleColumnHeader: View {
+    let title: String
+    var width: CGFloat? = nil
+    var alignment: Alignment = .leading
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.secondary.opacity(0.85))
+            .frame(width: width, alignment: alignment)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: alignment)
+    }
+}
+
+/// Consistent "+ Add …" affordance used at the bottom of every editor.
+private struct AddRuleButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: "plus.circle.fill")
+                .font(.system(size: 12, weight: .medium))
+        }
+        .buttonStyle(.borderless)
+        .controlSize(.small)
+        .padding(.top, 2)
+    }
+}
+
+/// Trash button that always asks for confirmation before deleting. `name`, when
+/// present, is shown in the prompt title so the user knows exactly what goes.
+private struct RuleDeleteButton: View {
+    var name: String? = nil
+    let perform: () -> Void
+
+    var body: some View {
+        Button {
+            confirmRuleDelete(name: name, perform: perform)
+        } label: {
+            Image(systemName: "trash")
+                .font(.system(size: 12))
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(.secondary)
+        .help(L10n.t(.delete))
+    }
+}
+
+@MainActor
+private func confirmRuleDelete(name: String?, perform: @escaping () -> Void) {
+    let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let title = trimmed.isEmpty
+        ? L10n.t(.deleteRuleTitle)
+        : L10n.pick("Delete \"\(trimmed)\"?", "删除 “\(trimmed)”？")
+    NotificationCenter.shared.present(AlertItem(
+        title: title,
+        message: L10n.t(.deleteRuleMessage),
+        actions: [
+            .confirm(L10n.t(.delete), isDestructive: true, action: perform),
+            .cancel(L10n.t(.cancel))
+        ],
+        textFieldValue: nil, textFieldLabel: nil
+    ))
+}
+
 // MARK: - TiersEditor
 
 struct TiersEditor: View {
@@ -134,16 +244,10 @@ struct TiersEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(L10n.t(.tierRank))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(width: 44, alignment: .leading)
-                Text(L10n.t(.name))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(L10n.t(.tierPointsValue))
-                    .font(.caption).foregroundStyle(.secondary)
-                    .frame(width: 64, alignment: .leading)
-                Spacer().frame(width: 20)
+                RuleColumnHeader(title: L10n.t(.tierRank), width: 44)
+                RuleColumnHeader(title: L10n.t(.name))
+                RuleColumnHeader(title: L10n.t(.tierPointsValue), width: 64)
+                Spacer().frame(width: 22)
             }
 
             ForEach($tiers) { $tier in
@@ -156,15 +260,15 @@ struct TiersEditor: View {
                         .frame(maxWidth: .infinity)
                     TextField("", value: $tier.points, format: .number)
                         .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.center)
                         .frame(width: 64)
-                    Button(role: .destructive) {
+                    RuleDeleteButton(name: tier.name) {
                         tiers.removeAll { $0.rank == tier.rank }
-                    } label: { Image(systemName: "trash") }
-                    .buttonStyle(.borderless)
+                    }
                 }
             }
 
-            Button {
+            AddRuleButton(title: L10n.t(.addTier)) {
                 let nextRank = (tiers.map(\.rank).max() ?? 0) + 1
                 tiers.append(TierPref(
                     rank: nextRank,
@@ -173,8 +277,7 @@ struct TiersEditor: View {
                     color: nil,
                     sortOrder: tiers.count
                 ))
-            } label: { Label(L10n.t(.addTier), systemImage: "plus") }
-            .buttonStyle(.borderless)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -187,79 +290,108 @@ struct CitationCurveEditor: View {
     @Binding var maxPoints: Int
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(L10n.t(.citationScoringHint))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
+        VStack(alignment: .leading, spacing: 10) {
             if breakpoints.isEmpty {
-                Text(L10n.t(.noBreakpoints))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
+                emptyState
             } else {
-                HStack(spacing: 8) {
-                    Text(L10n.t(.breakpointUpTo))
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(width: 90, alignment: .leading)
-                    Text(L10n.t(.pointsPerCitation))
-                        .font(.caption).foregroundStyle(.secondary)
-                        .frame(width: 80, alignment: .leading)
-                    Spacer().frame(width: 20)
-                }
-
-                ForEach(breakpoints.indices, id: \.self) { index in
-                    HStack(spacing: 8) {
-                        if breakpoints[index].up_to != nil {
-                            TextField("", value: upToBinding(for: index), format: .number)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 90)
-                        } else {
-                            Text(L10n.t(.noCap))
-                                .foregroundStyle(.secondary)
-                                .frame(width: 90, alignment: .leading)
-                        }
-
-                        TextField("", value: $breakpoints[index].points_per_citation, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-
-                        // Toggle cap button
-                        Button {
-                            if breakpoints[index].up_to != nil {
-                                breakpoints[index].up_to = nil
-                            } else {
-                                breakpoints[index].up_to = 100
-                            }
-                        } label: {
-                            Image(systemName: breakpoints[index].up_to != nil ? "infinity" : "number")
-                                .help(breakpoints[index].up_to != nil ? L10n.t(.noCap) : L10n.t(.breakpointUpTo))
-                        }
-                        .buttonStyle(.borderless)
-
-                        Button(role: .destructive) {
-                            breakpoints.remove(at: index)
-                        } label: { Image(systemName: "trash") }
-                        .buttonStyle(.borderless)
-                    }
-                }
-
-                HStack {
-                    Text(L10n.t(.maxCitationPointsLabel))
-                        .font(.subheadline)
-                    TextField("", value: $maxPoints, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
-                }
-                .padding(.top, 4)
+                segmentTable
+                Divider().padding(.vertical, 2)
+                maxPointsRow
             }
 
-            Button {
+            AddRuleButton(title: L10n.t(.addBreakpoint)) {
                 breakpoints.append(CitationBreakpoint(up_to: nil, points_per_citation: 1.0))
-            } label: { Label(L10n.t(.addBreakpoint), systemImage: "plus") }
-            .buttonStyle(.borderless)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var emptyState: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "info.circle")
+            Text(L10n.t(.noBreakpoints))
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.vertical, 4)
+    }
+
+    private var segmentTable: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                RuleColumnHeader(title: L10n.t(.breakpointUpTo), width: 132)
+                RuleColumnHeader(title: L10n.t(.pointsPerCitation), width: 72)
+                Spacer()
+            }
+
+            ForEach(breakpoints.indices, id: \.self) { index in
+                segmentRow(index)
+            }
+        }
+    }
+
+    private func segmentRow(_ index: Int) -> some View {
+        HStack(spacing: 10) {
+            // "Up to" cell: a number field with an inline cap toggle. Tapping the
+            // toggle flips between a hard cap and the open-ended (∞) tail segment.
+            HStack(spacing: 6) {
+                if breakpoints[index].up_to != nil {
+                    TextField("", value: upToBinding(for: index), format: .number)
+                        .textFieldStyle(.roundedBorder)
+                        .multilineTextAlignment(.center)
+                        .frame(width: 88)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "infinity")
+                        Text(L10n.t(.noCap))
+                    }
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 88, alignment: .leading)
+                }
+
+                Button {
+                    if breakpoints[index].up_to != nil {
+                        breakpoints[index].up_to = nil
+                    } else {
+                        breakpoints[index].up_to = 100
+                    }
+                } label: {
+                    Image(systemName: breakpoints[index].up_to != nil ? "infinity" : "number")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(.borderless)
+                .foregroundStyle(.secondary)
+                .help(breakpoints[index].up_to != nil ? L10n.t(.noCap) : L10n.t(.breakpointUpTo))
+            }
+            .frame(width: 132, alignment: .leading)
+
+            TextField("", value: $breakpoints[index].points_per_citation, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.center)
+                .frame(width: 72)
+
+            Spacer()
+
+            RuleDeleteButton {
+                breakpoints.remove(at: index)
+            }
+        }
+    }
+
+    private var maxPointsRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.up.to.line.compact")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+            Text(L10n.t(.maxCitationPointsLabel))
+                .font(.subheadline)
+            Spacer()
+            TextField("", value: $maxPoints, format: .number)
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.center)
+                .frame(width: 72)
+        }
     }
 
     private func upToBinding(for index: Int) -> Binding<Int> {
@@ -285,10 +417,9 @@ struct TracksEditor: View {
                     HStack {
                         TextField(L10n.t(.name), text: $track.name)
                             .textFieldStyle(.roundedBorder)
-                        Button(role: .destructive) {
+                        RuleDeleteButton(name: track.name) {
                             tracks.removeAll { $0.id == track.id }
-                        } label: { Image(systemName: "trash") }
-                        .buttonStyle(.borderless)
+                        }
                     }
                     TextField(L10n.t(.searchQuery), text: $track.query)
                         .textFieldStyle(.roundedBorder)
@@ -297,10 +428,9 @@ struct TracksEditor: View {
                     Divider()
                 }
             }
-            Button {
+            AddRuleButton(title: L10n.t(.addTrack)) {
                 tracks.append(TrackPref(name: L10n.t(.newTrack), query: "", keywords: []))
-            } label: { Label(L10n.t(.addTrack), systemImage: "plus") }
-            .buttonStyle(.borderless)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -336,11 +466,11 @@ struct VenuesEditor: View {
                 Text(L10n.t(.noVenues)).font(.caption).foregroundStyle(.secondary)
             }
             HStack(spacing: 8) {
-                Text(L10n.t(.abbr)).font(.caption).foregroundStyle(.secondary).frame(width: 64, alignment: .leading)
-                Text(L10n.t(.field)).font(.caption).foregroundStyle(.secondary).frame(width: 110, alignment: .leading)
-                Text(L10n.t(.matchPhrase)).font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-                Text(L10n.t(.tier)).font(.caption).foregroundStyle(.secondary).frame(width: 84, alignment: .leading)
-                Spacer().frame(width: 20)
+                RuleColumnHeader(title: L10n.t(.abbr), width: 64)
+                RuleColumnHeader(title: L10n.t(.field), width: 110)
+                RuleColumnHeader(title: L10n.t(.matchPhrase))
+                RuleColumnHeader(title: L10n.t(.tier), width: 84)
+                Spacer().frame(width: 22)
             }
             ForEach($venues) { $venue in
                 HStack(spacing: 8) {
@@ -353,16 +483,14 @@ struct VenuesEditor: View {
                         ForEach(1...5, id: \.self) { Text("\(L10n.t(.tier)) \($0)").tag($0) }
                     }
                     .labelsHidden().frame(width: 84)
-                    Button(role: .destructive) {
+                    RuleDeleteButton(name: venue.abbr.isEmpty ? venue.phrase : venue.abbr) {
                         venues.removeAll { $0.id == venue.id }
-                    } label: { Image(systemName: "trash") }
-                    .buttonStyle(.borderless)
+                    }
                 }
             }
-            Button {
+            AddRuleButton(title: L10n.t(.addVenue)) {
                 venues.append(VenuePref(abbr: "", phrase: "", tier: 3, field: nil))
-            } label: { Label(L10n.t(.addVenue), systemImage: "plus") }
-            .buttonStyle(.borderless)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -430,4 +558,3 @@ struct VenuesEditor: View {
         venues[index].field = name
     }
 }
-
