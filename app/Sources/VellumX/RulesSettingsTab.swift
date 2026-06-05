@@ -11,7 +11,7 @@ struct RulesSettingsTab: View {
                 RuleSection(title: L10n.t(.interestsTracks),
                             icon: "scope",
                             hint: L10n.t(.tracksHint)) {
-                    TracksEditor(tracks: $metadata.topics)
+                    TopicsSummaryList(metadata: metadata)
                 }
 
                 RuleSection(title: L10n.t(.venueRatings),
@@ -393,49 +393,63 @@ struct CitationCurveEditor: View {
     }
 }
 
-// MARK: - TracksEditor
+// MARK: - TopicsSummaryList
 
-struct TracksEditor: View {
-    @Binding var tracks: [TrackPref]
+/// Compact, read-only topic list for the Rules tab. Each row opens the shared
+/// `TopicEditor`; "Add Topic" creates a new one. Editing lives in the sidebar
+/// and this editor — there is no inline editing here — but topics stay part of
+/// the metadata so Export Rules continues to include them.
+struct TopicsSummaryList: View {
+    @Bindable var metadata: MetadataStore
+    @State private var topicSheet: TopicEditTarget?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if tracks.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+            if metadata.topics.isEmpty {
                 Text(L10n.t(.noTracks)).font(.caption).foregroundStyle(.secondary)
             }
-            ForEach($tracks) { $track in
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack {
-                        TextField(L10n.t(.name), text: $track.name)
-                            .textFieldStyle(.roundedBorder)
-                        RuleDeleteButton(name: track.name) {
-                            tracks.removeAll { $0.id == track.id }
+            ForEach(metadata.topics) { topic in
+                Button { topicSheet = .edit(topic) } label: {
+                    HStack(spacing: 9) {
+                        TopicBadge(color: topic.resolvedColor, icon: topic.displayIcon, size: 22)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(topic.name)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.primary)
+                            if !topic.keywords.isEmpty {
+                                Text(topic.keywords.prefix(4).joined(separator: " · "))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
+                        Spacer()
+                        if topic.archived {
+                            Text(L10n.pick("Archived", "已归档"))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.tertiary)
                     }
-                    TextField(L10n.t(.searchQuery), text: $track.query)
-                        .textFieldStyle(.roundedBorder)
-                    TextField(L10n.t(.keywordsCSV), text: keywordsBinding(for: $track))
-                        .textFieldStyle(.roundedBorder)
-                    Divider()
+                    .padding(.vertical, 5)
+                    .padding(.horizontal, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .opacity(topic.archived ? 0.6 : 1)
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
             }
             AddRuleButton(title: L10n.t(.addTrack)) {
-                tracks.append(TrackPref(name: L10n.t(.newTrack), query: "", keywords: []))
+                topicSheet = .new
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func keywordsBinding(for track: Binding<TrackPref>) -> Binding<String> {
-        Binding(
-            get: { track.wrappedValue.keywords.joined(separator: ", ") },
-            set: { newValue in
-                track.wrappedValue.keywords = newValue
-                    .split(separator: ",")
-                    .map { $0.trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
-            }
-        )
+        .sheet(item: $topicSheet) { sheet in
+            TopicEditor(existing: sheet.existing)
+        }
     }
 }
 

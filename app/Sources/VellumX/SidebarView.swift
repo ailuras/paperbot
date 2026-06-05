@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct SidebarView: View {
-    @Environment(\.openSettings) private var openSettings
     @Binding var selectedItem: SidebarItem?
     @Binding var selectedCollectionId: String?
     @Binding var selectedTopic: String?
@@ -13,6 +12,11 @@ struct SidebarView: View {
     let papers: [Paper]
 
     @State private var expandedCollections: Set<String> = []
+    @State private var topicSheet: TopicEditTarget?
+    @State private var archivedExpanded = false
+
+    private var activeTopics: [TrackPref] { metadata.topics.filter { !$0.archived } }
+    private var archivedTopics: [TrackPref] { metadata.topics.filter { $0.archived } }
 
     /// Collections grouped by their parent id (roots are resolved separately).
     private var childrenByParent: [String: [PaperCollection]] {
@@ -56,11 +60,34 @@ struct SidebarView: View {
             }
 
             Section {
-                ForEach(metadata.topics.map(\.name), id: \.self) { name in
-                    FilterRow(title: name, colorKey: "topic:\(name)",
-                              defaultColor: .purple,
-                              isSelected: selectedTopic == name) {
-                        selectedTopic = (selectedTopic == name) ? nil : name
+                ForEach(activeTopics) { topic in
+                    TopicSidebarRow(
+                        topic: topic,
+                        isSelected: selectedTopic == topic.name,
+                        isArchived: false,
+                        onSelect: { toggleTopic(topic.name) },
+                        onEdit: { topicSheet = .edit(topic) },
+                        onArchive: { archiveTopic(topic) },
+                        onRestore: {},
+                        onDelete: { confirmDeleteTopic(topic) }
+                    )
+                }
+
+                if !archivedTopics.isEmpty {
+                    archivedDisclosure
+                    if archivedExpanded {
+                        ForEach(archivedTopics) { topic in
+                            TopicSidebarRow(
+                                topic: topic,
+                                isSelected: false,
+                                isArchived: true,
+                                onSelect: {},
+                                onEdit: { topicSheet = .edit(topic) },
+                                onArchive: {},
+                                onRestore: { restoreTopic(topic) },
+                                onDelete: { confirmDeleteTopic(topic) }
+                            )
+                        }
                     }
                 }
             } header: {
@@ -68,7 +95,7 @@ struct SidebarView: View {
                     Text("Topics")
                     Spacer()
                     Button {
-                        openTracksSettings()
+                        topicSheet = .new
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 13, weight: .semibold))
@@ -77,7 +104,7 @@ struct SidebarView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help("Edit tracks in Settings")
+                    .help("New topic")
                     .padding(.trailing, 8)
                 }
             }
@@ -136,12 +163,61 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .sheet(item: $topicSheet) { sheet in
+            TopicEditor(existing: sheet.existing)
+        }
     }
 
-    /// Jump straight to the Rules tab (which hosts the tracks editor).
-    private func openTracksSettings() {
-        SettingsRouter.shared.selectedTab = .rules
-        openSettings()
+    /// Collapsible header for the archived-topics group at the bottom of Topics.
+    private var archivedDisclosure: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.15)) { archivedExpanded.toggle() }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 9, weight: .semibold))
+                    .rotationEffect(.degrees(archivedExpanded ? 90 : 0))
+                Text("Archived")
+                Text("\(archivedTopics.count)")
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Topics actions
+
+    private func toggleTopic(_ name: String) {
+        selectedTopic = (selectedTopic == name) ? nil : name
+    }
+
+    private func archiveTopic(_ topic: TrackPref) {
+        if selectedTopic == topic.name { selectedTopic = nil }
+        metadata.setTopicArchived(id: topic.id, true)
+    }
+
+    private func restoreTopic(_ topic: TrackPref) {
+        metadata.setTopicArchived(id: topic.id, false)
+    }
+
+    private func confirmDeleteTopic(_ topic: TrackPref) {
+        NotificationCenter.shared.present(AlertItem(
+            title: "Delete \"\(topic.name)\"?",
+            message: "This removes the topic and its keywords. Papers already in your library stay.",
+            actions: [
+                .confirm("Delete", isDestructive: true, action: {
+                    if selectedTopic == topic.name { selectedTopic = nil }
+                    metadata.deleteTopic(id: topic.id)
+                }),
+                .cancel("Cancel")
+            ],
+            textFieldValue: nil,
+            textFieldLabel: nil
+        ))
     }
 
     private func paperCount(for item: SidebarItem) -> Int {
@@ -286,6 +362,77 @@ private struct TagFilterChip: View {
         case .neutral: return Color.gray.opacity(0.18)
         case .include: return Color.accentColor.opacity(0.45)
         case .exclude: return Color.red.opacity(0.35)
+        }
+    }
+}
+
+/// FacetX-style topic row: a rounded tinted glyph badge, the topic name, and a
+/// keyword/query subtitle. Tapping toggles the topic filter; right-click edits,
+/// archives, or deletes. Archived rows are dimmed and offer Restore instead.
+private struct TopicSidebarRow: View {
+    let topic: TrackPref
+    let isSelected: Bool
+    let isArchived: Bool
+    let onSelect: () -> Void
+    let onEdit: () -> Void
+    let onArchive: () -> Void
+    let onRestore: () -> Void
+    let onDelete: () -> Void
+
+    private var subtitle: String {
+        if !topic.keywords.isEmpty { return topic.keywords.prefix(3).joined(separator: " · ") }
+        return topic.query
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 9) {
+                TopicBadge(color: topic.resolvedColor, icon: topic.displayIcon)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(topic.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 3)
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.07))
+                }
+            }
+            .overlay {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(Color.accentColor.opacity(0.95), lineWidth: 1)
+                }
+            }
+            .opacity(isArchived ? 0.5 : 1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 8)
+        .contextMenu {
+            if isArchived {
+                Button("Restore") { onRestore() }
+                Divider()
+                Button("Delete", role: .destructive) { onDelete() }
+            } else {
+                Button("Edit…") { onEdit() }
+                Button("Archive") { onArchive() }
+                Divider()
+                Button("Delete", role: .destructive) { onDelete() }
+            }
         }
     }
 }

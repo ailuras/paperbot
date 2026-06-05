@@ -202,8 +202,9 @@ class ConfigManager {
         if !s.targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             cfg.translate.target_language = s.targetLanguage
         }
-        if !metadata.topics.isEmpty {
-            cfg.tracks = Dictionary(uniqueKeysWithValues: metadata.topics.map {
+        let activeTopics = metadata.topics.filter { !$0.archived }
+        if !activeTopics.isEmpty {
+            cfg.tracks = Dictionary(uniqueKeysWithValues: activeTopics.map {
                 ($0.name, TrackConfig(query: $0.query, keywords: $0.keywords))
             })
         }

@@ -11,6 +11,9 @@ struct TrackPref: Codable, Identifiable, Equatable {
     var color: String? = nil
     /// Optional SF Symbol shown in the sidebar instead of the default dot.
     var icon: String? = nil
+    /// Archived topics are hidden from the sidebar and excluded from fetching /
+    /// recommendation, but kept in the library and still exported.
+    var archived: Bool = false
 }
 
 /// One venue rating used for scoring. `phrase` is matched (case-insensitive)

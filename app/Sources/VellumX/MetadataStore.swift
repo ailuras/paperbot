@@ -200,6 +200,7 @@ final class MetadataStore {
             keywords_json TEXT NOT NULL DEFAULT '[]',
             color TEXT,
             icon TEXT,
+            archived INTEGER NOT NULL DEFAULT 0,
             sort_order INTEGER NOT NULL DEFAULT 0
         );
 
@@ -245,6 +246,7 @@ final class MetadataStore {
         // Bring older databases up to the current schema. Adding an existing
         // column fails harmlessly, so the error is ignored.
         sqlite3_exec(db, "ALTER TABLE metadata_topics ADD COLUMN icon TEXT", nil, nil, nil)
+        sqlite3_exec(db, "ALTER TABLE metadata_topics ADD COLUMN archived INTEGER NOT NULL DEFAULT 0", nil, nil, nil)
     }
 
     /// Populate the taxonomy with the built-in defaults the first time the
@@ -306,9 +308,31 @@ final class MetadataStore {
         rulesDirty = false
     }
 
+    // MARK: - Topic CRUD
+
+    /// Append a new topic. Mutating `topics` persists via its `didSet`.
+    func addTopic(_ topic: TrackPref) {
+        topics.append(topic)
+    }
+
+    /// Replace an existing topic (matched by id) with an edited copy.
+    func updateTopic(_ topic: TrackPref) {
+        guard let index = topics.firstIndex(where: { $0.id == topic.id }) else { return }
+        topics[index] = topic
+    }
+
+    func setTopicArchived(id: UUID, _ archived: Bool) {
+        guard let index = topics.firstIndex(where: { $0.id == id }) else { return }
+        topics[index].archived = archived
+    }
+
+    func deleteTopic(id: UUID) {
+        topics.removeAll { $0.id == id }
+    }
+
     private func saveTopics() {
         replace(table: "metadata_topics") {
-            let sql = "INSERT INTO metadata_topics (id, name, query, keywords_json, color, icon, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            let sql = "INSERT INTO metadata_topics (id, name, query, keywords_json, color, icon, archived, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
             for (index, topic) in topics.enumerated() {
                 let keywordsData = (try? JSONEncoder().encode(topic.keywords)) ?? Data("[]".utf8)
                 let keywords = String(data: keywordsData, encoding: .utf8) ?? "[]"
@@ -319,6 +343,7 @@ final class MetadataStore {
                     keywords,
                     topic.color,
                     topic.icon,
+                    topic.archived ? 1 : 0,
                     index
                 ])
             }
@@ -426,7 +451,7 @@ final class MetadataStore {
     }
 
     private func loadTopics() -> [TrackPref] {
-        let sql = "SELECT id, name, query, keywords_json, color, icon FROM metadata_topics ORDER BY sort_order, name"
+        let sql = "SELECT id, name, query, keywords_json, color, icon, archived FROM metadata_topics ORDER BY sort_order, name"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
@@ -441,7 +466,8 @@ final class MetadataStore {
             let keywords = (try? JSONDecoder().decode([String].self, from: keywordsData)) ?? []
             let color = columnOptionalString(stmt, 4)
             let icon = columnOptionalString(stmt, 5)
-            rows.append(TrackPref(id: id, name: name, query: query, keywords: keywords, color: color, icon: icon))
+            let archived = sqlite3_column_int(stmt, 6) != 0
+            rows.append(TrackPref(id: id, name: name, query: query, keywords: keywords, color: color, icon: icon, archived: archived))
         }
         return rows
     }
@@ -593,6 +619,7 @@ final class MetadataStore {
             var keywords: [String]
             var color: String?
             var icon: String?
+            var archived: Bool?
         }
         struct VenueExport: Codable {
             var abbr: String
@@ -625,7 +652,7 @@ final class MetadataStore {
 
     func exportMetadata() throws -> Data {
         let export = MetadataExport(
-            topics: topics.map { .init(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color, icon: $0.icon) },
+            topics: topics.map { .init(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color, icon: $0.icon, archived: $0.archived) },
             venues: venues.map { .init(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: Self.normalizedField($0.field), exact: $0.exact) },
             tiers: tiers.map { .init(rank: $0.rank, name: $0.name, points: $0.points, color: $0.color) },
             fields: fields.compactMap { field in
@@ -645,7 +672,7 @@ final class MetadataStore {
         isLoading = true
 
         topics = decoded.topics.map {
-            TrackPref(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color, icon: $0.icon)
+            TrackPref(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color, icon: $0.icon, archived: $0.archived ?? false)
         }
         venues = decoded.venues.map {
             VenuePref(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: Self.normalizedField($0.field), exact: $0.exact)
