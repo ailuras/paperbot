@@ -186,7 +186,7 @@ struct PaperDetailView: View {
             }
 
             if !doiDisplay.isEmpty {
-                DetailExternalLinkLine(label: "DOI", value: doiDisplay, url: doiUrl)
+                DetailExternalLinkLine(label: "LINK", value: doiDisplay, url: doiUrl)
             } else if !landingPageDisplay.isEmpty {
                 DetailExternalLinkLine(label: "LINK", value: landingPageDisplay, url: landingPageUrl)
             }
