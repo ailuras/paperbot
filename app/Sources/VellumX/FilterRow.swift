@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// A multi-select sidebar filter row (Topics / Fields / Tier). Shows a colored
-/// dot icon (the color lives on the icon, not the text), the label, and a
-/// checkmark when selected. Tapping toggles selection; right-click sets the
-/// color, persisted in the metadata tables under `colorKey`.
+/// A multi-select filter row (Fields / Tier). Shows a colored dot (the color
+/// lives on the dot, not the text), the label, and a checkmark when selected.
+/// Tapping toggles selection; right-click sets the color, persisted in the
+/// metadata tables under `colorKey`.
 struct FilterRow: View {
     let title: String
     let colorKey: String
@@ -25,24 +25,13 @@ struct FilterRow: View {
         metadata.color(forKey: colorKey, default: defaultColor)
     }
 
-    /// Only topics support a custom glyph; other label kinds keep the dot.
-    private var supportsIcon: Bool { colorKey.hasPrefix("topic:") }
-    private var icon: String? { supportsIcon ? metadata.iconName(forKey: colorKey) : nil }
-
     var body: some View {
         Button(action: onToggle) {
             HStack(spacing: 8) {
-                Group {
-                    if let icon {
-                        Image(systemName: icon)
-                            .font(.system(size: 11))
-                    } else {
-                        Image(systemName: "circle.fill")
-                            .font(.system(size: 9))
-                    }
-                }
-                .foregroundStyle(color)
-                .frame(width: 16)
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 9))
+                    .foregroundStyle(color)
+                    .frame(width: 16)
                 Text(title)
                     .foregroundStyle(.primary)
                 Spacer()
@@ -62,19 +51,6 @@ struct FilterRow: View {
                 }
                 Divider()
                 Button("Default") { metadata.setLabelColor(key: colorKey, colorName: nil) }
-            }
-            if supportsIcon {
-                Menu("Icon") {
-                    ForEach(SidebarGlyph.choices, id: \.symbol) { choice in
-                        Button {
-                            metadata.setLabelIcon(key: colorKey, icon: choice.symbol)
-                        } label: {
-                            Label(choice.label, systemImage: choice.symbol)
-                        }
-                    }
-                    Divider()
-                    Button("Default") { metadata.setLabelIcon(key: colorKey, icon: nil) }
-                }
             }
         }
     }

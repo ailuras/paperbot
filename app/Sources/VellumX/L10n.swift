@@ -22,7 +22,7 @@ enum L10n {
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
         // Rules
         case interestsTracks, venueRatings
-        case noTracks, name, searchQuery, keywordsCSV, newTrack, addTrack
+        case noTracks, name, searchQuery, keywordsCSV, addTrack
         case noVenues, abbr, matchPhrase, tier, addVenue, field, newField
         case venueChangesApplied
         case applyChanges, applyChangesHint
@@ -135,7 +135,6 @@ enum L10n {
         case .name:               return ("Name", "名称")
         case .searchQuery:        return ("Search query", "搜索词 (query)")
         case .keywordsCSV:        return ("Keywords (comma-separated)", "关键词（逗号分隔）")
-        case .newTrack:           return ("New Track", "新方向")
         case .addTrack:           return ("Add Track", "添加方向")
         case .noVenues:           return ("No venues yet. Add one below.", "暂无会议。点击下方按钮添加。")
         case .abbr:               return ("Abbr.", "缩写")

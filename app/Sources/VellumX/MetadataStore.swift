@@ -96,12 +96,7 @@ final class MetadataStore {
     }
 
     func setLabelColor(key: String, colorName: String?) {
-        if key.hasPrefix("topic:") {
-            let name = String(key.dropFirst("topic:".count))
-            if let index = topics.firstIndex(where: { $0.name == name }) {
-                topics[index].color = colorName
-            }
-        } else if key.hasPrefix("field:") {
+        if key.hasPrefix("field:") {
             guard let name = Self.normalizedFieldName(String(key.dropFirst("field:".count))) else { return }
             if let index = fields.firstIndex(where: { $0.name == name }) {
                 fields[index].color = colorName
@@ -118,28 +113,7 @@ final class MetadataStore {
         metadataVersion += 1
     }
 
-    /// Per-key glyph. Only topics carry an icon; other label kinds return nil
-    /// so they keep their colored dot.
-    func iconName(forKey key: String) -> String? {
-        guard key.hasPrefix("topic:") else { return nil }
-        let name = String(key.dropFirst("topic:".count))
-        return topics.first(where: { $0.name == name })?.icon
-    }
-
-    func setLabelIcon(key: String, icon: String?) {
-        guard key.hasPrefix("topic:") else { return }
-        let name = String(key.dropFirst("topic:".count))
-        if let index = topics.firstIndex(where: { $0.name == name }) {
-            topics[index].icon = icon
-        }
-        metadataVersion += 1
-    }
-
     private func colorName(forKey key: String) -> String? {
-        if key.hasPrefix("topic:") {
-            let name = String(key.dropFirst("topic:".count))
-            return topics.first(where: { $0.name == name })?.color
-        }
         if key.hasPrefix("field:") {
             guard let name = Self.normalizedFieldName(String(key.dropFirst("field:".count))) else { return nil }
             return fields.first(where: { $0.name == name })?.color
@@ -242,11 +216,6 @@ final class MetadataStore {
             print("Error creating metadata tables: \(error)")
             sqlite3_free(errorMsg)
         }
-
-        // Bring older databases up to the current schema. Adding an existing
-        // column fails harmlessly, so the error is ignored.
-        sqlite3_exec(db, "ALTER TABLE metadata_topics ADD COLUMN icon TEXT", nil, nil, nil)
-        sqlite3_exec(db, "ALTER TABLE metadata_topics ADD COLUMN archived INTEGER NOT NULL DEFAULT 0", nil, nil, nil)
     }
 
     /// Populate the taxonomy with the built-in defaults the first time the
@@ -619,7 +588,7 @@ final class MetadataStore {
             var keywords: [String]
             var color: String?
             var icon: String?
-            var archived: Bool?
+            var archived: Bool
         }
         struct VenueExport: Codable {
             var abbr: String
@@ -672,7 +641,7 @@ final class MetadataStore {
         isLoading = true
 
         topics = decoded.topics.map {
-            TrackPref(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color, icon: $0.icon, archived: $0.archived ?? false)
+            TrackPref(name: $0.name, query: $0.query, keywords: $0.keywords, color: $0.color, icon: $0.icon, archived: $0.archived)
         }
         venues = decoded.venues.map {
             VenuePref(abbr: $0.abbr, phrase: $0.phrase, tier: $0.tier, field: Self.normalizedField($0.field), exact: $0.exact)
