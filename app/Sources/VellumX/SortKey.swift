@@ -32,7 +32,7 @@ enum SortKey: String, CaseIterable, Identifiable {
         case .citations:       return "quote.bubble"
         case .statusTime:      return "clock"
         case .dateAdded:       return "tray.and.arrow.down"
-        case .title:           return "textformat"
+        case .title:           return "a.square"
         }
     }
 }
