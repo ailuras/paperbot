@@ -416,8 +416,8 @@ struct TopicsSummaryList: View {
                             Text(topic.name)
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(.primary)
-                            if !topic.keywords.isEmpty {
-                                Text(topic.keywords.prefix(4).joined(separator: " · "))
+                            if !topic.query.isEmpty {
+                                Text(topic.query)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)

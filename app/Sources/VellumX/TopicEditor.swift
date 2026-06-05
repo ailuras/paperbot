@@ -98,7 +98,7 @@ struct TopicEditor: View {
                 Text(trimmedName.isEmpty ? L10n.pick("Untitled", "未命名") : trimmedName)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(trimmedName.isEmpty ? .secondary : .primary)
-                Text(keywordsSubtitle)
+                Text(subtitlePreview)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -110,10 +110,11 @@ struct TopicEditor: View {
         .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 
-    private var keywordsSubtitle: String {
+    private var subtitlePreview: String {
+        let q = draft.query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !q.isEmpty { return q }
         let kw = keywordsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-        if kw.isEmpty { return draft.query.isEmpty ? L10n.pick("No keywords", "无关键词") : draft.query }
-        return kw.prefix(4).joined(separator: " · ")
+        return kw.isEmpty ? L10n.pick("No search query", "无搜索词") : kw.prefix(4).joined(separator: " · ")
     }
 
     private var fields: some View {

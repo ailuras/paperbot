@@ -389,8 +389,8 @@ private struct TopicSidebarRow: View {
     let onDelete: () -> Void
 
     private var subtitle: String {
-        if !topic.keywords.isEmpty { return topic.keywords.prefix(3).joined(separator: " · ") }
-        return topic.query
+        if !topic.query.isEmpty { return topic.query }
+        return topic.keywords.prefix(3).joined(separator: " · ")
     }
 
     var body: some View {
