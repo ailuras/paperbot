@@ -76,6 +76,15 @@ final class MetadataStore {
         color(named: topics.first(where: { $0.name == topic })?.color, default: .purple)
     }
 
+    /// Topic names carried on a paper's `track` CSV, excluding archived topics
+    /// (whose labels are hidden). Shared by the paper list and detail views.
+    func visibleTopicNames(in track: String) -> [String] {
+        let archived = Set(topics.filter { $0.archived }.map(\.name))
+        return track.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !archived.contains($0) }
+    }
+
     func fieldColor(_ field: String?) -> Color {
         let normalized = Self.normalizedField(field) ?? Self.othersField
         if normalized == Self.othersField {

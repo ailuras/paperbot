@@ -175,6 +175,12 @@ private struct PaperRowView: View {
         return Calendar.current.isDateInToday(recommendedAt)
     }
 
+    /// Visible (non-archived) topic labels, capped so they never crowd out the
+    /// trailing date on a narrow row.
+    private var topics: [String] {
+        Array(metadata.visibleTopicNames(in: paper.track).prefix(3))
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             Text(paper.title)
@@ -188,6 +194,10 @@ private struct PaperRowView: View {
                     TagChip.venue(paper.venueAbbr, color: venueColor)
                 }
                 TagChip.score(paper.score, color: metadata.tierColor(paper.tier))
+
+                ForEach(topics, id: \.self) { topic in
+                    TagChip(text: topic, color: metadata.topicColor(topic))
+                }
 
                 Spacer(minLength: 8)
 
