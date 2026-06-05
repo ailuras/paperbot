@@ -853,23 +853,6 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Score Badge (extracted to avoid type-checker timeout)
-
-struct ScoreBadgeView: View {
-    let score: Double
-    let color: Color
-
-    var body: some View {
-        Text(String(format: "%.0f", score))
-            .font(.system(size: 9, weight: .bold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
 // MARK: - Batch actions panel (shown when >1 paper is selected)
 
 private struct BatchActionsView: View {

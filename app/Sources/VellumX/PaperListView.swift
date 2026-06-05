@@ -97,7 +97,11 @@ struct PaperListView: View {
         }
         .overlay {
             if papers.isEmpty {
-                EmptyPaperListView()
+                EmptyStateView(
+                    icon: "doc.text.magnifyingglass",
+                    title: "No papers here",
+                    message: "Press ⌘R to fetch papers or adjust your filters"
+                )
             }
         }
         }
@@ -181,17 +185,17 @@ private struct PaperRowView: View {
 
             HStack(spacing: 6) {
                 if !paper.venueAbbr.isEmpty {
-                    PaperTagView(title: paper.venueAbbr, color: venueColor)
+                    TagChip.venue(paper.venueAbbr, color: venueColor)
                 }
-                ScoreBadgeView(score: paper.score, color: metadata.tierColor(paper.tier))
+                TagChip.score(paper.score, color: metadata.tierColor(paper.tier))
 
                 Spacer(minLength: 8)
 
                 if isTodayRecommended {
-                    MetaChip(icon: "sparkles", text: "Today", color: todayColor)
+                    TagChip(text: "Today", icon: "sparkles", color: todayColor)
                 }
                 if !paper.publicationDate.isEmpty {
-                    MetaChip(icon: "calendar", text: paper.publicationDate, color: .secondary)
+                    TagChip.date(paper.publicationDate)
                 }
             }
         }
@@ -237,75 +241,5 @@ private struct PaperRowView: View {
         if isTodayRecommended { return todayColor.opacity(0.5) }
         if isHovering { return accent.opacity(0.30) }
         return Color.primary.opacity(0.08)
-    }
-}
-
-/// Small tinted, rounded info chip (venue date / "Today"), styled after FacetX's
-/// metadata pills.
-private struct MetaChip: View {
-    let icon: String
-    let text: String
-    let color: Color
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 9, weight: .semibold))
-            Text(text)
-                .font(.system(size: 10, weight: .medium))
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(color.opacity(0.12))
-        .foregroundStyle(color)
-        .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-    }
-}
-
-private struct PaperTagView: View {
-    let title: String
-    let color: Color
-
-    var body: some View {
-        Text(title)
-            .font(.system(size: 9, weight: .bold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.12))
-            .foregroundStyle(color)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
-// MARK: - Empty State
-
-private struct EmptyPaperListView: View {
-    var body: some View {
-        VStack(spacing: 14) {
-            Spacer()
-
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 44, weight: .light))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.secondary.opacity(0.5), Color(nsColor: .controlAccentColor).opacity(0.3)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Text("No papers here")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.primary.opacity(0.8))
-
-            Text("Press ⌘R to fetch papers or adjust your filters")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor).opacity(0.92))
     }
 }

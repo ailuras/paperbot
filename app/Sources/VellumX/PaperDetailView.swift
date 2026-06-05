@@ -142,30 +142,29 @@ struct PaperDetailView: View {
             // Row 1: Venue | Score | Citations | Date | Topics | … | 📁 📄
             HStack(spacing: 6) {
                 if !paper.venueAbbr.isEmpty {
-                    DetailTag(
-                        title: paper.venueAbbr,
+                    TagChip.venue(
+                        paper.venueAbbr,
                         color: metadata.fieldColor(metadata.field(forAbbr: paper.venueAbbr)),
-                        fontSize: 11,
-                        icon: "building.2"
+                        size: .regular
                     )
                     .help(venueDisplayName.isEmpty ? paper.venueAbbr : venueDisplayName)
                 }
 
-                ScoreTagView(score: paper.score, color: metadata.tierColor(paper.tier))
+                TagChip.score(paper.score, color: metadata.tierColor(paper.tier), size: .regular)
                     .help(scoreHelp)
 
-                CitationBadgeView(count: paper.citedByCount)
+                TagChip.citations(paper.citedByCount, size: .regular)
                     .help(citationHelp)
 
                 if !paper.publicationDate.isEmpty {
-                    DetailInlineMeta(icon: "calendar", value: paper.publicationDate)
+                    TagChip.date(paper.publicationDate, size: .regular)
                         .help(L10n.pick("Published \(paper.publicationDate)", "发表于 \(paper.publicationDate)"))
                 }
 
                 if !topics.isEmpty {
                     HStack(spacing: 5) {
                         ForEach(topics, id: \.self) { topic in
-                            DetailTag(title: topic, color: metadata.topicColor(topic), fontSize: 10)
+                            TagChip(text: topic, color: metadata.topicColor(topic), size: .regular)
                                 .help(topic)
                         }
                     }
@@ -627,31 +626,11 @@ private struct CollectionPickerPopover: View {
 
 struct EmptyDetailView: View {
     var body: some View {
-        VStack(spacing: 18) {
-            Spacer()
-
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 56, weight: .light))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.secondary.opacity(0.45), .accentColor.opacity(0.25)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Text("Select a paper to view details")
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(.primary.opacity(0.85))
-
-            VStack(spacing: 6) {
-                Text("Choose an item from the list to read its abstract,")
-                Text("add notes, or open the PDF.")
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(.secondary.opacity(0.75))
-            .multilineTextAlignment(.center)
-
+        EmptyStateView(
+            icon: "doc.text.magnifyingglass",
+            title: "Select a paper to view details",
+            message: "Choose an item from the list to read its abstract,\nadd notes, or open the PDF."
+        ) {
             VStack(spacing: 8) {
                 HStack(spacing: 16) {
                     ShortcutHint(key: "⌘R", action: "Fetch")
@@ -667,11 +646,7 @@ struct EmptyDetailView: View {
                 }
             }
             .padding(.top, 8)
-
-            Spacer()
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(NSColor.textBackgroundColor))
     }
 }
 
@@ -724,8 +699,7 @@ private struct MemoLine: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary.opacity(0.78))
+                .metaLabel()
                 .frame(width: 104, alignment: .leading)
 
             Text(value)
@@ -814,83 +788,36 @@ private struct FlowLayout: Layout {
     }
 }
 
-/// Score tag with icon — used only in the detail meta card.
-/// Distinct from the list's ScoreBadgeView: adds a star icon so the score
-/// number is visually distinguishable from the citation count.
-private struct ScoreTagView: View {
-    let score: Double
-    let color: Color
 
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "star.fill")
-            Text(String(format: "%.0f", score))
-        }
-        .font(.system(size: 9, weight: .bold))   // unified → SF Symbol aligns to text baseline
-        .padding(.horizontal, 6)
-        .frame(height: 20)
-        .background(color.opacity(0.15))
-        .foregroundStyle(color)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+/// Uppercase secondary mini-label used by detail meta rows (VENUE / DOI / LINK)
+/// and the memo key column — one font/color so they stay in sync.
+private extension Text {
+    func metaLabel() -> some View {
+        self.font(.system(size: 10, weight: .bold))
+            .foregroundStyle(.secondary.opacity(0.75))
     }
 }
 
-private struct CitationBadgeView: View {
-    let count: Int
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "quote.bubble")
-            Text("\(count)")
-        }
-        .font(.system(size: 9, weight: .bold))   // unified
-        .padding(.horizontal, 6)
-        .frame(height: 20)
-        .background(Color.secondary.opacity(0.10))
-        .foregroundStyle(.secondary)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
-private struct DetailTag: View {
-    let title: String
-    let color: Color
-    let fontSize: CGFloat
-    var icon: String? = nil
-
-    var body: some View {
-        HStack(spacing: 3) {
-            if let icon {
-                Image(systemName: icon)
-            }
-            Text(title)
-                .lineLimit(1)
-        }
-        .font(.system(size: fontSize, weight: .bold))
-        .padding(.horizontal, 7)
-        .frame(height: 20)
-        .background(color.opacity(0.12))
-        .foregroundStyle(color)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-}
-
-private struct DetailInlineMeta: View {
+/// A leading "icon + uppercase label + value" row, shared by every detail meta
+/// line. The value is supplied by the caller so each row keeps its own
+/// rendering (plain text, a hyperlink, etc.).
+private struct MetaLabelRow<Content: View>: View {
     let icon: String
-    let value: String
+    let label: String
+    @ViewBuilder var content: () -> Content
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(alignment: .top, spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
-            Text(value)
-                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.top, 1)
+
+            Text(label).metaLabel()
+
+            content()
         }
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 7)
-        .frame(height: 20)
-        .background(Color.secondary.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -898,16 +825,7 @@ private struct DetailVenueLine: View {
     let value: String
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "building.columns")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, 1)
-
-            Text("VENUE")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary.opacity(0.75))
-
+        MetaLabelRow(icon: "building.columns", label: "VENUE") {
             Text(value)
                 .font(.caption)
                 .foregroundStyle(.primary.opacity(0.8))
@@ -916,7 +834,6 @@ private struct DetailVenueLine: View {
                 .textSelection(.enabled)
                 .help(value)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -926,16 +843,7 @@ private struct DetailExternalLinkLine: View {
     let url: URL?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
-            Image(systemName: "link")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, 1)
-
-            Text(label)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.secondary.opacity(0.75))
-
+        MetaLabelRow(icon: "link", label: label) {
             if let url {
                 Link(destination: url) {
                     Text(value)
@@ -959,6 +867,5 @@ private struct DetailExternalLinkLine: View {
                     .textSelection(.enabled)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

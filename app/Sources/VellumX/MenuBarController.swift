@@ -324,8 +324,8 @@ private struct MenuBarPaperRow: View {
                         .multilineTextAlignment(.leading)
                     HStack(spacing: 5) {
                         if paper.score > 0 {
-                            ScoreBadgeView(score: paper.score,
-                                           color: MetadataStore.shared.tierColor(paper.tier))
+                            TagChip.score(paper.score,
+                                          color: MetadataStore.shared.tierColor(paper.tier))
                         }
                         if !meta.isEmpty {
                             Text(meta)
