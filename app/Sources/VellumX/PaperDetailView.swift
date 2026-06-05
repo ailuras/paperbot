@@ -244,9 +244,11 @@ struct PaperDetailView: View {
     }
 
     private var topics: [String] {
-        paper.track.split(separator: ",")
+        // Archived topics stay on the paper but their label is hidden.
+        let archived = Set(metadata.topics.filter { $0.archived }.map(\.name))
+        return paper.track.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty && !archived.contains($0) }
     }
 
     private var tagSection: some View {

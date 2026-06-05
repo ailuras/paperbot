@@ -935,6 +935,41 @@ class PaperStore {
         if succeeded { loadPapers() }
     }
 
+    /// Paper ids whose *only* topic is `topicName`. Deleting the topic removes
+    /// these papers entirely; papers also tagged with other topics are kept.
+    /// Drives the delete confirmation count.
+    func paperIdsSolelyInTopic(_ topicName: String) -> [String] {
+        let sql = """
+        SELECT paper_id FROM paper_topics WHERE topic_name = ?1
+          AND paper_id NOT IN (SELECT paper_id FROM paper_topics WHERE topic_name <> ?1)
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, topicName, -1, SQLITE_TRANSIENT)
+        var ids: [String] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            if let c = sqlite3_column_text(stmt, 0) { ids.append(String(cString: c)) }
+        }
+        return ids
+    }
+
+    /// Remove `topicName` from the library: papers belonging only to it are
+    /// deleted; papers also tagged with other topics keep those and just lose
+    /// this one. Pair with `MetadataStore.deleteTopic` to drop the topic itself.
+    func purgeTopicPapers(_ topicName: String) {
+        let sole = paperIdsSolelyInTopic(topicName)
+        if !sole.isEmpty { deletePapers(ids: sole) }
+        let sql = "DELETE FROM paper_topics WHERE topic_name = ?"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, topicName, -1, SQLITE_TRANSIENT)
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+        loadPapers()
+    }
+
     private func bindOptionalText(_ stmt: OpaquePointer?, _ index: Int32, _ value: String?) {
         if let value {
             sqlite3_bind_text(stmt, index, value, -1, SQLITE_TRANSIENT)

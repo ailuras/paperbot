@@ -205,15 +205,24 @@ struct SidebarView: View {
     }
 
     private func confirmDeleteTopic(_ topic: TrackPref) {
+        let doomed = PaperStore.shared.paperIdsSolelyInTopic(topic.name).count
+        let message = doomed == 0
+            ? L10n.pick(
+                "No papers belong only to this topic, so none are deleted. Papers also tagged with other topics keep them.",
+                "没有仅属于该主题的论文，因此不会删除任何论文；同时带有其他主题的论文会保留。")
+            : L10n.pick(
+                "\(doomed) paper(s) belonging only to \"\(topic.name)\" will be permanently deleted. Papers also tagged with other topics are kept. This cannot be undone.",
+                "有 \(doomed) 篇仅属于「\(topic.name)」的论文将被永久删除；同时带有其他主题的论文会保留。此操作不可撤销。")
         NotificationCenter.shared.present(AlertItem(
-            title: "Delete \"\(topic.name)\"?",
-            message: "This removes the topic and its keywords. Papers already in your library stay.",
+            title: L10n.pick("Delete topic \"\(topic.name)\"?", "删除主题「\(topic.name)」？"),
+            message: message,
             actions: [
-                .confirm("Delete", isDestructive: true, action: {
+                .confirm(L10n.pick("Delete", "删除"), isDestructive: true, action: {
                     if selectedTopic == topic.name { selectedTopic = nil }
+                    PaperStore.shared.purgeTopicPapers(topic.name)
                     metadata.deleteTopic(id: topic.id)
                 }),
-                .cancel("Cancel")
+                .cancel(L10n.pick("Cancel", "取消"))
             ],
             textFieldValue: nil,
             textFieldLabel: nil
