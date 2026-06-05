@@ -199,7 +199,7 @@ struct SidebarView: View {
     private func topicRowBackground(_ topic: TrackPref) -> some View {
         if selectedTopic == topic.name {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.accentColor)
+                .fill(Color.accentColor.opacity(0.25))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 1)
         } else {
@@ -412,16 +412,16 @@ private struct TopicSidebarRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 9) {
-                TopicBadge(color: isSelected ? Color.white : topic.resolvedColor, icon: topic.displayIcon)
+                TopicBadge(color: topic.resolvedColor, icon: topic.displayIcon)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(topic.name)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isSelected ? Color.white : Color.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(1)
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.caption2)
-                            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
                 }
