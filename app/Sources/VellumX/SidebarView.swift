@@ -71,6 +71,7 @@ struct SidebarView: View {
                         onRestore: {},
                         onDelete: { confirmDeleteTopic(topic) }
                     )
+                    .listRowBackground(topicRowBackground(topic))
                 }
 
                 if !archivedTopics.isEmpty {
@@ -190,6 +191,21 @@ struct SidebarView: View {
     }
 
     // MARK: - Topics actions
+
+    /// Selection fill for a topic row, drawn at the row-cell level so it matches
+    /// the native sidebar selection width. Inset slightly to leave the same side
+    /// margins as the system highlight.
+    @ViewBuilder
+    private func topicRowBackground(_ topic: TrackPref) -> some View {
+        if selectedTopic == topic.name {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 1)
+        } else {
+            Color.clear
+        }
+    }
 
     private func toggleTopic(_ name: String) {
         selectedTopic = (selectedTopic == name) ? nil : name
@@ -412,16 +428,12 @@ private struct TopicSidebarRow: View {
                 Spacer(minLength: 0)
             }
             .padding(.vertical, 4)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // Filled highlight to match the native sidebar selection (Library)
-            // and FacetX, instead of a thin border.
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.accentColor)
-                }
-            }
+            // The selection fill is drawn at the row-cell level via
+            // `.listRowBackground` (see the call site) so it spans the same
+            // width as the native sidebar selection (Library), not just the
+            // inset content area.
             .opacity(isArchived ? 0.5 : 1)
             .contentShape(Rectangle())
         }
