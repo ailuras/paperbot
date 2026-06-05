@@ -80,6 +80,10 @@ final class Paper: Identifiable {
     var collectionIds: [String]
     var note: String       { didSet { _searchText = nil } }
     var abstractZh: String
+    /// When the paper entered its current status (set on every status change).
+    var statusChangedAt: Date?
+    /// When the paper was first added to the library.
+    var addedAt: Date?
 
     /// Lazily-built, lowercased concatenation of the searchable fields. Cached
     /// so per-keystroke filtering doesn't re-lowercase long abstracts for every
@@ -108,7 +112,8 @@ final class Paper: Identifiable {
         recommendationReason: String = "",
         tags: [String] = [],
         collectionIds: [String] = [],
-        note: String = "", abstractZh: String = ""
+        note: String = "", abstractZh: String = "",
+        statusChangedAt: Date? = nil, addedAt: Date? = nil
     ) {
         self.id = id
         self.doi = doi
@@ -133,5 +138,7 @@ final class Paper: Identifiable {
         self.collectionIds = collectionIds
         self.note = note
         self.abstractZh = abstractZh
+        self.statusChangedAt = statusChangedAt
+        self.addedAt = addedAt
     }
 }

@@ -15,7 +15,6 @@ struct ContentView: View {
     /// burst of keystrokes triggers at most one `applyFilters` pass.
     @State private var debouncedSearch: String = ""
     @State private var searchDebounceTask: Task<Void, Never>?
-    @State private var sortByScore: Bool = false
 
     // Topic is single-select; Fields/Tier are multi-select (in the toolbar
     // filter popover). Union within a group, intersect across groups.
@@ -59,8 +58,7 @@ struct ContentView: View {
             excludedTags: excludedTags,
             fields: selectedFields,
             tiers: selectedTiers,
-            search: debouncedSearch,
-            sortByScore: sortByScore
+            search: debouncedSearch
         )
     }
 
@@ -77,7 +75,6 @@ struct ContentView: View {
         var fields: Set<String>
         var tiers: Set<Int>
         var search: String
-        var sortByScore: Bool
     }
 
     /// The paper whose details are shown. Driven by `lastViewedPaperId` (not the
@@ -106,6 +103,9 @@ struct ContentView: View {
     // MARK: - Toolbar helpers (unified; used for both list and detail groups)
 
     private var filtersActive: Bool { !selectedFields.isEmpty || !selectedTiers.isEmpty }
+
+    /// Active sort dimension, resolved from the persisted setting.
+    private var sortKey: SortKey { SortKey(rawValue: settings.sortKeyRaw) ?? .score }
 
     private func toggle<T: Hashable>(_ value: T, in set: inout Set<T>) {
         if set.contains(value) { set.remove(value) } else { set.insert(value) }
@@ -175,25 +175,52 @@ struct ContentView: View {
     }
 
     private var sortPopover: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Sort").font(.headline)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(L10n.pick("Sort by", "排序方式"))
+                .font(.headline)
+                .padding(.bottom, 4)
+
+            ForEach(SortKey.allCases) { key in
+                Button {
+                    settings.sortKeyRaw = key.rawValue
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: key.systemImage)
+                            .frame(width: 16)
+                            .foregroundStyle(.secondary)
+                        Text(key.title)
+                        Spacer()
+                        if sortKey == key {
+                            Image(systemName: "checkmark")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.vertical, 3)
+            }
+
+            Divider().padding(.vertical, 4)
+
             Button {
-                sortByScore = true; showSortOptions = false
+                settings.sortAscending.toggle()
             } label: {
-                Label("Score", systemImage: sortByScore ? "checkmark.circle.fill" : "number")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 8) {
+                    Image(systemName: settings.sortAscending ? "arrow.up" : "arrow.down")
+                        .frame(width: 16)
+                        .foregroundStyle(.secondary)
+                    Text(settings.sortAscending ? L10n.pick("Ascending", "升序") : L10n.pick("Descending", "降序"))
+                    Spacer()
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            Button {
-                sortByScore = false; showSortOptions = false
-            } label: {
-                Label("Date", systemImage: sortByScore ? "calendar" : "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.plain)
+            .padding(.vertical, 3)
         }
         .padding(14)
-        .frame(width: 170)
+        .frame(width: 200)
     }
 
     var body: some View {
@@ -491,28 +518,47 @@ struct ContentView: View {
             }
         }
 
-        // 3. Sort
-        if sortByScore {
-            result.sort {
-                if $0.score == $1.score {
-                    return $0.citedByCount > $1.citedByCount
-                }
-                return $0.score > $1.score
-            }
-        } else if selectedSidebarItem == .recommended {
-            // Recommend: today first, then history by recommendation date (newest first)
+        // 3. Sort. Each key defines a "descending / natural" comparator; the
+        //    direction toggle flips it by swapping operands. In the Recommended
+        //    view, today's picks stay pinned on top, sorted within each group.
+        let ascending = settings.sortAscending
+        let ordered: (Paper, Paper) -> Bool = { a, b in
+            let lhs = ascending ? b : a
+            let rhs = ascending ? a : b
+            return Self.precedes(lhs, rhs, by: self.sortKey)
+        }
+        if selectedSidebarItem == .recommended {
             result.sort {
                 let lhsToday = $0.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
                 let rhsToday = $1.recommendedAt.map { Calendar.current.isDateInToday($0) } ?? false
-                if lhsToday && !rhsToday { return true }
-                if !lhsToday && rhsToday { return false }
-                return ($0.recommendedAt ?? Date.distantPast) > ($1.recommendedAt ?? Date.distantPast)
+                if lhsToday != rhsToday { return lhsToday }
+                return ordered($0, $1)
             }
         } else {
-            result.sort { $0.publicationDate > $1.publicationDate }
+            result.sort(by: ordered)
         }
 
         filteredPapers = result
+    }
+
+    /// Natural (descending) ordering for a sort key: higher score / more
+    /// citations / newer dates first; title A→Z. The caller applies direction.
+    private static func precedes(_ a: Paper, _ b: Paper, by key: SortKey) -> Bool {
+        switch key {
+        case .score:
+            if a.score != b.score { return a.score > b.score }
+            return a.citedByCount > b.citedByCount
+        case .publicationDate:
+            return a.publicationDate > b.publicationDate
+        case .citations:
+            return a.citedByCount > b.citedByCount
+        case .statusTime:
+            return (a.statusChangedAt ?? .distantPast) > (b.statusChangedAt ?? .distantPast)
+        case .dateAdded:
+            return (a.addedAt ?? .distantPast) > (b.addedAt ?? .distantPast)
+        case .title:
+            return a.title.localizedCaseInsensitiveCompare(b.title) == .orderedAscending
+        }
     }
 
     private func selectPaper(at index: Int) {

@@ -135,7 +135,8 @@ class PaperStore {
             venue TEXT,
             cited_by_count INTEGER DEFAULT 0,
             abstract TEXT,
-            landing_page_url TEXT
+            landing_page_url TEXT,
+            added_at TEXT DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS paper_cache (
@@ -147,7 +148,8 @@ class PaperStore {
 
         CREATE TABLE IF NOT EXISTS paper_states (
             paper_id TEXT PRIMARY KEY,
-            status TEXT NOT NULL DEFAULT 'pending'
+            status TEXT NOT NULL DEFAULT 'pending',
+            status_changed_at TEXT DEFAULT (datetime('now'))
         );
 
         CREATE TABLE IF NOT EXISTS paper_recommendations (
@@ -246,7 +248,8 @@ class PaperStore {
                         ORDER BY cp2.added_at, cp2.collection_id
                     )
                 ), ''), '') as collections,
-                 COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh
+                 COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh,
+                ps.status_changed_at, p.added_at
          FROM papers p
         LEFT JOIN paper_cache pc ON p.id = pc.paper_id
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
@@ -302,6 +305,8 @@ class PaperStore {
             let collectionIds = Self.splitCSV(columnString(stmt, 19))
             let note = columnString(stmt, 20)
             let abstractZh = columnString(stmt, 21)
+            let statusChangedAt = columnOptionalString(stmt, 22).flatMap(Self.parseSQLiteDate)
+            let addedAt = columnOptionalString(stmt, 23).flatMap(Self.parseSQLiteDate)
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -331,7 +336,9 @@ class PaperStore {
                 tags: tags,
                 collectionIds: collectionIds,
                 note: note,
-                abstractZh: abstractZh
+                abstractZh: abstractZh,
+                statusChangedAt: statusChangedAt,
+                addedAt: addedAt
             )
             loadedPapers.append(paper)
         }
@@ -607,10 +614,11 @@ class PaperStore {
 
     func setPaperStatus(id: String, status: PaperStatus) {
         let sql = """
-        INSERT INTO paper_states (paper_id, status)
-        VALUES (?, ?)
+        INSERT INTO paper_states (paper_id, status, status_changed_at)
+        VALUES (?, ?, datetime('now'))
         ON CONFLICT(paper_id) DO UPDATE SET
-            status = excluded.status
+            status = excluded.status,
+            status_changed_at = datetime('now')
         """
 
         var stmt: OpaquePointer?

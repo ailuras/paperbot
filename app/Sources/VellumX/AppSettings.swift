@@ -92,6 +92,10 @@ final class AppSettings {
     var defaultMaxResults: Int { didSet { save() } }
     var topicFilter: String { didSet { save() } }
 
+    // ── List sort (persisted) ────────────────────────────────────────────
+    var sortKeyRaw: String { didSet { save() } }
+    var sortAscending: Bool { didSet { save() } }
+
     /// Bumped on every `save()` so `ConfigManager` can cache `effectiveConfig`.
     private(set) var configVersion: Int = 0
 
@@ -159,6 +163,8 @@ final class AppSettings {
         defaultDays        = stored?.defaultDays ?? d.openalex.default_days
         defaultMaxResults  = stored?.defaultMaxResults ?? d.openalex.default_max_results
         topicFilter        = stored?.topicFilter ?? d.openalex.topic_filter
+        sortKeyRaw         = stored?.sortKeyRaw ?? SortKey.score.rawValue
+        sortAscending      = stored?.sortAscending ?? false
         // NOTE: didSet does not fire during init, so apiKeys is set directly.
         apiKeys = stored?.apiKeys ?? [:]
         apiKey   = apiKeys[selectedProvider.rawValue] ?? ""
@@ -185,6 +191,8 @@ final class AppSettings {
         var defaultDays: Int?
         var defaultMaxResults: Int?
         var topicFilter: String?
+        var sortKeyRaw: String?
+        var sortAscending: Bool?
         var apiKeys: [String: String]?
     }
 
@@ -209,6 +217,8 @@ final class AppSettings {
             defaultDays: defaultDays,
             defaultMaxResults: defaultMaxResults,
             topicFilter: topicFilter,
+            sortKeyRaw: sortKeyRaw,
+            sortAscending: sortAscending,
             apiKeys: nonEmptyKeys.isEmpty ? nil : nonEmptyKeys
         )
         let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
