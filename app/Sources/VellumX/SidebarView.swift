@@ -426,7 +426,6 @@ private struct TopicSidebarRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.trailing, 8)
         .contextMenu {
             if isArchived {
                 Button("Restore") { onRestore() }
