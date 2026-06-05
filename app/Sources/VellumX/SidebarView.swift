@@ -396,34 +396,30 @@ private struct TopicSidebarRow: View {
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 9) {
-                TopicBadge(color: topic.resolvedColor, icon: topic.displayIcon)
+                TopicBadge(color: isSelected ? Color.white : topic.resolvedColor, icon: topic.displayIcon)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(topic.name)
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(isSelected ? Color.white : Color.primary)
                         .lineLimit(1)
                     if !subtitle.isEmpty {
                         Text(subtitle)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(isSelected ? Color.white.opacity(0.85) : Color.secondary)
                             .lineLimit(1)
                     }
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.vertical, 3)
-            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // Filled highlight to match the native sidebar selection (Library)
+            // and FacetX, instead of a thin border.
             .background {
                 if isSelected {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.07))
-                }
-            }
-            .overlay {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Color.accentColor.opacity(0.95), lineWidth: 1)
+                        .fill(Color.accentColor)
                 }
             }
             .opacity(isArchived ? 0.5 : 1)
