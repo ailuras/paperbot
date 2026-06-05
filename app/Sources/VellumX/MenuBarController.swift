@@ -68,8 +68,15 @@ final class MenuBarController {
         if popover.isShown {
             popover.performClose(nil)
         } else {
+            NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+            // Without this the popover is hidden behind a fullscreen Space:
+            // let its window join that Space and float above the app's content.
+            if let popoverWindow = popover.contentViewController?.view.window {
+                popoverWindow.collectionBehavior.formUnion([.canJoinAllSpaces, .fullScreenAuxiliary])
+                popoverWindow.level = .popUpMenu
+                popoverWindow.makeKey()
+            }
         }
     }
 
