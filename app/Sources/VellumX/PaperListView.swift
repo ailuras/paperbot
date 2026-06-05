@@ -18,9 +18,9 @@ struct PaperListView: View {
     let collections: [PaperCollection]
 
     var body: some View {
-        // Keep List's native selection (multi-select, ⌘A, keyboard nav) but hide
-        // its full-width highlight via `.tint(.clear)`; the card border conveys
-        // selection instead (drawn with the system accent, not the cleared tint).
+        // Native List selection (multi-select, ⌘A, keyboard nav) stays in charge;
+        // only its full-width highlight is suppressed by ListSelectionHighlightDisabler,
+        // so the rounded card border is the sole selection cue (system accent).
         ScrollViewReader { proxy in
         List(selection: $selectedPaperIds) {
             ForEach(papers) { paper in
@@ -163,7 +163,7 @@ private struct PaperRowView: View {
     /// Distinct from the (blue) selection accent so a selected today-pick still
     /// reads clearly as selected.
     private let todayColor = Color.orange
-    /// System accent, resolved independently of the list's cleared `.tint`.
+    /// System accent for the selection border, resolved directly from AppKit.
     private let accent = Color(nsColor: .controlAccentColor)
 
     private var venueColor: Color {
