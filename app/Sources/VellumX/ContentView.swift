@@ -903,7 +903,10 @@ struct ContentView: View {
     }
 
     private func dropPdf(id: String, url: URL) {
-        guard let paper = store.papers.first(where: { $0.id == id }) else { return }
+        guard let paper = store.papers.first(where: { $0.id == id }) else {
+            NotificationCenter.shared.showToast(L10n.t(.paperNotFound), type: .warning)
+            return
+        }
         PdfCoordinator.setManualPdf(paper: paper, store: store, from: url)
     }
 

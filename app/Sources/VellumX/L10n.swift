@@ -41,7 +41,7 @@ enum L10n {
         case noRecommendations, runRecommendEngine, todaysTopPicks
         case openPDF, markRead, markStarred, markSkip, cancelRecommendation, openInVellumX, openVellumX, quit
         // PDF fetch / reveal
-        case fetchPDF, showPdfInFinder, resolvingPDF, pdfDownloaded, pdfNotAvailable, pdfNotFound
+        case fetchPDF, showPdfInFinder, resolvingPDF, pdfDownloaded, pdfNotAvailable, pdfNotFound, paperNotFound
         case setPdfFromFile, removePdf, choosePdf, pdfSet, pdfRemoved, notAPdfFile, pdfSetFailed
         // Citation export
         case cite, copiedBibtex
@@ -197,6 +197,7 @@ enum L10n {
         case .fetchPDF:           return ("Fetch PDF", "获取 PDF")
         case .showPdfInFinder:    return ("Show PDF in Finder", "在访达中显示 PDF")
         case .resolvingPDF:       return ("Resolving open-access PDF…", "正在解析开放获取 PDF…")
+        case .paperNotFound:      return ("Paper not found", "未找到论文")
         case .pdfDownloaded:      return ("PDF downloaded", "PDF 已下载")
         case .pdfNotAvailable:    return ("No downloadable PDF found", "未找到可下载的 PDF")
         case .pdfNotFound:        return ("No open-access PDF found", "无开放获取 PDF")
