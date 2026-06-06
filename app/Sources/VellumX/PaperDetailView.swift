@@ -92,14 +92,32 @@ struct PaperDetailView: View {
                 if isResolvingPdf {
                     ProgressView().controlSize(.small)
                 } else {
-                    Image(systemName: paper.pdfUrl?.isEmpty == false ? "doc.text" : "doc.text.magnifyingglass")
+                    Image(systemName: pdfButtonIcon)
                 }
             }
             .detailActionChrome()
         }
         .buttonStyle(.plain)
         .disabled(isResolvingPdf)
-        .help(paper.pdfUrl?.isEmpty == false ? L10n.t(.openPDF) : L10n.pick("Resolve PDF", "解析 PDF"))
+        .help(pdfButtonHelp)
+    }
+
+    /// Reflects the PDF lifecycle: a downloaded paper reads offline, an
+    /// invalid/missing one warns, and an unfetched one offers to fetch.
+    private var pdfButtonIcon: String {
+        switch PdfStatus(rawValue: paper.pdfStatus ?? "") {
+        case .downloaded:     return "doc.text"
+        case .notPdf, .dead:  return "exclamationmark.triangle"
+        default:              return "doc.text.magnifyingglass"
+        }
+    }
+
+    private var pdfButtonHelp: String {
+        switch PdfStatus(rawValue: paper.pdfStatus ?? "") {
+        case .downloaded:     return L10n.t(.openPDF)
+        case .notPdf, .dead:  return L10n.pick("No PDF available — retry fetch", "无可用 PDF — 重试获取")
+        default:              return L10n.pick("Fetch PDF", "获取 PDF")
+        }
     }
 
     private var citeButton: some View {
