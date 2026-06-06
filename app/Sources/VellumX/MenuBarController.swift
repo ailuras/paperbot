@@ -266,9 +266,12 @@ struct MenuBarContentView: View {
     }
 
     private func openPdf(for paper: Paper) {
-        let cfg = ConfigManager.shared.effectiveConfig
         Task {
-            await PdfFetcher.openOrFetch(paper: paper, store: store, config: cfg)
+            if PdfCoordinator.hasLocalPdf(paper) {
+                await PdfCoordinator.reveal(paper: paper, store: store)
+            } else {
+                await PdfCoordinator.fetch(paper: paper, store: store)
+            }
         }
     }
 }

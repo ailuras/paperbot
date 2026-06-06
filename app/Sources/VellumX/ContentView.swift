@@ -270,7 +270,8 @@ struct ContentView: View {
                     isTranslating: $isTranslating,
                     isResolvingPdf: $isResolvingPdf,
                     onTranslate: translate,
-                    onResolvePdf: resolvePdf,
+                    onFetchPdf: fetchPdf,
+                    onRevealPdf: revealPdf,
                     onStatusChange: updatePaperStatus,
                     onAddTag: addPaperTag,
                     onRemoveTag: removePaperTag,
@@ -871,13 +872,16 @@ struct ContentView: View {
         }
     }
 
-    private func resolvePdf(for paper: Paper) {
+    private func fetchPdf(for paper: Paper) {
         isResolvingPdf = true
-        let config = ConfigManager.shared.effectiveConfig
         Task {
-            await PdfFetcher.openOrFetch(paper: paper, store: store, config: config)
+            await PdfCoordinator.fetch(paper: paper, store: store)
             isResolvingPdf = false
         }
+    }
+
+    private func revealPdf(for paper: Paper) {
+        Task { await PdfCoordinator.reveal(paper: paper, store: store) }
     }
 }
 

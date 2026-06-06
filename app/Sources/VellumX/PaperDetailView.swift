@@ -10,7 +10,10 @@ struct PaperDetailView: View {
     @Binding var isResolvingPdf: Bool
 
     let onTranslate: (Paper) -> Void
-    let onResolvePdf: (Paper) -> Void
+    /// Resolve + download the PDF (no opening).
+    let onFetchPdf: (Paper) -> Void
+    /// Reveal an already-downloaded PDF in Finder.
+    let onRevealPdf: (Paper) -> Void
     let onStatusChange: (Paper, PaperStatus) -> Void
     let onAddTag: (Paper, String) -> Void
     let onRemoveTag: (Paper, String) -> Void
@@ -84,9 +87,13 @@ struct PaperDetailView: View {
         .padding(.bottom, 4)
     }
 
+    private var isPdfDownloaded: Bool {
+        PdfStatus(rawValue: paper.pdfStatus ?? "") == .downloaded
+    }
+
     private var pdfButton: some View {
         Button {
-            onResolvePdf(paper)
+            if isPdfDownloaded { onRevealPdf(paper) } else { onFetchPdf(paper) }
         } label: {
             Group {
                 if isResolvingPdf {
@@ -102,11 +109,11 @@ struct PaperDetailView: View {
         .help(pdfButtonHelp)
     }
 
-    /// Reflects the PDF lifecycle: a downloaded paper reads offline, an
+    /// Reflects the PDF lifecycle: a downloaded paper reveals in Finder, an
     /// invalid/missing one warns, and an unfetched one offers to fetch.
     private var pdfButtonIcon: String {
         switch PdfStatus(rawValue: paper.pdfStatus ?? "") {
-        case .downloaded:     return "doc.text"
+        case .downloaded:     return "doc.text.fill"
         case .notPdf, .dead:  return "exclamationmark.triangle"
         default:              return "doc.text.magnifyingglass"
         }
@@ -114,9 +121,9 @@ struct PaperDetailView: View {
 
     private var pdfButtonHelp: String {
         switch PdfStatus(rawValue: paper.pdfStatus ?? "") {
-        case .downloaded:     return L10n.t(.openPDF)
+        case .downloaded:     return L10n.t(.showPdfInFinder)
         case .notPdf, .dead:  return L10n.pick("No PDF available — retry fetch", "无可用 PDF — 重试获取")
-        default:              return L10n.pick("Fetch PDF", "获取 PDF")
+        default:              return L10n.t(.fetchPDF)
         }
     }
 

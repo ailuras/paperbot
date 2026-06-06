@@ -8,7 +8,7 @@ enum L10n {
         // Tabs
         case general, api, papers, rules
         // General
-        case storageLocation, currentLocation, change, restoreDefault, storageHint
+        case storageLocation, currentLocation, change, restoreDefault, storageHint, pdfLocation
         case interface, showInMenuBar, language, menuBarHint
         case changeStorageTitle, migrateDB, switchOnly, cancel, migratePrompt
         case choose, storageUpdated
@@ -40,6 +40,8 @@ enum L10n {
         // Menu bar
         case noRecommendations, runRecommendEngine, todaysTopPicks
         case openPDF, markRead, markStarred, markSkip, cancelRecommendation, openInVellumX, openVellumX, quit
+        // PDF fetch / reveal
+        case fetchPDF, showPdfInFinder, resolvingPDF, pdfDownloaded, pdfNotAvailable, pdfNotFound
         // Citation export
         case cite, copiedBibtex
         // Related papers
@@ -78,11 +80,12 @@ enum L10n {
         case .rules:              return ("Rules", "学术规则")
 
         case .storageLocation:    return ("Storage Location", "存储位置")
-        case .currentLocation:    return ("Current location", "当前位置")
+        case .currentLocation:    return ("Database", "数据库")
+        case .pdfLocation:        return ("Downloaded PDFs", "已下载 PDF")
         case .change:             return ("Change…", "更改…")
         case .restoreDefault:     return ("Restore Default", "恢复默认")
-        case .storageHint:        return ("Folder holding vellumx.db. Defaults to Application Support; pick another folder to relocate it.",
-                                          "数据库 vellumx.db 所在的文件夹。默认位于 Application Support，可另选文件夹迁移。")
+        case .storageHint:        return ("Folder holding vellumx.db and downloaded PDFs. Defaults to Application Support; pick another folder to relocate them together.",
+                                          "存放 vellumx.db 与已下载 PDF 的文件夹。默认位于 Application Support，可另选文件夹一并迁移。")
         case .interface:          return ("Interface", "界面")
         case .showInMenuBar:      return ("Show in Menu Bar", "在菜单栏显示")
         case .language:           return ("Language", "语言")
@@ -190,6 +193,12 @@ enum L10n {
         case .runRecommendEngine: return ("Run Recommend Engine", "运行推荐引擎")
         case .todaysTopPicks:     return ("Today's Top Picks:", "今日精选：")
         case .openPDF:            return ("Open PDF", "打开 PDF")
+        case .fetchPDF:           return ("Fetch PDF", "获取 PDF")
+        case .showPdfInFinder:    return ("Show PDF in Finder", "在访达中显示 PDF")
+        case .resolvingPDF:       return ("Resolving open-access PDF…", "正在解析开放获取 PDF…")
+        case .pdfDownloaded:      return ("PDF downloaded", "PDF 已下载")
+        case .pdfNotAvailable:    return ("No downloadable PDF found", "未找到可下载的 PDF")
+        case .pdfNotFound:        return ("No open-access PDF found", "无开放获取 PDF")
         case .markRead:           return ("Mark Read", "标记已读")
         case .markStarred:        return ("Mark Starred", "标记收藏")
         case .markSkip:           return ("Skip", "跳过")

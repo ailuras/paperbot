@@ -1,5 +1,6 @@
 import Foundation
 import CryptoKit
+import AppKit
 
 /// Lifecycle of a paper's PDF as derived secondary data.
 /// - `resolved`: a source link is known but no file is downloaded yet.
@@ -64,6 +65,15 @@ struct PdfStorage {
 
     func fileExists(relative: String) -> Bool {
         FileManager.default.fileExists(atPath: absoluteURL(forRelative: relative).path)
+    }
+
+    /// Reveals the stored file in Finder with it selected. Returns false when
+    /// the file is missing so the caller can fall back (e.g. re-fetch).
+    @discardableResult
+    func revealInFinder(relative: String) -> Bool {
+        guard fileExists(relative: relative) else { return false }
+        NSWorkspace.shared.activateFileViewerSelecting([absoluteURL(forRelative: relative)])
+        return true
     }
 
     /// Writes PDF bytes for a paper and returns the stored relative path.

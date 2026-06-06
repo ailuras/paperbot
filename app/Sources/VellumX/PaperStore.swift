@@ -867,9 +867,14 @@ class PaperStore {
 
     private func applyPdfResultInMemory(id: String, result: PdfFetchResult) {
         guard let idx = papers.firstIndex(where: { $0.id == id }) else { return }
-        if let url = result.url { papers[idx].pdfUrl = url }
-        papers[idx].pdfLocalPath = result.localPath
-        papers[idx].pdfStatus = result.status.rawValue
+        let paper = papers[idx]
+        if let url = result.url { paper.pdfUrl = url }
+        paper.pdfLocalPath = result.localPath
+        paper.pdfStatus = result.status.rawValue
+        // `Paper` is a reference type, so mutating its fields does not notify the
+        // @Observable store. Reassign the element through the array subscript so
+        // observers of `papers` (e.g. the detail view's icon) re-render.
+        papers[idx] = paper
         paperVersion += 1
     }
 
