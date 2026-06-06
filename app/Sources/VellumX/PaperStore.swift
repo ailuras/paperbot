@@ -867,7 +867,7 @@ class PaperStore {
 
     /// Removes a paper's PDF record (used by manual "Remove PDF"). The caller is
     /// responsible for deleting the file on disk via `PdfStorage`.
-    func clearPdf(id: String) {
+    func removePdf(id: String) {
         var stmt: OpaquePointer?
         if sqlite3_prepare_v2(db, "DELETE FROM paper_pdfs WHERE paper_id = ?", -1, &stmt, nil) == SQLITE_OK {
             sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)

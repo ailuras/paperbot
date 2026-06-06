@@ -89,7 +89,7 @@ enum PdfCoordinator {
         if let path = paper.pdfLocalPath {
             PdfStorage.current().delete(relative: path)
         }
-        store.clearPdf(id: paper.id)
+        store.removePdf(id: paper.id)
         NotificationCenter.shared.showToast(L10n.t(.pdfRemoved), type: .info)
     }
 }
