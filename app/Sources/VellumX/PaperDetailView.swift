@@ -7,7 +7,7 @@ struct PaperDetailView: View {
     let paper: Paper
     private var metadata: MetadataStore { .shared }
     @Binding var isTranslating: Bool
-    @Binding var isResolvingPdf: Bool
+    @Binding var resolvingPdfIds: Set<String>
 
     let onTranslate: (Paper) -> Void
     /// Resolve + download the PDF (no opening).
@@ -107,7 +107,7 @@ struct PaperDetailView: View {
             if isPdfDownloaded { onRevealPdf(paper) } else { onFetchPdf(paper) }
         } label: {
             Group {
-                if isResolvingPdf {
+                if resolvingPdfIds.contains(paper.id) {
                     ProgressView().controlSize(.small)
                 } else {
                     Image(systemName: pdfButtonIcon)
@@ -116,7 +116,7 @@ struct PaperDetailView: View {
             .detailActionChrome()
         }
         .buttonStyle(.plain)
-        .disabled(isResolvingPdf)
+        .disabled(resolvingPdfIds.contains(paper.id))
         .help(pdfButtonHelp)
         .overlay(
             RoundedRectangle(cornerRadius: 7)

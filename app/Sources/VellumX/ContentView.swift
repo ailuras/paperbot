@@ -39,7 +39,9 @@ struct ContentView: View {
     @State private var isFetching: Bool = false
     @State private var isRecommending: Bool = false
     @State private var isTranslating: Bool = false
-    @State private var isResolvingPdf: Bool = false
+    /// Paper IDs currently resolving their PDF; per-paper so switching detail
+    /// views does not carry the spinner state across papers.
+    @State private var resolvingPdfIds: Set<String> = []
 
     // Cached filtered results — recalculated only when inputs change.
     @State private var filteredPapers: [Paper] = []
@@ -269,7 +271,7 @@ struct ContentView: View {
                 PaperDetailView(
                     paper: paper,
                     isTranslating: $isTranslating,
-                    isResolvingPdf: $isResolvingPdf,
+                    resolvingPdfIds: $resolvingPdfIds,
                     onTranslate: translate,
                     onFetchPdf: fetchPdf,
                     onRevealPdf: revealPdf,
@@ -877,10 +879,10 @@ struct ContentView: View {
     }
 
     private func fetchPdf(for paper: Paper) {
-        isResolvingPdf = true
+        resolvingPdfIds.insert(paper.id)
         Task {
             await PdfCoordinator.fetch(paper: paper, store: store)
-            isResolvingPdf = false
+            resolvingPdfIds.remove(paper.id)
         }
     }
 
