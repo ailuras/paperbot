@@ -87,6 +87,7 @@ struct PaperListView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .padding(.vertical, 10)
         .onChange(of: selectedPaperIds) { _, ids in
             onSelectionChange(ids)
             // Keep a programmatically selected paper (⌘↑/⌘↓, status advance)
