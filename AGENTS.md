@@ -10,6 +10,14 @@ fields, old paths, and compatibility bridges instead of preserving legacy
 entrypoints. Do not keep wrappers, aliases, migration shims, or fallback paths
 for removed interfaces unless the user specifically requests them.
 
+## Code Cleanness
+
+Implementations should be minimal and precise. Do not write forward-compatible
+layering, speculative abstractions, or unused parameters “just in case.” When a
+feature is removed, delete its code, its tests, and its documentation; do not
+leave dead code or commented-out blocks behind. Prefer small, single-purpose
+units over generalised helpers that accumulate optional behaviour over time.
+
 ## What This Is
 
 VellumX is a native macOS SwiftUI app (macOS 14+) for academic paper discovery,
@@ -86,7 +94,8 @@ values.
 
 ## Commit Style
 
-Commit complete features only; do not stack unrelated changes.
+Commit by feature point; each commit should be a single, complete, and
+reviewable unit. Do not stack unrelated changes in one commit.
 
 - `feat(...)` - new capability
 - `fix(...)` - bug fix
@@ -95,6 +104,9 @@ Commit complete features only; do not stack unrelated changes.
 - `docs(...)` - documentation-only change
 
 Format: `prefix(scope): imperative description`.
+
+Keep every commit small and focused so that `git revert` and `git bisect` remain
+useful. If a change touches multiple concerns, split it into separate commits.
 
 ## Design Principles
 
