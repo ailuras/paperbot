@@ -7,6 +7,10 @@ struct GeneralSettingsTab: View {
     @Environment(\.settingsAlerts) private var alerts
 
     private var currentDir: URL { settings.resolvedStorageDirectory }
+    private var pdfDir: URL { currentDir.appendingPathComponent("pdfs") }
+    private var pdfDirExists: Bool {
+        FileManager.default.fileExists(atPath: pdfDir.path)
+    }
 
     private var fileURL: URL { settings.settingsFileURL }
     private var settingsFileExists: Bool {
@@ -15,12 +19,29 @@ struct GeneralSettingsTab: View {
 
     var body: some View {
         Form {
+            Section(L10n.t(.interface)) {
+                Toggle(L10n.t(.showInMenuBar), isOn: $settings.menuBarEnabled)
+                Picker(L10n.t(.language), selection: $settings.language) {
+                    Text("English").tag("en")
+                    Text("中文").tag("zh")
+                }
+                Text(L10n.t(.menuBarHint))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
             Section(L10n.t(.storageLocation)) {
                 LabeledContent(L10n.t(.currentLocation)) {
-                    Text(currentDir.path)
-                        .lineLimit(1).truncationMode(.middle)
-                        .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
+                    pathLabel(currentDir.path)
+                }
+                LabeledContent(L10n.t(.pdfLocation)) {
+                    HStack(spacing: 8) {
+                        pathLabel(pdfDir.path)
+                        Button(L10n.t(.revealInFinder)) {
+                            NSWorkspace.shared.activateFileViewerSelecting([pdfDir])
+                        }
+                        .controlSize(.small)
+                        .disabled(!pdfDirExists)
+                    }
                 }
                 HStack {
                     Button(L10n.t(.change)) { chooseFolder() }
@@ -32,22 +53,9 @@ struct GeneralSettingsTab: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            Section(L10n.t(.interface)) {
-                Toggle(L10n.t(.showInMenuBar), isOn: $settings.menuBarEnabled)
-                Picker(L10n.t(.language), selection: $settings.language) {
-                    Text("English").tag("en")
-                    Text("中文").tag("zh")
-                }
-                Text(L10n.t(.menuBarHint))
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
             Section(L10n.t(.settingsFile)) {
                 LabeledContent(L10n.t(.path)) {
-                    Text(fileURL.path)
-                        .lineLimit(1).truncationMode(.middle)
-                        .textSelection(.enabled)
-                        .foregroundStyle(.secondary)
+                    pathLabel(fileURL.path)
                 }
                 HStack {
                     Button(L10n.t(.open)) { NSWorkspace.shared.open(fileURL) }
@@ -62,6 +70,13 @@ struct GeneralSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private func pathLabel(_ path: String) -> some View {
+        Text(path)
+            .lineLimit(1).truncationMode(.middle)
+            .textSelection(.enabled)
+            .foregroundStyle(.secondary)
     }
 
     private func chooseFolder() {
