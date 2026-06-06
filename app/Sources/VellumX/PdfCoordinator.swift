@@ -30,7 +30,7 @@ enum PdfCoordinator {
             NotificationCenter.shared.showToast(L10n.t(.pdfDownloaded), type: .success)
         case .notPdf:
             NotificationCenter.shared.showToast(L10n.t(.pdfNotAvailable), type: .warning)
-        case .dead, .resolved:
+        case .dead:
             NotificationCenter.shared.showToast(L10n.t(.pdfNotFound), type: .error)
         }
     }

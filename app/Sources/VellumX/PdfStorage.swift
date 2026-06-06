@@ -3,13 +3,11 @@ import CryptoKit
 import AppKit
 
 /// Lifecycle of a paper's PDF as derived secondary data.
-/// - `resolved`: a source link is known but no file is downloaded yet.
 /// - `downloaded`: a validated PDF is stored locally and readable offline.
 /// - `notPdf`: the resolved link returned content that is not a PDF (landing
 ///   page / paywall HTML); nothing is stored.
 /// - `dead`: no open-access link could be resolved.
 enum PdfStatus: String {
-    case resolved
     case downloaded
     case notPdf = "not_pdf"
     case dead
