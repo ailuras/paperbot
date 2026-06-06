@@ -266,20 +266,9 @@ struct MenuBarContentView: View {
     }
 
     private func openPdf(for paper: Paper) {
-        if let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty, let url = URL(string: pdfUrl) {
-            NSWorkspace.shared.open(url)
-            return
-        }
+        let cfg = ConfigManager.shared.effectiveConfig
         Task {
-            let cfg = ConfigManager.shared.effectiveConfig
-            let resolver = PdfResolver(config: cfg)
-            if let result = await resolver.resolve(id: paper.id, title: paper.title, doi: paper.doi, currentPdfUrl: paper.pdfUrl) {
-                paper.pdfUrl = result.url
-                store.setPaperPdf(id: paper.id, pdfUrl: result.url, pdfSource: result.source)
-                if let url = URL(string: result.url) {
-                    NSWorkspace.shared.open(url)
-                }
-            }
+            await PdfFetcher.openOrFetch(paper: paper, store: store, config: cfg)
         }
     }
 }

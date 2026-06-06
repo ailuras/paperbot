@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 class PdfResolver {
     let config: AppConfig
@@ -105,35 +106,33 @@ class PdfResolver {
         return nil
     }
     
-    func resolve(id: String, title: String, doi: String?, currentPdfUrl: String?) async -> (url: String, source: String)? {
-        if let currentPdf = currentPdfUrl, !currentPdf.isEmpty {
-            return (currentPdf, "cached")
-        }
+    /// Collects every candidate PDF link in priority order. Unlike a
+    /// first-non-empty resolver, this returns all sources so the downloader can
+    /// validate each in turn and keep the first that is actually a PDF.
+    func candidates(title: String, doi: String?, currentPdfUrl: String?) async -> [(url: String, source: String)] {
+        var result: [(url: String, source: String)] = []
 
-        guard let rawDoi = doi, !rawDoi.isEmpty else {
-            if let arxivPdf = await fetchArxiv(title: title) {
-                return (arxivPdf, "arxiv")
-            }
-            return nil
+        if let currentPdf = currentPdfUrl, !currentPdf.isEmpty {
+            result.append((currentPdf, "openalex"))
         }
 
         // OpenAlex returns DOIs as full URLs (https://doi.org/10.xxx).
         // Unpaywall and Semantic Scholar expect a bare DOI path (10.xxx).
-        let bareDoi = Self.stripDoiPrefix(rawDoi)
+        let bareDoi = doi.map(Self.stripDoiPrefix).flatMap { $0.isEmpty ? nil : $0 }
 
-        if let unpaywallPdf = await fetchUnpaywall(doi: bareDoi) {
-            return (unpaywallPdf, "unpaywall")
+        if let bareDoi, let unpaywallPdf = await fetchUnpaywall(doi: bareDoi) {
+            result.append((unpaywallPdf, "unpaywall"))
         }
 
         if let arxivPdf = await fetchArxiv(title: title) {
-            return (arxivPdf, "arxiv")
+            result.append((arxivPdf, "arxiv"))
         }
 
-        if let s2Pdf = await fetchSemanticScholar(doi: bareDoi) {
-            return (s2Pdf, "semanticscholar")
+        if let bareDoi, let s2Pdf = await fetchSemanticScholar(doi: bareDoi) {
+            result.append((s2Pdf, "semanticscholar"))
         }
 
-        return nil
+        return result
     }
 
     static func stripDoiPrefix(_ doi: String) -> String {
@@ -143,5 +142,97 @@ class PdfResolver {
             if lower.hasPrefix(prefix) { return String(doi.dropFirst(prefix.count)) }
         }
         return doi
+    }
+}
+
+/// Resolves candidate links, downloads each until one validates as a real PDF,
+/// and stores the bytes locally. Content parsing (full text, in-app reader) is
+/// intentionally out of scope for this phase — this only "fetches".
+struct PdfFetcher {
+    let config: AppConfig
+    let storage: PdfStorage
+
+    /// Downloads and validates a paper's PDF. Returns the materialized result;
+    /// the caller is responsible for persisting it via `PaperStore.savePdf`.
+    func fetch(id: String, title: String, doi: String?, currentPdfUrl: String?) async -> PdfFetchResult {
+        let resolver = PdfResolver(config: config)
+        let candidates = await resolver.candidates(title: title, doi: doi, currentPdfUrl: currentPdfUrl)
+        if candidates.isEmpty { return .dead }
+
+        var firstUrl: String?
+        var firstSource: String?
+        for candidate in candidates {
+            guard let url = URL(string: candidate.url) else { continue }
+            if firstUrl == nil { firstUrl = candidate.url; firstSource = candidate.source }
+            guard let data = await Self.download(url) else { continue }
+            guard PdfStorage.looksLikePdf(data) else { continue }
+
+            do {
+                let relative = try storage.write(data, forPaperId: id)
+                return PdfFetchResult(
+                    status: .downloaded,
+                    url: candidate.url,
+                    source: candidate.source,
+                    localPath: relative,
+                    byteSize: data.count,
+                    sha256: PdfStorage.sha256Hex(data)
+                )
+            } catch {
+                print("PDF write failed: \(error)")
+            }
+        }
+
+        // Candidates existed but none was a real PDF (landing page / paywall).
+        if let firstUrl, let firstSource {
+            return .notPdf(url: firstUrl, source: firstSource)
+        }
+        return .dead
+    }
+
+    /// Shared entry point for both the detail view and the menu bar: opens the
+    /// local PDF if already downloaded, otherwise fetches, persists, and opens
+    /// the result (falling back to the source link when no PDF could be stored).
+    @MainActor
+    static func openOrFetch(paper: Paper, store: PaperStore, config: AppConfig) async {
+        let storage = PdfStorage.current()
+
+        if let path = paper.pdfLocalPath, !path.isEmpty, storage.fileExists(relative: path) {
+            NSWorkspace.shared.open(storage.absoluteURL(forRelative: path))
+            return
+        }
+
+        NotificationCenter.shared.setStatus("Resolving OpenAccess PDF...", type: .progress)
+        let result = await PdfFetcher(config: config, storage: storage)
+            .fetch(id: paper.id, title: paper.title, doi: paper.doi, currentPdfUrl: paper.pdfUrl)
+        store.savePdf(id: paper.id, result: result)
+        NotificationCenter.shared.clearStatus()
+
+        switch result.status {
+        case .downloaded:
+            if let path = result.localPath {
+                NotificationCenter.shared.showToast("PDF downloaded", type: .success)
+                NSWorkspace.shared.open(storage.absoluteURL(forRelative: path))
+            }
+        case .notPdf:
+            NotificationCenter.shared.showToast("No downloadable PDF; opened source link", type: .info)
+            if let link = result.url, let url = URL(string: link) {
+                NSWorkspace.shared.open(url)
+            }
+        case .dead, .resolved:
+            NotificationCenter.shared.showToast("No open-access PDF found", type: .error)
+        }
+    }
+
+    private static func download(_ url: URL) async -> Data? {
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                return nil
+            }
+            return data
+        } catch {
+            print("PDF download failed for \(url): \(error)")
+            return nil
+        }
     }
 }

@@ -101,6 +101,14 @@ class PaperStore {
                     if fm.fileExists(atPath: dst.path) { try fm.removeItem(at: dst) }
                     try fm.moveItem(at: src, to: dst)
                 }
+                // Downloaded PDFs are materialized assets that must travel with
+                // the database; move the whole pdfs/ directory alongside it.
+                let srcPdfs = currentDb.deletingLastPathComponent().appendingPathComponent("pdfs")
+                let dstPdfs = newDir.appendingPathComponent("pdfs")
+                if fm.fileExists(atPath: srcPdfs.path) {
+                    if fm.fileExists(atPath: dstPdfs.path) { try fm.removeItem(at: dstPdfs) }
+                    try fm.moveItem(at: srcPdfs, to: dstPdfs)
+                }
             } catch {
                 openDatabase()
                 return .failed("迁移失败：\(error.localizedDescription)")
@@ -178,7 +186,13 @@ class PaperStore {
         CREATE TABLE IF NOT EXISTS paper_pdfs (
             paper_id TEXT PRIMARY KEY,
             pdf_url TEXT NOT NULL,
-            pdf_source TEXT
+            pdf_source TEXT,
+            pdf_path TEXT,
+            pdf_status TEXT,
+            byte_size INTEGER,
+            sha256 TEXT,
+            checked_at INTEGER,
+            fetched_at INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS paper_topics (
@@ -208,6 +222,34 @@ class PaperStore {
             let error = errorMsg.map { String(cString: $0) } ?? "unknown error"
             print("Error creating tables: \(error)")
             sqlite3_free(errorMsg)
+        }
+
+        migratePdfSchema()
+    }
+
+    /// Adds the local-asset columns to `paper_pdfs` on databases created before
+    /// PDFs were stored locally. `CREATE TABLE IF NOT EXISTS` leaves existing
+    /// tables untouched, so new columns must be ALTERed in. Purely additive.
+    private func migratePdfSchema() {
+        var existing = Set<String>()
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "PRAGMA table_info(paper_pdfs)", -1, &stmt, nil) == SQLITE_OK {
+            while sqlite3_step(stmt) == SQLITE_ROW {
+                existing.insert(columnString(stmt, 1)) // column 1 = name
+            }
+        }
+        sqlite3_finalize(stmt)
+
+        let columns: [(String, String)] = [
+            ("pdf_path", "TEXT"),
+            ("pdf_status", "TEXT"),
+            ("byte_size", "INTEGER"),
+            ("sha256", "TEXT"),
+            ("checked_at", "INTEGER"),
+            ("fetched_at", "INTEGER")
+        ]
+        for (name, type) in columns where !existing.contains(name) {
+            sqlite3_exec(db, "ALTER TABLE paper_pdfs ADD COLUMN \(name) \(type)", nil, nil, nil)
         }
     }
 
@@ -249,7 +291,8 @@ class PaperStore {
                     )
                 ), ''), '') as collections,
                  COALESCE(pn.note, '') as note, COALESCE(pt.abstract_zh, '') as abstract_zh,
-                ps.status_changed_at, p.added_at
+                ps.status_changed_at, p.added_at,
+                f.pdf_path, f.pdf_status
          FROM papers p
         LEFT JOIN paper_cache pc ON p.id = pc.paper_id
         LEFT JOIN paper_states ps ON p.id = ps.paper_id
@@ -307,6 +350,8 @@ class PaperStore {
             let abstractZh = columnString(stmt, 21)
             let statusChangedAt = columnOptionalString(stmt, 22).flatMap(Self.parseSQLiteDate)
             let addedAt = columnOptionalString(stmt, 23).flatMap(Self.parseSQLiteDate)
+            let pdfLocalPath = columnOptionalString(stmt, 24)
+            let pdfStatus = columnOptionalString(stmt, 25)
 
             var pubYear: Int? = nil
             if pubDate.count >= 4 {
@@ -326,6 +371,8 @@ class PaperStore {
                 abstract: abstract,
                 landingPageUrl: landingPage,
                 pdfUrl: pdfUrl,
+                pdfLocalPath: pdfLocalPath,
+                pdfStatus: pdfStatus,
                 track: track,
                 score: score,
                 tier: tier,
@@ -763,28 +810,67 @@ class PaperStore {
         }
     }
 
-    func setPaperPdf(id: String, pdfUrl: String, pdfSource: String) {
-        let sql = """
-        INSERT INTO paper_pdfs (paper_id, pdf_url, pdf_source)
-        VALUES (?, ?, ?)
-        ON CONFLICT(paper_id) DO UPDATE SET
-            pdf_url = excluded.pdf_url,
-            pdf_source = excluded.pdf_source
-        """
+    /// Persists the outcome of a PDF fetch (see `PdfFetcher`). A `.downloaded`
+    /// or `.notPdf` result always carries a URL and upserts the full row; a
+    /// `.dead` result (no link found) only stamps the status onto an existing
+    /// row, leaving any previously known URL intact.
+    func savePdf(id: String, result: PdfFetchResult) {
+        let now = Int(Date().timeIntervalSince1970)
 
-        var stmt: OpaquePointer?
-        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 2, pdfUrl, -1, SQLITE_TRANSIENT)
-            sqlite3_bind_text(stmt, 3, pdfSource, -1, SQLITE_TRANSIENT)
-            if sqlite3_step(stmt) == SQLITE_DONE {
-                if let idx = papers.firstIndex(where: { $0.id == id }) {
-                    papers[idx].pdfUrl = pdfUrl
-                }
-                paperVersion += 1
+        if result.status == .dead {
+            let sql = """
+            UPDATE paper_pdfs SET pdf_status = ?, checked_at = ? WHERE paper_id = ?
+            """
+            var stmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(stmt, 1, result.status.rawValue, -1, SQLITE_TRANSIENT)
+                sqlite3_bind_int64(stmt, 2, Int64(now))
+                sqlite3_bind_text(stmt, 3, id, -1, SQLITE_TRANSIENT)
+                sqlite3_step(stmt)
             }
             sqlite3_finalize(stmt)
+            applyPdfResultInMemory(id: id, result: result)
+            return
         }
+
+        let sql = """
+        INSERT INTO paper_pdfs
+            (paper_id, pdf_url, pdf_source, pdf_path, pdf_status, byte_size, sha256, checked_at, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(paper_id) DO UPDATE SET
+            pdf_url = excluded.pdf_url,
+            pdf_source = excluded.pdf_source,
+            pdf_path = excluded.pdf_path,
+            pdf_status = excluded.pdf_status,
+            byte_size = excluded.byte_size,
+            sha256 = excluded.sha256,
+            checked_at = excluded.checked_at,
+            fetched_at = excluded.fetched_at
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        defer { sqlite3_finalize(stmt) }
+        sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+        sqlite3_bind_text(stmt, 2, result.url ?? "", -1, SQLITE_TRANSIENT)
+        bindOptionalText(stmt, 3, result.source)
+        bindOptionalText(stmt, 4, result.localPath)
+        sqlite3_bind_text(stmt, 5, result.status.rawValue, -1, SQLITE_TRANSIENT)
+        if let size = result.byteSize { sqlite3_bind_int64(stmt, 6, Int64(size)) } else { sqlite3_bind_null(stmt, 6) }
+        bindOptionalText(stmt, 7, result.sha256)
+        sqlite3_bind_int64(stmt, 8, Int64(now))
+        if result.status == .downloaded { sqlite3_bind_int64(stmt, 9, Int64(now)) } else { sqlite3_bind_null(stmt, 9) }
+
+        if sqlite3_step(stmt) == SQLITE_DONE {
+            applyPdfResultInMemory(id: id, result: result)
+        }
+    }
+
+    private func applyPdfResultInMemory(id: String, result: PdfFetchResult) {
+        guard let idx = papers.firstIndex(where: { $0.id == id }) else { return }
+        if let url = result.url { papers[idx].pdfUrl = url }
+        papers[idx].pdfLocalPath = result.localPath
+        papers[idx].pdfStatus = result.status.rawValue
+        paperVersion += 1
     }
 
     // MARK: - Collections

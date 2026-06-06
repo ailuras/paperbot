@@ -872,28 +872,10 @@ struct ContentView: View {
     }
 
     private func resolvePdf(for paper: Paper) {
-        if let pdfUrl = paper.pdfUrl, !pdfUrl.isEmpty, let url = URL(string: pdfUrl) {
-            NSWorkspace.shared.open(url)
-            return
-        }
-
         isResolvingPdf = true
-        NotificationCenter.shared.setStatus("Resolving OpenAccess PDF...", type: .progress)
         let config = ConfigManager.shared.effectiveConfig
-
         Task {
-            let resolver = PdfResolver(config: config)
-            if let result = await resolver.resolve(id: paper.id, title: paper.title, doi: paper.doi, currentPdfUrl: paper.pdfUrl),
-               let url = URL(string: result.url) {
-                paper.pdfUrl = result.url
-                store.setPaperPdf(id: paper.id, pdfUrl: result.url, pdfSource: result.source)
-                NotificationCenter.shared.showToast("PDF resolved!", type: .success)
-                NotificationCenter.shared.clearStatus()
-                NSWorkspace.shared.open(url)
-            } else {
-                NotificationCenter.shared.showToast("Could not resolve PDF for this paper", type: .error)
-                NotificationCenter.shared.clearStatus()
-            }
+            await PdfFetcher.openOrFetch(paper: paper, store: store, config: config)
             isResolvingPdf = false
         }
     }

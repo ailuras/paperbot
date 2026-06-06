@@ -69,6 +69,11 @@ final class Paper: Identifiable {
     var abstract: String   { didSet { _searchText = nil } }
     var landingPageUrl: String
     var pdfUrl: String?
+    /// Relative path of the downloaded PDF under the storage directory
+    /// (`pdfs/<id>.pdf`); `nil` until a validated PDF is fetched.
+    var pdfLocalPath: String?
+    /// Raw `PdfStatus` rawValue; `nil` means no fetch has been attempted.
+    var pdfStatus: String?
     var track: String
     var score: Double
     var tier: Int
@@ -105,7 +110,8 @@ final class Paper: Identifiable {
         publicationYear: Int? = nil, venue: String = "",
         venueAbbr: String = "", citedByCount: Int = 0,
         abstract: String = "", landingPageUrl: String = "",
-        pdfUrl: String? = nil, track: String = "",
+        pdfUrl: String? = nil, pdfLocalPath: String? = nil,
+        pdfStatus: String? = nil, track: String = "",
         score: Double = 0.0, tier: Int = 0,
         status: PaperStatus = .pending,
         isRecommended: Bool = false, recommendedAt: Date? = nil,
@@ -127,6 +133,8 @@ final class Paper: Identifiable {
         self.abstract = abstract
         self.landingPageUrl = landingPageUrl
         self.pdfUrl = pdfUrl
+        self.pdfLocalPath = pdfLocalPath
+        self.pdfStatus = pdfStatus
         self.track = track
         self.score = score
         self.tier = tier
