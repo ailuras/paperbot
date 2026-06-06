@@ -42,6 +42,7 @@ enum L10n {
         case openPDF, markRead, markStarred, markSkip, cancelRecommendation, openInVellumX, openVellumX, quit
         // PDF fetch / reveal
         case fetchPDF, showPdfInFinder, resolvingPDF, pdfDownloaded, pdfNotAvailable, pdfNotFound
+        case setPdfFromFile, removePdf, choosePdf, pdfSet, pdfRemoved, notAPdfFile, pdfSetFailed
         // Citation export
         case cite, copiedBibtex
         // Related papers
@@ -199,6 +200,13 @@ enum L10n {
         case .pdfDownloaded:      return ("PDF downloaded", "PDF 已下载")
         case .pdfNotAvailable:    return ("No downloadable PDF found", "未找到可下载的 PDF")
         case .pdfNotFound:        return ("No open-access PDF found", "无开放获取 PDF")
+        case .setPdfFromFile:     return ("Set PDF from File…", "从文件设置 PDF…")
+        case .removePdf:          return ("Remove PDF", "移除 PDF")
+        case .choosePdf:          return ("Choose", "选择")
+        case .pdfSet:             return ("PDF set", "PDF 已设置")
+        case .pdfRemoved:         return ("PDF removed", "PDF 已移除")
+        case .notAPdfFile:        return ("The selected file is not a PDF", "所选文件不是 PDF")
+        case .pdfSetFailed:       return ("Could not set the PDF", "无法设置 PDF")
         case .markRead:           return ("Mark Read", "标记已读")
         case .markStarred:        return ("Mark Starred", "标记收藏")
         case .markSkip:           return ("Skip", "跳过")

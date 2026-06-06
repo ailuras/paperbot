@@ -14,6 +14,10 @@ struct PaperDetailView: View {
     let onFetchPdf: (Paper) -> Void
     /// Reveal an already-downloaded PDF in Finder.
     let onRevealPdf: (Paper) -> Void
+    /// Manually attach a PDF chosen from disk.
+    let onSetPdf: (Paper) -> Void
+    /// Remove the paper's stored PDF.
+    let onRemovePdf: (Paper) -> Void
     let onStatusChange: (Paper, PaperStatus) -> Void
     let onAddTag: (Paper, String) -> Void
     let onRemoveTag: (Paper, String) -> Void
@@ -91,6 +95,10 @@ struct PaperDetailView: View {
         PdfStatus(rawValue: paper.pdfStatus ?? "") == .downloaded
     }
 
+    private var hasPdfRecord: Bool {
+        paper.pdfStatus != nil || paper.pdfLocalPath != nil
+    }
+
     private var pdfButton: some View {
         Button {
             if isPdfDownloaded { onRevealPdf(paper) } else { onFetchPdf(paper) }
@@ -107,6 +115,12 @@ struct PaperDetailView: View {
         .buttonStyle(.plain)
         .disabled(isResolvingPdf)
         .help(pdfButtonHelp)
+        .contextMenu {
+            Button(L10n.t(.setPdfFromFile)) { onSetPdf(paper) }
+            if hasPdfRecord {
+                Button(L10n.t(.removePdf), role: .destructive) { onRemovePdf(paper) }
+            }
+        }
     }
 
     /// Reflects the PDF lifecycle: a downloaded paper reveals in Finder, an

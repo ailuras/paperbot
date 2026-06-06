@@ -865,6 +865,26 @@ class PaperStore {
         }
     }
 
+    /// Removes a paper's PDF record (used by manual "Remove PDF"). The caller is
+    /// responsible for deleting the file on disk via `PdfStorage`.
+    func clearPdf(id: String) {
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, "DELETE FROM paper_pdfs WHERE paper_id = ?", -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            sqlite3_step(stmt)
+        }
+        sqlite3_finalize(stmt)
+
+        if let idx = papers.firstIndex(where: { $0.id == id }) {
+            let paper = papers[idx]
+            paper.pdfUrl = nil
+            paper.pdfLocalPath = nil
+            paper.pdfStatus = nil
+            papers[idx] = paper
+            paperVersion += 1
+        }
+    }
+
     private func applyPdfResultInMemory(id: String, result: PdfFetchResult) {
         guard let idx = papers.firstIndex(where: { $0.id == id }) else { return }
         let paper = papers[idx]

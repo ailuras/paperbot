@@ -43,4 +43,42 @@ enum PdfCoordinator {
         }
         await fetch(paper: paper, store: store)
     }
+
+    /// Copies a user-chosen PDF into the structured library, validating it first.
+    /// The manual PDF lands in the same place as a downloaded one
+    /// (`pdfs/<id>.pdf`, source "manual"), so reveal/migration/shared-library
+    /// behavior applies uniformly.
+    static func setManualPdf(paper: Paper, store: PaperStore, from fileURL: URL) {
+        guard let data = try? Data(contentsOf: fileURL) else {
+            NotificationCenter.shared.showToast(L10n.t(.pdfSetFailed), type: .error)
+            return
+        }
+        guard PdfStorage.looksLikePdf(data) else {
+            NotificationCenter.shared.showToast(L10n.t(.notAPdfFile), type: .warning)
+            return
+        }
+        do {
+            let relative = try PdfStorage.current().write(data, forPaperId: paper.id)
+            store.savePdf(id: paper.id, result: PdfFetchResult(
+                status: .downloaded,
+                url: nil,
+                source: "manual",
+                localPath: relative,
+                byteSize: data.count,
+                sha256: PdfStorage.sha256Hex(data)
+            ))
+            NotificationCenter.shared.showToast(L10n.t(.pdfSet), type: .success)
+        } catch {
+            NotificationCenter.shared.showToast(L10n.t(.pdfSetFailed), type: .error)
+        }
+    }
+
+    /// Deletes the stored file (if any) and clears the paper's PDF record.
+    static func removePdf(paper: Paper, store: PaperStore) {
+        if let path = paper.pdfLocalPath {
+            PdfStorage.current().delete(relative: path)
+        }
+        store.clearPdf(id: paper.id)
+        NotificationCenter.shared.showToast(L10n.t(.pdfRemoved), type: .info)
+    }
 }

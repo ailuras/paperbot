@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 
 struct ContentView: View {
     @State private var store = PaperStore.shared
@@ -272,6 +273,8 @@ struct ContentView: View {
                     onTranslate: translate,
                     onFetchPdf: fetchPdf,
                     onRevealPdf: revealPdf,
+                    onSetPdf: setPdf,
+                    onRemovePdf: removePdf,
                     onStatusChange: updatePaperStatus,
                     onAddTag: addPaperTag,
                     onRemoveTag: removePaperTag,
@@ -882,6 +885,22 @@ struct ContentView: View {
 
     private func revealPdf(for paper: Paper) {
         Task { await PdfCoordinator.reveal(paper: paper, store: store) }
+    }
+
+    private func setPdf(for paper: Paper) {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.pdf]
+        panel.prompt = L10n.t(.choosePdf)
+        if panel.runModal() == .OK, let url = panel.url {
+            PdfCoordinator.setManualPdf(paper: paper, store: store, from: url)
+        }
+    }
+
+    private func removePdf(for paper: Paper) {
+        PdfCoordinator.removePdf(paper: paper, store: store)
     }
 }
 
