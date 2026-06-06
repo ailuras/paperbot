@@ -67,8 +67,10 @@ struct TagChip: View {
             if let icon {
                 Image(systemName: icon)
             }
-            Text(text)
-                .lineLimit(1)
+            if !text.isEmpty {
+                Text(text)
+                    .lineLimit(1)
+            }
         }
         .font(size.font)   // unified font keeps the SF Symbol on the text baseline
         .padding(.horizontal, size.horizontalPadding)
@@ -100,5 +102,10 @@ extension TagChip {
     /// Publication date — neutral, secondary styling.
     static func date(_ text: String, size: Size = .small) -> TagChip {
         TagChip(text: text, icon: "calendar", size: size, emphasis: .subtle)
+    }
+
+    /// Marks that a validated PDF is stored locally — icon-only, green.
+    static func pdf(size: Size = .small) -> TagChip {
+        TagChip(text: "", icon: "doc.fill", color: .green, size: size)
     }
 }

@@ -30,7 +30,8 @@ struct PaperListView: View {
                     isDailyRecommendation: highlightsDailyRecommendations,
                     showsStatusMarker: showsStatusMarker,
                     isSelected: selectedPaperIds.contains(paper.id),
-                    status: paper.status
+                    status: paper.status,
+                    hasPdf: PdfStatus(rawValue: paper.pdfStatus ?? "") == .downloaded
                 )
                 .tag(paper.id)
                 .listRowSeparator(.hidden)
@@ -156,6 +157,9 @@ private struct PaperRowView: View {
     /// re-renders the moment the status changes — a class mutation alone would
     /// not change any of the row's inputs and SwiftUI would skip the redraw.
     let status: PaperStatus
+    /// Whether a validated PDF is stored locally. Passed as a value (like
+    /// `status`) so the row re-renders when a PDF is fetched, set, or removed.
+    let hasPdf: Bool
 
     @State private var isHovering = false
 
@@ -203,6 +207,9 @@ private struct PaperRowView: View {
 
                 if isTodayRecommended {
                     TagChip(text: "Today", icon: "sparkles", color: todayColor)
+                }
+                if hasPdf {
+                    TagChip.pdf().help(L10n.t(.openPDF))
                 }
                 if !paper.publicationDate.isEmpty {
                     TagChip.date(paper.publicationDate)
