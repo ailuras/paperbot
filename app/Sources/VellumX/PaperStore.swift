@@ -819,16 +819,16 @@ class PaperStore {
 
         if result.status == .dead {
             let sql = """
-            UPDATE paper_pdfs SET pdf_status = ?, checked_at = ? WHERE paper_id = ?
+            UPDATE paper_pdfs SET pdf_source = NULL, pdf_path = NULL, byte_size = NULL,
+                                  sha256 = NULL, pdf_status = ?, checked_at = ? WHERE paper_id = ?
             """
             var stmt: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
-                sqlite3_bind_text(stmt, 1, result.status.rawValue, -1, SQLITE_TRANSIENT)
-                sqlite3_bind_int64(stmt, 2, Int64(now))
-                sqlite3_bind_text(stmt, 3, id, -1, SQLITE_TRANSIENT)
-                sqlite3_step(stmt)
-            }
-            sqlite3_finalize(stmt)
+            guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+            defer { sqlite3_finalize(stmt) }
+            sqlite3_bind_text(stmt, 1, result.status.rawValue, -1, SQLITE_TRANSIENT)
+            sqlite3_bind_int64(stmt, 2, Int64(now))
+            sqlite3_bind_text(stmt, 3, id, -1, SQLITE_TRANSIENT)
+            sqlite3_step(stmt)
             applyPdfResultInMemory(id: id, result: result)
             return
         }

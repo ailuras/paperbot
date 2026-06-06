@@ -22,6 +22,13 @@ enum PdfCoordinator {
         NotificationCenter.shared.setStatus(L10n.t(.resolvingPDF), type: .progress)
         let result = await PdfFetcher(config: config, storage: storage)
             .fetch(id: paper.id, title: paper.title, doi: paper.doi, currentPdfUrl: paper.pdfUrl)
+
+        // If a previous local PDF exists but the new result is not a download,
+        // remove the orphaned file so the library stays consistent.
+        if result.status != .downloaded, let oldPath = paper.pdfLocalPath {
+            storage.delete(relative: oldPath)
+        }
+
         store.savePdf(id: paper.id, result: result)
         NotificationCenter.shared.clearStatus()
 
