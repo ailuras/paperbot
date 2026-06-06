@@ -94,8 +94,12 @@ struct PaperDetailView: View {
         .padding(.bottom, 4)
     }
 
+    private var pdfStatus: PdfStatus? {
+        PdfStatus(rawValue: paper.pdfStatus ?? "")
+    }
+
     private var isPdfDownloaded: Bool {
-        PdfStatus(rawValue: paper.pdfStatus ?? "") == .downloaded
+        pdfStatus == .downloaded
     }
 
     private var hasPdfRecord: Bool {
@@ -142,7 +146,7 @@ struct PaperDetailView: View {
     /// Reflects the PDF lifecycle: a downloaded paper reveals in Finder, an
     /// invalid/missing one warns, and an unfetched one offers to fetch.
     private var pdfButtonIcon: String {
-        switch PdfStatus(rawValue: paper.pdfStatus ?? "") {
+        switch pdfStatus {
         case .downloaded:     return "doc.text.fill"
         case .notPdf, .dead:  return "exclamationmark.triangle"
         default:              return "doc.text.magnifyingglass"
@@ -150,7 +154,7 @@ struct PaperDetailView: View {
     }
 
     private var pdfButtonHelp: String {
-        switch PdfStatus(rawValue: paper.pdfStatus ?? "") {
+        switch pdfStatus {
         case .downloaded:     return L10n.t(.showPdfInFinder)
         case .notPdf, .dead:  return L10n.pick("No PDF available — retry fetch", "无可用 PDF — 重试获取")
         default:              return L10n.t(.fetchPDF)
