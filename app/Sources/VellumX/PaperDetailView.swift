@@ -16,6 +16,8 @@ struct PaperDetailView: View {
     let onRevealPdf: (Paper) -> Void
     /// Manually attach a PDF chosen from disk.
     let onSetPdf: (Paper) -> Void
+    /// Attach a PDF dropped onto the PDF button (paper id, file URL).
+    let onDropPdf: (String, URL) -> Void
     /// Remove the paper's stored PDF.
     let onRemovePdf: (Paper) -> Void
     let onStatusChange: (Paper, PaperStatus) -> Void
@@ -27,6 +29,7 @@ struct PaperDetailView: View {
     let addTagSignal: Int
 
     @FocusState private var noteFocused: Bool
+    @State private var isPdfDropTargeted = false
     @State private var showCollectionPopover = false
     @State private var showingTranslation: Bool = false
     @State private var lastPersistedNote: String = ""
@@ -115,12 +118,25 @@ struct PaperDetailView: View {
         .buttonStyle(.plain)
         .disabled(isResolvingPdf)
         .help(pdfButtonHelp)
+        .overlay(
+            RoundedRectangle(cornerRadius: 7)
+                .stroke(Color.accentColor, lineWidth: 2)
+                .opacity(isPdfDropTargeted ? 1 : 0)
+        )
         .contextMenu {
             Button(L10n.t(.setPdfFromFile)) { onSetPdf(paper) }
             if hasPdfRecord {
                 Button(L10n.t(.removePdf), role: .destructive) { onRemovePdf(paper) }
             }
         }
+        // Drop a PDF straight onto the button to attach it. The action runs on
+        // the main actor with decoded URLs, reusing the same validate-and-store
+        // path as the menu action.
+        .dropDestination(for: URL.self) { urls, _ in
+            guard let url = urls.first, url.pathExtension.lowercased() == "pdf" else { return false }
+            onDropPdf(paper.id, url)
+            return true
+        } isTargeted: { isPdfDropTargeted = $0 }
     }
 
     /// Reflects the PDF lifecycle: a downloaded paper reveals in Finder, an

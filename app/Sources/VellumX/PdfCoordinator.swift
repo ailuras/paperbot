@@ -49,6 +49,10 @@ enum PdfCoordinator {
     /// (`pdfs/<id>.pdf`, source "manual"), so reveal/migration/shared-library
     /// behavior applies uniformly.
     static func setManualPdf(paper: Paper, store: PaperStore, from fileURL: URL) {
+        // A dropped or sandbox-scoped file URL needs explicit access to read.
+        let scoped = fileURL.startAccessingSecurityScopedResource()
+        defer { if scoped { fileURL.stopAccessingSecurityScopedResource() } }
+
         guard let data = try? Data(contentsOf: fileURL) else {
             NotificationCenter.shared.showToast(L10n.t(.pdfSetFailed), type: .error)
             return

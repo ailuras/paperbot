@@ -274,6 +274,7 @@ struct ContentView: View {
                     onFetchPdf: fetchPdf,
                     onRevealPdf: revealPdf,
                     onSetPdf: setPdf,
+                    onDropPdf: dropPdf,
                     onRemovePdf: removePdf,
                     onStatusChange: updatePaperStatus,
                     onAddTag: addPaperTag,
@@ -897,6 +898,11 @@ struct ContentView: View {
         if panel.runModal() == .OK, let url = panel.url {
             PdfCoordinator.setManualPdf(paper: paper, store: store, from: url)
         }
+    }
+
+    private func dropPdf(id: String, url: URL) {
+        guard let paper = store.papers.first(where: { $0.id == id }) else { return }
+        PdfCoordinator.setManualPdf(paper: paper, store: store, from: url)
     }
 
     private func removePdf(for paper: Paper) {
