@@ -206,7 +206,8 @@ class PaperStore {
             name TEXT NOT NULL,
             color TEXT,
             icon TEXT,
-            parent_id TEXT
+            parent_id TEXT,
+            notes TEXT
         );
 
         CREATE TABLE IF NOT EXISTS collection_papers (
@@ -225,6 +226,7 @@ class PaperStore {
         }
 
         migratePdfSchema()
+        migrateCollectionsSchema()
     }
 
     /// Adds the local-asset columns to `paper_pdfs` on databases created before
@@ -251,6 +253,14 @@ class PaperStore {
         for (name, type) in columns where !existing.contains(name) {
             sqlite3_exec(db, "ALTER TABLE paper_pdfs ADD COLUMN \(name) \(type)", nil, nil, nil)
         }
+    }
+
+    /// Adds the `notes` column to `collections` on databases created before it
+    /// was introduced. `ALTER TABLE ADD COLUMN` is purely additive and safe to
+    /// run multiple times — SQLite returns an error (ignored here) if the column
+    /// already exists.
+    private func migrateCollectionsSchema() {
+        sqlite3_exec(db, "ALTER TABLE collections ADD COLUMN notes TEXT", nil, nil, nil)
     }
 
     func loadPapers() {
@@ -901,7 +911,7 @@ class PaperStore {
     // MARK: - Collections
 
     var allCollections: [PaperCollection] {
-        let sql = "SELECT id, name, color, icon, parent_id FROM collections ORDER BY lower(name), name"
+        let sql = "SELECT id, name, color, icon, parent_id, notes FROM collections ORDER BY lower(name), name"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
@@ -913,19 +923,21 @@ class PaperStore {
             let color = columnOptionalString(stmt, 2)
             let icon = columnOptionalString(stmt, 3)
             let parentId = columnOptionalString(stmt, 4)
-            rows.append(PaperCollection(id: id, name: name, color: color, icon: icon, parentId: parentId))
+            let notes = columnOptionalString(stmt, 5)
+            rows.append(PaperCollection(id: id, name: name, color: color, icon: icon, parentId: parentId, notes: notes))
         }
         return rows
     }
 
     @discardableResult
     func createCollection(name: String, color: String? = nil,
-                          icon: String? = nil, parentId: String? = nil) -> PaperCollection? {
+                          icon: String? = nil, parentId: String? = nil,
+                          notes: String? = nil) -> PaperCollection? {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
 
         let id = UUID().uuidString
-        let sql = "INSERT INTO collections (id, name, color, icon, parent_id) VALUES (?, ?, ?, ?, ?)"
+        let sql = "INSERT INTO collections (id, name, color, icon, parent_id, notes) VALUES (?, ?, ?, ?, ?, ?)"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
@@ -934,9 +946,10 @@ class PaperStore {
         bindOptionalText(stmt, 3, color)
         bindOptionalText(stmt, 4, icon)
         bindOptionalText(stmt, 5, parentId)
+        bindOptionalText(stmt, 6, notes)
         guard sqlite3_step(stmt) == SQLITE_DONE else { return nil }
         paperVersion += 1
-        return PaperCollection(id: id, name: trimmedName, color: color, icon: icon, parentId: parentId)
+        return PaperCollection(id: id, name: trimmedName, color: color, icon: icon, parentId: parentId, notes: notes)
     }
 
     func renameCollection(id: String, to newName: String) {
@@ -951,6 +964,10 @@ class PaperStore {
 
     func setCollectionColor(id: String, color: String?) {
         updateCollectionColumn(id: id, column: "color", value: color)
+    }
+
+    func setCollectionNotes(id: String, notes: String?) {
+        updateCollectionColumn(id: id, column: "notes", value: notes)
     }
 
     private func updateCollectionColumn(id: String, column: String, value: String?) {

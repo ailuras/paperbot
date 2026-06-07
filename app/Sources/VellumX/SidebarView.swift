@@ -13,6 +13,7 @@ struct SidebarView: View {
 
     @State private var expandedCollections: Set<String> = []
     @State private var topicSheet: TopicEditTarget?
+    @State private var collectionEditorTarget: CollectionEditTarget?
     @State private var archivedExpanded = false
 
     private var activeTopics: [TrackPref] { metadata.topics.filter { !$0.archived } }
@@ -140,7 +141,7 @@ struct SidebarView: View {
                         selectedCollectionId: selectedCollectionId,
                         papers: papers,
                         onSelect: selectCollection,
-                        onRename: { startRename($0) },
+                        onEdit: { startEditCollection($0) },
                         onAddSubfolder: { startNewSubfolder($0) },
                         onDelete: { confirmDelete($0) }
                     )
@@ -167,6 +168,9 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .sheet(item: $topicSheet) { sheet in
             TopicEditor(existing: sheet.existing)
+        }
+        .sheet(item: $collectionEditorTarget) { target in
+            CollectionEditor(target: target)
         }
     }
 
@@ -280,40 +284,17 @@ struct SidebarView: View {
         if selectedCollectionId != nil { selectedItem = nil }
     }
 
-    private func startRename(_ collection: PaperCollection) {
-        presentNamePrompt(title: "Rename Collection", initial: collection.name) { text in
-            PaperStore.shared.renameCollection(id: collection.id, to: text)
-        }
+    private func startEditCollection(_ collection: PaperCollection) {
+        collectionEditorTarget = .edit(collection)
     }
 
     private func startNewSubfolder(_ parent: PaperCollection) {
-        presentNamePrompt(title: "New Subfolder", initial: "") { text in
-            PaperStore.shared.createCollection(name: text, parentId: parent.id)
-            expandedCollections.insert(parent.id)
-        }
+        expandedCollections.insert(parent.id)
+        collectionEditorTarget = .new(parentId: parent.id)
     }
 
     private func startNewRoot() {
-        presentNamePrompt(title: "New Collection", initial: "") { text in
-            PaperStore.shared.createCollection(name: text)
-        }
-    }
-
-    private func presentNamePrompt(title: String, initial: String, action: @escaping (String) -> Void) {
-        NotificationCenter.shared.present(AlertItem(
-            title: title,
-            message: nil,
-            actions: [
-                .confirm("Save", action: {
-                    let text = NotificationCenter.shared.currentAlert?.textFieldValue?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                    guard !text.isEmpty else { return }
-                    action(text)
-                }),
-                .cancel("Cancel")
-            ],
-            textFieldValue: initial,
-            textFieldLabel: "Name"
-        ))
+        collectionEditorTarget = .new(parentId: nil)
     }
 
     private func confirmDelete(_ target: PaperCollection) {
@@ -465,7 +446,7 @@ private struct CollectionTreeRow: View {
     let selectedCollectionId: String?
     let papers: [Paper]
     let onSelect: (PaperCollection) -> Void
-    let onRename: (PaperCollection) -> Void
+    let onEdit: (PaperCollection) -> Void
     let onAddSubfolder: (PaperCollection) -> Void
     let onDelete: (PaperCollection) -> Void
     @State private var isContextMenuPresented = false
@@ -504,7 +485,7 @@ private struct CollectionTreeRow: View {
                     selectedCollectionId: selectedCollectionId,
                     papers: papers,
                     onSelect: onSelect,
-                    onRename: onRename,
+                    onEdit: onEdit,
                     onAddSubfolder: onAddSubfolder,
                     onDelete: onDelete
                 )
@@ -516,16 +497,24 @@ private struct CollectionTreeRow: View {
         HStack(spacing: 5) {
             disclosure
             Button { onSelect(collection) } label: {
-                HStack {
-                    Label {
+                HStack(spacing: 8) {
+                    CollectionBadge(
+                        color: collection.resolvedColor,
+                        icon: collection.displayIcon,
+                        size: 22
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
                         Text(collection.name)
                             .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                            .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.85))
                             .lineLimit(1)
                             .truncationMode(.tail)
-                    } icon: {
-                        Image(systemName: collection.icon ?? "folder")
-                            .font(.system(size: 14))
-                            .foregroundStyle(iconColor)
+                        if let notes = collection.notes, !notes.isEmpty {
+                            Text(notes)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                     Spacer(minLength: 0)
                     if paperCount > 0 {
@@ -544,7 +533,6 @@ private struct CollectionTreeRow: View {
         .padding(.leading, CGFloat(depth) * 14)
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(isSelected ? .primary : .secondary)
         .background {
             if showsSelectionFrame {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
@@ -583,36 +571,11 @@ private struct CollectionTreeRow: View {
     }
 
     @ViewBuilder private var contextMenu: some View {
-        Button("Rename…") { onRename(collection) }
+        Button("Edit…") { onEdit(collection) }
             .onAppear { isContextMenuPresented = true }
             .onDisappear { isContextMenuPresented = false }
         Button("New Subfolder…") { onAddSubfolder(collection) }
-        Menu("Icon") {
-            ForEach(SidebarGlyph.choices, id: \.symbol) { choice in
-                Button {
-                    PaperStore.shared.setCollectionIcon(id: collection.id, icon: choice.symbol)
-                } label: {
-                    Label(choice.label, systemImage: choice.symbol)
-                }
-            }
-            Divider()
-            Button("Default") { PaperStore.shared.setCollectionIcon(id: collection.id, icon: nil) }
-        }
-        Menu("Color") {
-            ForEach(LabelColor.allCases) { c in
-                Button(c.title) { PaperStore.shared.setCollectionColor(id: collection.id, color: c.rawValue) }
-            }
-            Divider()
-            Button("Default") { PaperStore.shared.setCollectionColor(id: collection.id, color: nil) }
-        }
         Divider()
         Button("Delete", role: .destructive) { onDelete(collection) }
-    }
-
-    private var iconColor: Color {
-        if let colorName = collection.color, let labelColor = LabelColor(rawValue: colorName) {
-            return labelColor.color
-        }
-        return .accentColor
     }
 }
