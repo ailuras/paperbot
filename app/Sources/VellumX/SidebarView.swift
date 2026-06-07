@@ -531,7 +531,7 @@ private struct CollectionTreeRow: View {
                 } else {
                     Text(collection.name)
                         .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                        .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.85))
+                        .foregroundStyle(isSelected ? Color.white : Color.primary.opacity(0.85))
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .onTapGesture(count: 2) {
@@ -543,10 +543,13 @@ private struct CollectionTreeRow: View {
                 if !isEditing && paperCount > 0 {
                     Text("\(paperCount)")
                         .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(isSelected ? Color.white.opacity(0.75) : Color.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                        .background(
+                            isSelected ? Color.white.opacity(0.20) : Color.secondary.opacity(0.12),
+                            in: Capsule()
+                        )
                 }
             }
             .padding(.vertical, 5)
@@ -565,7 +568,7 @@ private struct CollectionTreeRow: View {
     private var rowBackground: some View {
         if isSelected {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.accentColor.opacity(0.25))
+                .fill(Color(NSColor.selectedContentBackgroundColor))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 1)
         } else {
