@@ -18,6 +18,17 @@ feature is removed, delete its code, its tests, and its documentation; do not
 leave dead code or commented-out blocks behind. Prefer small, single-purpose
 units over generalised helpers that accumulate optional behaviour over time.
 
+## After Implementation
+
+When you finish a code change, always do these two things before handing off:
+
+1. **Commit by feature point.** Each commit must be a single, complete,
+   reviewable unit. If a change touches multiple concerns, split it into
+   separate commits. Follow the prefix format in Commit Style below.
+2. **Restart the app.** Run `make run` to rebuild, re-test, re-sign, and
+   launch. The user verifies UI changes manually — do not claim a change
+   works until the app launches without error.
+
 ## What This Is
 
 VellumX is a native macOS SwiftUI app (macOS 14+) for academic paper discovery,
