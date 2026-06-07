@@ -524,10 +524,9 @@ private struct CollectionTreeRow: View {
                             .background(Color.secondary.opacity(0.12), in: Capsule())
                     }
                 }
+                .contentShape(Rectangle())  // must be on the label, not the button
             }
             .buttonStyle(.plain)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
         }
         .padding(.leading, CGFloat(depth) * 14)
         .padding(.vertical, 5)
@@ -541,8 +540,8 @@ private struct CollectionTreeRow: View {
     private var rowBackground: some View {
         if isSelected {
             RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(collection.resolvedColor.opacity(0.15))
-                .padding(.horizontal, 4)
+                .fill(Color.accentColor.opacity(0.25))
+                .padding(.horizontal, 8)
                 .padding(.vertical, 1)
         } else {
             Color.clear
