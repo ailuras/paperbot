@@ -542,6 +542,7 @@ struct PaperDetailView: View {
                 MemoLine(title: "Recommendation", value: recommendationMemo)
                 MemoLine(title: "Venue Rule", value: venueRuleMemo)
                 MemoLine(title: "Score", value: scoreMemo)
+                MemoLine(title: "Abstract", value: abstractMemo)
             }
             .padding(10)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -575,6 +576,17 @@ struct PaperDetailView: View {
     private var scoreMemo: String {
         let citations = paper.citedByCount == 1 ? "1 citation" : "\(paper.citedByCount) citations"
         return "Score \(String(format: "%.0f", paper.score)); tier \(paper.tier); \(citations)"
+    }
+
+    private var abstractMemo: String {
+        let words = paper.abstractWordCount
+        guard words > 0 else { return "No abstract available" }
+        let translated = paper.abstractZh.isEmpty ? "no translation" : "translated"
+        if let minutes = paper.abstractReadingMinutes {
+            let plural = minutes == 1 ? "minute" : "minutes"
+            return "\(words) words — ~\(minutes) \(plural) at 220 wpm; \(translated)"
+        }
+        return "\(words) words; \(translated)"
     }
 
     private var matchedVenueRule: VenuePref? {
