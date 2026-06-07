@@ -60,6 +60,12 @@ Distinguish the common prompt family:
   Tell the user to choose Always Allow for `codesign` if they want repeated
   rebuilds to avoid private-key access prompts.
 
+## UI Verification
+
+Do not screenshot or attempt to interact with the running app to verify UI
+changes. Build and launch with `make run`, report the build result, then stop.
+The user tests the UI directly.
+
 ## Core Contract
 
 - `PaperStore` owns the SQLite paper library and is `@MainActor`.
