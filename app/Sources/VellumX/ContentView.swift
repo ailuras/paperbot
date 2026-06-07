@@ -38,6 +38,7 @@ struct ContentView: View {
     // Async execution states
     @State private var isFetching: Bool = false
     @State private var isRecommending: Bool = false
+    @State private var showImport: Bool = false
     @State private var isTranslating: Bool = false
     /// Paper IDs currently resolving their PDF; per-paper so switching detail
     /// views does not carry the spinner state across papers.
@@ -121,17 +122,17 @@ struct ContentView: View {
                              activeColor: Color = .accentColor) -> some View {
         ZStack {
             if isActive {
-                Circle()
-                    .fill(activeColor.opacity(0.85))
-                    .frame(width: 19, height: 19)
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(activeColor.opacity(0.80))
+                    .frame(width: 18, height: 18)
             }
             Image(systemName: systemName)
-                .font(.system(size: 8.8, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
+                .font(.system(size: 9.5, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(
                     isActive  ? Color.white :
                     isEnabled ? Color.primary.opacity(0.72) :
-                                Color.primary.opacity(0.22)
+                                Color.primary.opacity(0.26)
                 )
         }
         .frame(width: 23, height: 23)
@@ -332,6 +333,22 @@ struct ContentView: View {
                     .disabled(isFetching || isRecommending)
                     .accessibilityLabel("Generate recommendations")
                     .help("Generate daily paper recommendations")
+
+                    Button { showImport = true } label: {
+                        toolbarIcon("plus")
+                    }
+                    .accessibilityLabel("Add paper")
+                    .help("Add a paper by DOI, title search, or manual entry")
+                    .sheet(isPresented: $showImport) {
+                        PaperImportView { paper in
+                            _ = store.addOrUpdate(papers: [paper])
+                            applyFilters()
+                            NotificationCenter.shared.showToast(
+                                "Added \"\(paper.title)\"",
+                                type: .success
+                            )
+                        }
+                    }
 
                     Button { showFilters.toggle() } label: {
                         toolbarIcon("line.3.horizontal.decrease", isActive: filtersActive)
