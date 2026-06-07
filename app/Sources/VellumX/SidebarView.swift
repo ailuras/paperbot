@@ -280,8 +280,8 @@ struct SidebarView: View {
     // MARK: - Collections actions
 
     private func selectCollection(_ collection: PaperCollection) {
-        selectedCollectionId = (selectedCollectionId == collection.id) ? nil : collection.id
-        if selectedCollectionId != nil { selectedItem = nil }
+        selectedCollectionId = collection.id
+        selectedItem = nil
     }
 
     private func startEditCollection(_ collection: PaperCollection) {
