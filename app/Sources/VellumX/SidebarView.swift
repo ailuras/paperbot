@@ -524,12 +524,15 @@ private struct CollectionTreeRow: View {
                             .background(Color.secondary.opacity(0.12), in: Capsule())
                     }
                 }
-                .contentShape(Rectangle())  // must be on the label, not the button
+                // Vertical padding lives inside the label so the button's hit
+                // area covers the full row height, not just the content height.
+                .padding(.vertical, 5)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
         }
         .padding(.leading, CGFloat(depth) * 14)
-        .padding(.vertical, 5)
         .padding(.trailing, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu { contextMenu }
