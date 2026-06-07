@@ -317,21 +317,10 @@ struct PaperDetailView: View {
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "plus")
-                            .font(.system(size: 9, weight: .bold))
                         Text("Tag")
-                            .font(.system(size: 11, weight: .semibold))
                     }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(Color.secondary.opacity(0.08))
-                    .foregroundStyle(.secondary)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-                    )
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PillActionButtonStyle(color: .secondary))
                 .help(L10n.pick("Add a tag to this paper", "为这篇论文添加标签"))
             }
 
@@ -393,17 +382,10 @@ struct PaperDetailView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.triangle.2.circlepath")
-                                .font(.system(size: 10, weight: .semibold))
                             Text(showingTranslation ? "Original" : "Translation")
-                                .font(.system(size: 11, weight: .medium))
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.accentColor.opacity(0.12))
-                        .foregroundStyle(Color.accentColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PillActionButtonStyle())
                     .help(showingTranslation
                           ? L10n.pick("Switch to original abstract", "切换到原文摘要")
                           : L10n.pick("Show translated abstract", "显示译文摘要"))
@@ -413,17 +395,10 @@ struct PaperDetailView: View {
                     } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "character.book.closed")
-                                .font(.system(size: 10, weight: .semibold))
                             Text("Translate")
-                                .font(.system(size: 11, weight: .medium))
                         }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.accentColor.opacity(0.12))
-                        .foregroundStyle(Color.accentColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(PillActionButtonStyle())
                     .help(L10n.pick("Translate abstract via AI", "通过 AI 翻译摘要"))
                 }
             }
@@ -564,9 +539,45 @@ struct PaperDetailView: View {
     }
 }
 
-// MARK: - Header Action Button Style
+// MARK: - Shared button styles
 
-/// Shared button style for the header action icons (cite / collection / PDF).
+/// Pill-shaped text (+ optional icon) button used in section headers.
+/// Hover and press states follow the same timing curve as DetailActionButtonStyle.
+private struct PillActionButtonStyle: ButtonStyle {
+    var color: Color = .accentColor
+
+    func makeBody(configuration: Configuration) -> some View {
+        Pill(configuration: configuration, color: color)
+    }
+
+    private struct Pill: View {
+        let configuration: ButtonStyle.Configuration
+        let color: Color
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(color)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(
+                            configuration.isPressed  ? color.opacity(0.22) :
+                            hovering                 ? color.opacity(0.18) :
+                                                       color.opacity(0.11)
+                        )
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .onHover { hovering = $0 }
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+        }
+    }
+}
+
+/// Square 28×28 icon-only button used in the metaCard action row.
 /// Supports hover, press, and an optional active state with semantic tinting.
 private struct DetailActionButtonStyle: ButtonStyle {
     var isActive: Bool = false
@@ -679,7 +690,10 @@ private struct CollectionPickerPopover: View {
 
     private func row(for collection: PaperCollection) -> some View {
         let isMember = memberIds.contains(collection.id)
-        return Button {
+        return CollectionPickerRow(
+            collection: collection,
+            isMember: isMember
+        ) {
             if isMember {
                 onRemoveFromCollection(paper, collection.id)
                 memberIds.remove(collection.id)
@@ -687,20 +701,7 @@ private struct CollectionPickerPopover: View {
                 onAddToCollection(paper, collection.id)
                 memberIds.insert(collection.id)
             }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isMember ? Color.accentColor : .secondary)
-                Text(collection.name)
-                    .foregroundStyle(.primary)
-                Spacer(minLength: 0)
-            }
-            .font(.system(size: 12))
-            .contentShape(Rectangle())
-            .padding(.vertical, 3)
-            .padding(.horizontal, 4)
         }
-        .buttonStyle(.plain)
     }
 
     private func createAndAdd() {
@@ -710,6 +711,38 @@ private struct CollectionPickerPopover: View {
         onAddToCollection(paper, created.id)
         memberIds.insert(created.id)
         newName = ""
+    }
+}
+
+// MARK: - Collection Picker Row
+
+private struct CollectionPickerRow: View {
+    let collection: PaperCollection
+    let isMember: Bool
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: isMember ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isMember ? Color.accentColor : Color.secondary.opacity(0.6))
+                Text(collection.name)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 12))
+            .contentShape(Rectangle())
+            .padding(.vertical, 4)
+            .padding(.horizontal, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(hovering ? Color.secondary.opacity(0.10) : Color.clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.10), value: hovering)
     }
 }
 
