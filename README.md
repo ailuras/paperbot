@@ -14,6 +14,10 @@ local SQLite library.
 - Configurable translation providers with local cache.
 - Multi-stage open-access PDF resolution.
 - User-relocatable SQLite database.
+- Citation export in BibTeX, APA, RIS, Markdown, plain text, and CSV — from
+  the detail cite menu or as a save-to-file bibliography export.
+- Keyboard-first workflow: copy citation, open landing page, clear filters,
+  translate abstract, and pick a random pending paper from the menu bar.
 
 ## Build And Run
 
