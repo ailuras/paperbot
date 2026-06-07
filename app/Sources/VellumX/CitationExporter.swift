@@ -189,6 +189,38 @@ enum CitationExporter {
         papers.map { ris(for: $0) }.joined(separator: "\n\n")
     }
 
+    // MARK: - Plain text
+
+    /// Compact, human-readable single-line reference for pasting into emails
+    /// or chat: `Authors (Year). "Title." Venue. URL`. Missing components are
+    /// dropped without leaving dangling punctuation.
+    static func plain(for paper: Paper) -> String {
+        var parts: [String] = []
+
+        if !paper.authors.isEmpty {
+            parts.append(paper.authors.joined(separator: ", "))
+        }
+        if let year = paper.publicationYear {
+            parts.append("(\(year))")
+        }
+        let title = paper.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty {
+            parts.append("\"\(title)\"")
+        }
+        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            parts.append(venue)
+        }
+        if let url = canonicalUrl(for: paper) {
+            parts.append(url)
+        }
+        return parts.joined(separator: ". ")
+    }
+
+    static func plain(for papers: [Paper]) -> String {
+        papers.map { plain(for: $0) }.joined(separator: "\n")
+    }
+
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.

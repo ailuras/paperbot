@@ -47,8 +47,8 @@ enum L10n {
         case setPdfFromFile, removePdf, choosePdf, pdfSet, pdfRemoved, notAPdfFile, pdfSetFailed
         // Citation export
         case cite, copiedBibtex
-        case copyBibtex, copyApa, copyMarkdown, copyRis
-        case copiedApa, copiedMarkdown, copiedRis
+        case copyBibtex, copyApa, copyMarkdown, copyRis, copyPlain
+        case copiedApa, copiedMarkdown, copiedRis, copiedPlain
         case copyTitle, copyDoi, copyAuthors
         case copiedTitle, copiedDoi, copiedAuthors
         // Related papers
@@ -238,6 +238,8 @@ enum L10n {
         case .copyApa:            return ("Copy APA", "复制 APA")
         case .copyMarkdown:       return ("Copy Markdown", "复制 Markdown")
         case .copyRis:            return ("Copy RIS", "复制 RIS")
+        case .copyPlain:          return ("Copy Plain Text", "复制纯文本")
+        case .copiedPlain:        return ("Plain citation copied", "纯文本引用已复制")
         case .copyTitle:          return ("Copy Title", "复制标题")
         case .copyDoi:            return ("Copy DOI", "复制 DOI")
         case .copyAuthors:        return ("Copy Authors", "复制作者")

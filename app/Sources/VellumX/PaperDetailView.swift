@@ -211,6 +211,10 @@ struct PaperDetailView: View {
                 copyToPasteboard(CitationExporter.ris(for: paper))
                 NotificationCenter.shared.showToast(L10n.t(.copiedRis), type: .success)
             }
+            Button(L10n.t(.copyPlain)) {
+                copyToPasteboard(CitationExporter.plain(for: paper))
+                NotificationCenter.shared.showToast(L10n.t(.copiedPlain), type: .success)
+            }
         } label: {
             Image(systemName: "text.quote")
         }

@@ -209,6 +209,28 @@ final class CitationExporterTests: XCTestCase {
         XCTAssertTrue(ris.contains("DA  - 2017/06/12"))
     }
 
+    // MARK: - Plain text
+
+    func testPlainContainsAllFields() {
+        let s = CitationExporter.plain(for: makePaper())
+        XCTAssertEqual(
+            s,
+            "Ashish Vaswani, Noam Shazeer. (2017). \"Attention Is All You Need\". NeurIPS. https://doi.org/10.5555/3295222"
+        )
+    }
+
+    func testPlainDropsMissingFieldsCleanly() {
+        let s = CitationExporter.plain(for: makePaper(
+            authors: [], year: nil, venue: "", doi: nil, landing: ""
+        ))
+        XCTAssertEqual(s, "\"Attention Is All You Need\"")
+    }
+
+    func testPlainMultiplePapersOnePerLine() {
+        let s = CitationExporter.plain(for: [makePaper(title: "A"), makePaper(title: "B")])
+        XCTAssertEqual(s.split(separator: "\n").count, 2)
+    }
+
     func testRisMultiplePapersSeparatedByBlankLine() {
         let p1 = makePaper(title: "First")
         let p2 = makePaper(title: "Second")
