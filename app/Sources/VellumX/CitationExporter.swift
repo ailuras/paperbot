@@ -99,6 +99,45 @@ enum CitationExporter {
         papers.map { apa(for: $0) }.joined(separator: "\n\n")
     }
 
+    // MARK: - Markdown
+
+    /// Single-line Markdown citation: `[Title](url) — Authors (Year), *Venue*.`
+    /// Components are dropped when missing; the title becomes plain text when
+    /// no clickable URL is available.
+    static func markdown(for paper: Paper) -> String {
+        let title = paper.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let titlePart: String
+        if title.isEmpty {
+            titlePart = ""
+        } else if let url = canonicalUrl(for: paper) {
+            titlePart = "[\(escapeMarkdown(title))](\(url))"
+        } else {
+            titlePart = escapeMarkdown(title)
+        }
+
+        var trailing: [String] = []
+        if !paper.authors.isEmpty {
+            trailing.append(escapeMarkdown(paper.authors.joined(separator: ", ")))
+        }
+        if let year = paper.publicationYear {
+            trailing.append("(\(year))")
+        }
+        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            trailing.append("*\(escapeMarkdown(venue))*")
+        }
+
+        let suffix = trailing.joined(separator: " ")
+        if titlePart.isEmpty { return suffix }
+        if suffix.isEmpty   { return titlePart }
+        return "\(titlePart) — \(suffix)"
+    }
+
+    /// Markdown bullet list, one paper per line.
+    static func markdown(for papers: [Paper]) -> String {
+        papers.map { "- \(markdown(for: $0))" }.joined(separator: "\n")
+    }
+
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.
@@ -193,6 +232,22 @@ enum CitationExporter {
         if let doi = bareDoi(paper.doi) { return "https://doi.org/\(doi)" }
         let landing = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         return landing.isEmpty ? nil : landing
+    }
+
+    /// Escape Markdown-special characters that would otherwise alter rendering
+    /// (links, emphasis, etc.). Keeps the output readable as inline text.
+    private static func escapeMarkdown(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for ch in s {
+            switch ch {
+            case "\\", "`", "*", "_", "{", "}", "[", "]", "(", ")", "#", "+", "-", "!", "|":
+                out.append("\\"); out.append(ch)
+            default:
+                out.append(ch)
+            }
+        }
+        return out
     }
 
     private static func asciiAlnum(_ s: String) -> String {

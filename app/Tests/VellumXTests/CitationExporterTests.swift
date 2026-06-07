@@ -123,4 +123,35 @@ final class CitationExporterTests: XCTestCase {
         let s = CitationExporter.apa(for: makePaper(authors: ["Jean-Luc Picard"]))
         XCTAssertTrue(s.hasPrefix("Picard, J.-L."))
     }
+
+    // MARK: - Markdown
+
+    func testMarkdownIncludesAllFields() {
+        let md = CitationExporter.markdown(for: makePaper())
+        XCTAssertEqual(
+            md,
+            "[Attention Is All You Need](https://doi.org/10.5555/3295222) — Ashish Vaswani, Noam Shazeer (2017) *NeurIPS*"
+        )
+    }
+
+    func testMarkdownPlainTitleWhenNoUrl() {
+        let md = CitationExporter.markdown(for: makePaper(doi: nil, landing: ""))
+        XCTAssertFalse(md.contains("]("))
+        XCTAssertTrue(md.hasPrefix("Attention Is All You Need —"))
+    }
+
+    func testMarkdownEscapesSpecialChars() {
+        let md = CitationExporter.markdown(
+            for: makePaper(title: "C* and _under_ [stuff]", doi: nil, landing: "")
+        )
+        XCTAssertTrue(md.contains("C\\* and \\_under\\_ \\[stuff\\]"))
+    }
+
+    func testMarkdownBulletList() {
+        let p1 = makePaper(title: "First")
+        let p2 = makePaper(title: "Second")
+        let md = CitationExporter.markdown(for: [p1, p2])
+        XCTAssertTrue(md.hasPrefix("- "))
+        XCTAssertEqual(md.split(separator: "\n").count, 2)
+    }
 }
