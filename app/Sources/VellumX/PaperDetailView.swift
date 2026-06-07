@@ -269,6 +269,14 @@ struct PaperDetailView: View {
                         .help(L10n.pick("Published \(paper.publicationDate)", "发表于 \(paper.publicationDate)"))
                 }
 
+                if let minutes = paper.abstractReadingMinutes {
+                    TagChip.readingTime(minutes: minutes, size: .regular)
+                        .help(L10n.pick(
+                            "\(minutes) min abstract read (\(paper.abstractWordCount) words at 220 wpm)",
+                            "约 \(minutes) 分钟可读完摘要（\(paper.abstractWordCount) 词，按 220 词/分钟估算）"
+                        ))
+                }
+
                 if !topics.isEmpty {
                     HStack(spacing: 5) {
                         ForEach(topics, id: \.self) { topic in

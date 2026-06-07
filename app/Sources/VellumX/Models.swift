@@ -103,6 +103,19 @@ final class Paper: Identifiable {
         return blob
     }
 
+    /// Whitespace-separated token count of the abstract; zero if empty.
+    var abstractWordCount: Int {
+        abstract.split(whereSeparator: { $0.isWhitespace || $0.isNewline }).count
+    }
+
+    /// Rounded-up reading time at 220 wpm — a typical adult skim pace for
+    /// dense academic prose. Returns `nil` when there's no abstract to read.
+    var abstractReadingMinutes: Int? {
+        let words = abstractWordCount
+        guard words > 0 else { return nil }
+        return max(1, Int((Double(words) / 220.0).rounded(.up)))
+    }
+
     init(
         id: String, doi: String? = nil, title: String,
         authors: [String] = [], publicationDate: String = "",

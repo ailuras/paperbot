@@ -108,4 +108,9 @@ extension TagChip {
     static func pdf(size: Size = .small) -> TagChip {
         TagChip(text: "", icon: "doc.fill", color: .green, size: size)
     }
+
+    /// Estimated minutes to read a passage — neutral, secondary styling.
+    static func readingTime(minutes: Int, size: Size = .small) -> TagChip {
+        TagChip(text: "\(minutes) min", icon: "clock", size: size, emphasis: .subtle)
+    }
 }
