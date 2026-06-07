@@ -501,8 +501,8 @@ struct ContentView: View {
         panel.allowedContentTypes = [.data]
         panel.nameFieldStringValue = "vellumx-bibliography.bib"
         panel.message = L10n.pick(
-            "Choose .bib (BibTeX), .ris (Zotero/Mendeley), or .md (Markdown).",
-            "选择 .bib（BibTeX）、.ris（Zotero/Mendeley）或 .md（Markdown）。"
+            "Choose .bib (BibTeX), .ris (Zotero/Mendeley), .md (Markdown), or .csv (spreadsheet).",
+            "选择 .bib（BibTeX）、.ris（Zotero/Mendeley）、.md（Markdown）或 .csv（电子表格）。"
         )
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
@@ -512,6 +512,7 @@ struct ContentView: View {
         switch url.pathExtension.lowercased() {
         case "ris":     content = CitationExporter.ris(for: papers)
         case "md":      content = CitationExporter.markdown(for: papers)
+        case "csv":     content = CitationExporter.csv(for: papers)
         default:        content = CitationExporter.bibtex(for: papers)
         }
 

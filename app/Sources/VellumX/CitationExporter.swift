@@ -221,6 +221,34 @@ enum CitationExporter {
         papers.map { plain(for: $0) }.joined(separator: "\n")
     }
 
+    // MARK: - CSV
+
+    /// CSV with a header row and one paper per line, suitable for spreadsheet
+    /// imports. Columns: title, authors (semicolon-joined), year, venue, DOI,
+    /// citations, score, tier, status, URL. Quoting follows RFC 4180.
+    static func csv(for papers: [Paper]) -> String {
+        let header = ["Title", "Authors", "Year", "Venue", "DOI",
+                      "Citations", "Score", "Tier", "Status", "URL"]
+        var rows: [String] = [header.joined(separator: ",")]
+
+        for paper in papers {
+            let row: [String] = [
+                paper.title,
+                paper.authors.joined(separator: "; "),
+                paper.publicationYear.map(String.init) ?? "",
+                paper.venue,
+                bareDoi(paper.doi) ?? "",
+                String(paper.citedByCount),
+                String(format: "%.2f", paper.score),
+                String(paper.tier),
+                paper.status.rawValue,
+                canonicalUrl(for: paper) ?? ""
+            ]
+            rows.append(row.map(csvEscape).joined(separator: ","))
+        }
+        return rows.joined(separator: "\n")
+    }
+
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.
@@ -337,6 +365,16 @@ enum CitationExporter {
         if let doi = bareDoi(paper.doi) { return "https://doi.org/\(doi)" }
         let landing = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         return landing.isEmpty ? nil : landing
+    }
+
+    /// RFC 4180 escaping: wrap in double quotes when the value contains a
+    /// comma, quote, or newline; inner quotes are doubled.
+    private static func csvEscape(_ s: String) -> String {
+        if s.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" || $0 == "\r" }) {
+            let escaped = s.replacingOccurrences(of: "\"", with: "\"\"")
+            return "\"\(escaped)\""
+        }
+        return s
     }
 
     /// Escape Markdown-special characters that would otherwise alter rendering

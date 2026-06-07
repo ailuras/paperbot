@@ -231,6 +231,37 @@ final class CitationExporterTests: XCTestCase {
         XCTAssertEqual(s.split(separator: "\n").count, 2)
     }
 
+    // MARK: - CSV
+
+    func testCsvHeaderAndRow() {
+        let csv = CitationExporter.csv(for: [makePaper()])
+        let lines = csv.split(separator: "\n", omittingEmptySubsequences: false)
+        XCTAssertEqual(lines.count, 2)
+        XCTAssertEqual(
+            String(lines[0]),
+            "Title,Authors,Year,Venue,DOI,Citations,Score,Tier,Status,URL"
+        )
+        // Authors joined with semicolons, score is %.2f, status is rawValue.
+        XCTAssertTrue(String(lines[1]).contains("Ashish Vaswani; Noam Shazeer"))
+        XCTAssertTrue(String(lines[1]).contains(",2017,"))
+        XCTAssertTrue(String(lines[1]).contains(",pending,"))
+        XCTAssertTrue(String(lines[1]).hasSuffix("https://doi.org/10.5555/3295222"))
+    }
+
+    func testCsvEscapesCommasAndQuotes() {
+        let csv = CitationExporter.csv(for: [
+            makePaper(title: "Hello, \"World\"", authors: ["Doe, Jane"])
+        ])
+        let row = String(csv.split(separator: "\n").last!)
+        XCTAssertTrue(row.contains("\"Hello, \"\"World\"\"\""))
+        XCTAssertTrue(row.contains("\"Doe, Jane\""))
+    }
+
+    func testCsvEmptyPapers() {
+        let csv = CitationExporter.csv(for: [])
+        XCTAssertEqual(csv, "Title,Authors,Year,Venue,DOI,Citations,Score,Tier,Status,URL")
+    }
+
     func testRisMultiplePapersSeparatedByBlankLine() {
         let p1 = makePaper(title: "First")
         let p2 = makePaper(title: "Second")
