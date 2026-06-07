@@ -221,9 +221,31 @@ enum CitationExporter {
     }
 
     /// Last whitespace-separated token of an author string ("Jane Q. Doe" → "Doe").
+    /// Skips trailing generational/professional suffixes ("Jr.", "III", "PhD")
+    /// so the cite key keys on the surname rather than the honorific.
     private static func surnameToken(from author: String) -> String? {
-        let parts = author.split(whereSeparator: { $0 == " " || $0 == "\t" })
-        return parts.last.map(String.init)
+        let parts = author
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .map(String.init)
+        guard !parts.isEmpty else { return nil }
+
+        for token in parts.reversed() {
+            if !isAuthorSuffix(token) { return token }
+        }
+        // All tokens were suffixes — fall back to the very last token so we
+        // never lose every part of the name.
+        return parts.last
+    }
+
+    private static let authorSuffixes: Set<String> = [
+        "jr", "sr", "ii", "iii", "iv", "v", "phd", "md", "esq", "esquire", "mba", "dr"
+    ]
+
+    private static func isAuthorSuffix(_ token: String) -> Bool {
+        let normalized = token
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: ".,"))
+        return authorSuffixes.contains(normalized)
     }
 
     /// First word of the title that contains a letter or digit.

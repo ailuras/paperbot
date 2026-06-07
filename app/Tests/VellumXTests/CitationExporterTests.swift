@@ -41,6 +41,27 @@ final class CitationExporterTests: XCTestCase {
         XCTAssertEqual(key, "zl2020caf")
     }
 
+    func testCiteKeySkipsGenerationalSuffix() {
+        let key = CitationExporter.citeKey(
+            for: makePaper(authors: ["John Smith Jr."], year: 2020)
+        )
+        XCTAssertEqual(key, "smith2020attention")
+    }
+
+    func testCiteKeySkipsRomanNumeralSuffix() {
+        let key = CitationExporter.citeKey(
+            for: makePaper(authors: ["Henry Ford III"], year: 2020)
+        )
+        XCTAssertEqual(key, "ford2020attention")
+    }
+
+    func testCiteKeySkipsProfessionalSuffix() {
+        let key = CitationExporter.citeKey(
+            for: makePaper(authors: ["Alice Brown PhD"], year: 2020)
+        )
+        XCTAssertEqual(key, "brown2020attention")
+    }
+
     func testCiteKeyFallsBackToRefWhenNothingASCII() {
         // Author present but non-ASCII, no year, no ASCII title word → empty → "ref".
         let key = CitationExporter.citeKey(for: makePaper(title: "！？", authors: ["你好"], year: nil))
