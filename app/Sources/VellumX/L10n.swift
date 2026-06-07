@@ -61,7 +61,8 @@ enum L10n {
         case cmdFetch, cmdRecommend
         case cmdMarkPending, cmdMarkStarred, cmdMarkRead, cmdMarkSkip
         case cmdAddTag
-        case cmdCopyBibtex, cmdOpenLink
+        case cmdCopyBibtex, cmdOpenLink, cmdClearFilters
+        case clearFiltersToast
         case fetchConfirmTitle, fetchConfirmMessage
         case cmdDeletePaper, delete, deleteConfirmTitle, deleteConfirmMessage
         case cmdUpdatePaper
@@ -270,6 +271,8 @@ enum L10n {
         case .cmdAddTag:          return ("Add Tag…", "添加标签…")
         case .cmdCopyBibtex:      return ("Copy BibTeX", "复制 BibTeX")
         case .cmdOpenLink:        return ("Open Link", "打开链接")
+        case .cmdClearFilters:    return ("Clear All Filters", "清除所有过滤器")
+        case .clearFiltersToast:  return ("Filters cleared", "已清除过滤器")
         case .fetchConfirmTitle:  return ("Fetch New Papers?", "获取新论文？")
         case .fetchConfirmMessage:
             return ("This contacts OpenAlex and may take a while.",

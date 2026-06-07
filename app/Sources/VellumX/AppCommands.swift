@@ -24,6 +24,7 @@ struct PaperActions {
     var recommend: (() -> Void)?
     var copyBibtex: (() -> Void)?
     var openLink: (() -> Void)?
+    var clearFilters: (() -> Void)?
 }
 
 private struct PaperActionsKey: FocusedValueKey {
@@ -70,6 +71,12 @@ struct AppCommands: Commands {
             Button(L10n.t(.cmdNextPaper)) { actions?.selectNext?() }
                 .keyboardShortcut(.downArrow, modifiers: .command)
                 .disabled(actions?.selectNext == nil)
+
+            Divider()
+
+            Button(L10n.t(.cmdClearFilters)) { actions?.clearFilters?() }
+                .keyboardShortcut("k", modifiers: [.command, .shift])
+                .disabled(actions?.clearFilters == nil)
         }
 
         CommandMenu(L10n.t(.menuPaper)) {

@@ -427,6 +427,14 @@ struct ContentView: View {
                 { NSWorkspace.shared.open(url) }
             }
         }
+        let hasAnyFilter =
+            selectedTopic != nil ||
+            !selectedFields.isEmpty ||
+            !selectedTiers.isEmpty ||
+            !includedTags.isEmpty ||
+            !excludedTags.isEmpty ||
+            !searchKeyword.isEmpty
+        let clearFilters: (() -> Void)? = hasAnyFilter ? { resetFilters() } : nil
         return PaperActions(
             selectView: selectView,
             selectPrevious: selectPrevious,
@@ -436,8 +444,20 @@ struct ContentView: View {
             fetch: fetch,
             recommend: recommend,
             copyBibtex: copyBibtex,
-            openLink: openLink
+            openLink: openLink,
+            clearFilters: clearFilters
         )
+    }
+
+    private func resetFilters() {
+        selectedTopic = nil
+        selectedFields = []
+        selectedTiers = []
+        includedTags = []
+        excludedTags = []
+        searchKeyword = ""
+        debouncedSearch = ""
+        NotificationCenter.shared.showToast(L10n.t(.clearFiltersToast), type: .success)
     }
 
     /// Best clickable destination for a paper: DOI URL if known, else the
