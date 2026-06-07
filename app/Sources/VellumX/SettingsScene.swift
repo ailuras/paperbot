@@ -5,7 +5,7 @@ import Observation
 /// other parts of the UI can deep-link to (e.g. the sidebar's "edit tracks"
 /// button jumps to `.rules`).
 enum SettingsTab: Hashable {
-    case general, api, automation, papers, rules
+    case general, api, papers, rules
 }
 
 /// Lets non-Settings views request a specific Settings tab before opening the
@@ -19,7 +19,7 @@ final class SettingsRouter {
 
 /// The standard macOS Settings window (⌘,), organized into tabs:
 /// General (storage, settings file, menu bar, language), API (translation),
-/// Automation (local task timing), Papers (recommendation + OpenAlex params),
+/// Papers (recommendation, OpenAlex fetch, automation scheduling),
 /// and Rules (tracks, venues, tiers, citation scoring - all DB-persisted).
 struct SettingsRootView: View {
     @State private var router = SettingsRouter.shared
@@ -35,9 +35,6 @@ struct SettingsRootView: View {
             APISettingsTab()
                 .tabItem { Label(L10n.t(.api), systemImage: "key") }
                 .tag(SettingsTab.api)
-            AutomationSettingsTab()
-                .tabItem { Label(L10n.t(.automation), systemImage: "clock") }
-                .tag(SettingsTab.automation)
             PapersSettingsTab()
                 .tabItem { Label(L10n.t(.papers), systemImage: "doc.text.magnifyingglass") }
                 .tag(SettingsTab.papers)

@@ -50,9 +50,8 @@ final class AutomationScheduler {
         if preferences.autoFetchEnabled,
            Self.needsMonthlyRun(lastRun: preferences.lastAutoFetchAt, now: now, calendar: calendar),
            Self.shouldRunAtScheduledTime(
-               requiredDay: preferences.fetchDay,
-               hour: preferences.fetchHour,
-               minute: preferences.fetchMinute,
+               scheduledDate: preferences.fetchSchedule,
+               useDay: true,
                now: now, calendar: calendar
            ) {
             let result = await workflows.fetchPapers(notify: false)
@@ -64,8 +63,8 @@ final class AutomationScheduler {
         if preferences.autoRecommendEnabled,
            Self.needsDailyRun(lastRun: preferences.lastAutoRecommendAt, now: now, calendar: calendar),
            Self.shouldRunAtScheduledTime(
-               hour: preferences.recommendHour,
-               minute: preferences.recommendMinute,
+               scheduledDate: preferences.recommendTime,
+               useDay: false,
                now: now, calendar: calendar
            ) {
             if hasRecommendationToday(now: now) {
@@ -84,11 +83,8 @@ final class AutomationScheduler {
             _ = preferences.automationEnabled
             _ = preferences.autoFetchEnabled
             _ = preferences.autoRecommendEnabled
-            _ = preferences.recommendHour
-            _ = preferences.recommendMinute
-            _ = preferences.fetchDay
-            _ = preferences.fetchHour
-            _ = preferences.fetchMinute
+            _ = preferences.recommendTime
+            _ = preferences.fetchSchedule
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.observePreferences()
@@ -117,31 +113,29 @@ final class AutomationScheduler {
         return last.era != current.era || last.year != current.year || last.month != current.month
     }
 
-    /// Returns true when `now` has reached or passed the scheduled parameters.
-    /// - `requiredDay`: -1 means "any day" (used only for monthly fetch).
-    /// - `hour`: -1 means "any time" (returns true immediately).
-    /// - `minute`: ignored when hour is -1; -1 behaves as 0.
+    /// Returns true when `now` has reached or passed the scheduled time.
+    /// - `useDay`: true for monthly (respects day-of-month), false for daily (time only).
     nonisolated static func shouldRunAtScheduledTime(
-        requiredDay: Int = -1,
-        hour: Int,
-        minute: Int,
+        scheduledDate: Date,
+        useDay: Bool,
         now: Date,
         calendar: Calendar
     ) -> Bool {
-        guard hour >= 0 else { return true }
-        let dc = calendar.dateComponents([.day, .hour, .minute], from: now)
-        let nowDay = dc.day ?? 0
-        let nowHour = dc.hour ?? 0
-        let nowMinute = dc.minute ?? 0
+        let target = calendar.dateComponents(
+            useDay ? [.day, .hour, .minute] : [.hour, .minute],
+            from: scheduledDate
+        )
+        let current = calendar.dateComponents([.day, .hour, .minute], from: now)
+        let nowDay = current.day ?? 0, nowHour = current.hour ?? 0, nowMinute = current.minute ?? 0
 
-        if requiredDay >= 0 {
-            if nowDay > requiredDay { return true }
-            guard nowDay == requiredDay else { return false }
+        if useDay, let targetDay = target.day {
+            if nowDay > targetDay { return true }
+            guard nowDay == targetDay else { return false }
         }
 
-        if nowHour > hour { return true }
-        guard nowHour == hour else { return false }
-        let m = minute < 0 ? 0 : minute
-        return nowMinute >= m
+        let targetHour = target.hour ?? 0
+        if nowHour > targetHour { return true }
+        guard nowHour == targetHour else { return false }
+        return nowMinute >= (target.minute ?? 0)
     }
 }

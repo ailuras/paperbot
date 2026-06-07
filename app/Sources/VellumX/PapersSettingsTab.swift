@@ -3,6 +3,7 @@ import SwiftUI
 struct PapersSettingsTab: View {
     @State private var store = PaperStore.shared
     @State private var settings = AppSettings.shared
+    @State private var automation = AutomationPreferences.shared
     @State private var newCollectionName = ""
 
     var body: some View {
@@ -41,6 +42,26 @@ struct PapersSettingsTab: View {
 
                 TextField(L10n.t(.topicFilter), text: $settings.topicFilter)
                     .textFieldStyle(.roundedBorder)
+            }
+
+            Section(L10n.t(.automation)) {
+                Toggle(L10n.t(.enableAutomation), isOn: $automation.automationEnabled)
+
+                if automation.automationEnabled {
+                    Toggle(L10n.t(.monthlyFetch), isOn: $automation.autoFetchEnabled)
+                    if automation.autoFetchEnabled {
+                        DatePicker("", selection: $automation.fetchSchedule,
+                                   displayedComponents: [.date, .hourAndMinute])
+                            .labelsHidden()
+                    }
+
+                    Toggle(L10n.t(.dailyRecommend), isOn: $automation.autoRecommendEnabled)
+                    if automation.autoRecommendEnabled {
+                        DatePicker("", selection: $automation.recommendTime,
+                                   displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                }
             }
 
             Section("Collections") {
