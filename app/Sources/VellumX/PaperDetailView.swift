@@ -110,16 +110,16 @@ struct PaperDetailView: View {
         Button {
             if isPdfDownloaded { onRevealPdf(paper) } else { onFetchPdf(paper) }
         } label: {
-            Group {
-                if resolvingPdfIds.contains(paper.id) {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: pdfButtonIcon)
-                }
+            if resolvingPdfIds.contains(paper.id) {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: pdfButtonIcon)
             }
-            .detailActionChrome()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DetailActionButtonStyle(
+            isActive: isPdfDownloaded,
+            activeColor: .green
+        ))
         .disabled(resolvingPdfIds.contains(paper.id))
         .help(pdfButtonHelp)
         .overlay(
@@ -166,9 +166,9 @@ struct PaperDetailView: View {
             copyToPasteboard(CitationExporter.bibtex(for: paper))
             NotificationCenter.shared.showToast(L10n.t(.copiedBibtex), type: .success)
         } label: {
-            Image(systemName: "text.quote").detailActionChrome()
+            Image(systemName: "text.quote")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DetailActionButtonStyle())
         .help(L10n.t(.cite))
     }
 
@@ -183,9 +183,9 @@ struct PaperDetailView: View {
         return Button {
             showCollectionPopover = true
         } label: {
-            Image(systemName: isInAny ? "folder.fill" : "folder").detailActionChrome()
+            Image(systemName: isInAny ? "folder.fill" : "folder")
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DetailActionButtonStyle(isActive: isInAny))
         .help(L10n.pick("Manage collections", "管理 Collection"))
         .popover(isPresented: $showCollectionPopover, arrowEdge: .bottom) {
             CollectionPickerPopover(
@@ -564,22 +564,55 @@ struct PaperDetailView: View {
     }
 }
 
-// MARK: - Header Action Chrome
+// MARK: - Header Action Button Style
 
-private extension View {
-    /// Shared 28×28 rounded-square chrome so the header action icons
-    /// (cite / collection / PDF) look identical.
-    func detailActionChrome() -> some View {
-        self
-            .font(.system(size: 13, weight: .semibold))
-            .frame(width: 28, height: 28)
-            .background(Color.secondary.opacity(0.10))
-            .foregroundStyle(.primary.opacity(0.75))
-            .clipShape(RoundedRectangle(cornerRadius: 7))
-            .overlay(
-                RoundedRectangle(cornerRadius: 7)
-                    .stroke(Color.gray.opacity(0.22), lineWidth: 0.5)
-            )
+/// Shared button style for the header action icons (cite / collection / PDF).
+/// Supports hover, press, and an optional active state with semantic tinting.
+private struct DetailActionButtonStyle: ButtonStyle {
+    var isActive: Bool = false
+    var activeColor: Color = .accentColor
+
+    func makeBody(configuration: Configuration) -> some View {
+        Chip(configuration: configuration, isActive: isActive, activeColor: activeColor)
+    }
+
+    private struct Chip: View {
+        let configuration: ButtonStyle.Configuration
+        let isActive: Bool
+        let activeColor: Color
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .font(.system(size: 13, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(
+                    isActive    ? activeColor :
+                    hovering    ? Color.primary.opacity(0.85) :
+                                  Color.primary.opacity(0.65)
+                )
+                .frame(width: 28, height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(
+                            isActive                    ? activeColor.opacity(0.12) :
+                            configuration.isPressed     ? Color.secondary.opacity(0.22) :
+                            hovering                    ? Color.secondary.opacity(0.16) :
+                                                          Color.secondary.opacity(0.09)
+                        )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(
+                            isActive ? activeColor.opacity(0.30) : Color.gray.opacity(0.18),
+                            lineWidth: 0.5
+                        )
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .onHover { hovering = $0 }
+                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+        }
     }
 }
 
