@@ -63,6 +63,8 @@ enum L10n {
         case cmdAddTag
         case cmdCopyBibtex, cmdOpenLink, cmdClearFilters
         case clearFiltersToast
+        case cmdExportBib
+        case exportBibSuccess, exportBibFailed, exportBibEmpty
         case fetchConfirmTitle, fetchConfirmMessage
         case cmdDeletePaper, delete, deleteConfirmTitle, deleteConfirmMessage
         case cmdUpdatePaper
@@ -273,6 +275,10 @@ enum L10n {
         case .cmdOpenLink:        return ("Open Link", "打开链接")
         case .cmdClearFilters:    return ("Clear All Filters", "清除所有过滤器")
         case .clearFiltersToast:  return ("Filters cleared", "已清除过滤器")
+        case .cmdExportBib:       return ("Export Bibliography…", "导出参考文献…")
+        case .exportBibSuccess:   return ("Bibliography exported", "参考文献已导出")
+        case .exportBibFailed:    return ("Bibliography export failed", "参考文献导出失败")
+        case .exportBibEmpty:     return ("No papers in the current view to export.", "当前视图没有可导出的论文。")
         case .fetchConfirmTitle:  return ("Fetch New Papers?", "获取新论文？")
         case .fetchConfirmMessage:
             return ("This contacts OpenAlex and may take a while.",

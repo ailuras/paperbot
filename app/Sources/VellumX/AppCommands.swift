@@ -25,6 +25,7 @@ struct PaperActions {
     var copyBibtex: (() -> Void)?
     var openLink: (() -> Void)?
     var clearFilters: (() -> Void)?
+    var exportBibliography: (() -> Void)?
 }
 
 private struct PaperActionsKey: FocusedValueKey {
@@ -117,6 +118,12 @@ struct AppCommands: Commands {
             Button(L10n.t(.cmdOpenLink)) { actions?.openLink?() }
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(actions?.openLink == nil)
+
+            Divider()
+
+            Button(L10n.t(.cmdExportBib)) { actions?.exportBibliography?() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(actions?.exportBibliography == nil)
         }
     }
 }

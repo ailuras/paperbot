@@ -435,6 +435,7 @@ struct ContentView: View {
             !excludedTags.isEmpty ||
             !searchKeyword.isEmpty
         let clearFilters: (() -> Void)? = hasAnyFilter ? { resetFilters() } : nil
+        let exportBib: (() -> Void)? = filteredPapers.isEmpty ? nil : { exportBibliography() }
         return PaperActions(
             selectView: selectView,
             selectPrevious: selectPrevious,
@@ -445,8 +446,50 @@ struct ContentView: View {
             recommend: recommend,
             copyBibtex: copyBibtex,
             openLink: openLink,
-            clearFilters: clearFilters
+            clearFilters: clearFilters,
+            exportBibliography: exportBib
         )
+    }
+
+    private func exportBibliography() {
+        guard !filteredPapers.isEmpty else {
+            NotificationCenter.shared.showToast(L10n.t(.exportBibEmpty), type: .warning)
+            return
+        }
+
+        let panel = NSSavePanel()
+        // BibTeX (.bib) and RIS (.ris) aren't registered system UTTypes, so
+        // accept all readable file types and infer the format from the chosen
+        // extension. .json is registered and lets us also offer that format.
+        panel.allowedContentTypes = [.data]
+        panel.nameFieldStringValue = "vellumx-bibliography.bib"
+        panel.message = L10n.pick(
+            "Choose .bib (BibTeX), .ris (Zotero/Mendeley), or .md (Markdown).",
+            "选择 .bib（BibTeX）、.ris（Zotero/Mendeley）或 .md（Markdown）。"
+        )
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        let papers = filteredPapers
+        let content: String
+        switch url.pathExtension.lowercased() {
+        case "ris":     content = CitationExporter.ris(for: papers)
+        case "md":      content = CitationExporter.markdown(for: papers)
+        default:        content = CitationExporter.bibtex(for: papers)
+        }
+
+        do {
+            try content.write(to: url, atomically: true, encoding: .utf8)
+            NotificationCenter.shared.showToast(
+                "\(L10n.t(.exportBibSuccess)) — \(papers.count) → \(url.lastPathComponent)",
+                type: .success
+            )
+        } catch {
+            NotificationCenter.shared.showToast(
+                "\(L10n.t(.exportBibFailed)): \(error.localizedDescription)",
+                type: .error
+            )
+        }
     }
 
     private func resetFilters() {
