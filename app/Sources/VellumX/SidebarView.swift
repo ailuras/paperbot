@@ -13,7 +13,8 @@ struct SidebarView: View {
 
     @State private var expandedCollections: Set<String> = []
     @State private var topicSheet: TopicEditTarget?
-    @State private var collectionEditorTarget: CollectionEditTarget?
+    @State private var editingCollectionId: String? = nil
+    @State private var editingCollectionName: String = ""
     @State private var archivedExpanded = false
 
     private var activeTopics: [TrackPref] { metadata.topics.filter { !$0.archived } }
@@ -140,8 +141,10 @@ struct SidebarView: View {
                         expanded: $expandedCollections,
                         selectedCollectionId: selectedCollectionId,
                         papers: papers,
+                        editingCollectionId: $editingCollectionId,
+                        editingCollectionName: $editingCollectionName,
                         onSelect: selectCollection,
-                        onEdit: { startEditCollection($0) },
+                        onCommitRename: commitCollectionRename,
                         onAddSubfolder: { startNewSubfolder($0) },
                         onDelete: { confirmDelete($0) }
                     )
@@ -168,9 +171,6 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .sheet(item: $topicSheet) { sheet in
             TopicEditor(existing: sheet.existing)
-        }
-        .sheet(item: $collectionEditorTarget) { target in
-            CollectionEditor(target: target)
         }
     }
 
@@ -284,17 +284,26 @@ struct SidebarView: View {
         selectedItem = nil
     }
 
-    private func startEditCollection(_ collection: PaperCollection) {
-        collectionEditorTarget = .edit(collection)
+    private func startNewRoot() {
+        guard let c = PaperStore.shared.createCollection(name: "Untitled") else { return }
+        editingCollectionId = c.id
+        editingCollectionName = c.name
     }
 
     private func startNewSubfolder(_ parent: PaperCollection) {
         expandedCollections.insert(parent.id)
-        collectionEditorTarget = .new(parentId: parent.id)
+        guard let c = PaperStore.shared.createCollection(name: "Untitled", parentId: parent.id) else { return }
+        editingCollectionId = c.id
+        editingCollectionName = c.name
     }
 
-    private func startNewRoot() {
-        collectionEditorTarget = .new(parentId: nil)
+    private func commitCollectionRename() {
+        guard let id = editingCollectionId else { return }
+        let name = editingCollectionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty {
+            PaperStore.shared.renameCollection(id: id, to: name)
+        }
+        editingCollectionId = nil
     }
 
     private func confirmDelete(_ target: PaperCollection) {
@@ -435,9 +444,7 @@ private struct TopicSidebarRow: View {
     }
 }
 
-/// One collection row plus its (lazily expanded) descendants. Recurses into
-/// itself for children, so the whole subtree renders as flat sidebar rows with
-/// growing indentation — a restrained, Finder-like look.
+/// One collection row plus its (lazily expanded) descendants.
 private struct CollectionTreeRow: View {
     let collection: PaperCollection
     let depth: Int
@@ -445,17 +452,21 @@ private struct CollectionTreeRow: View {
     @Binding var expanded: Set<String>
     let selectedCollectionId: String?
     let papers: [Paper]
+    @Binding var editingCollectionId: String?
+    @Binding var editingCollectionName: String
     let onSelect: (PaperCollection) -> Void
-    let onEdit: (PaperCollection) -> Void
+    let onCommitRename: () -> Void
     let onAddSubfolder: (PaperCollection) -> Void
     let onDelete: (PaperCollection) -> Void
+
+    @FocusState private var renameFocused: Bool
 
     private var children: [PaperCollection] { childrenByParent[collection.id] ?? [] }
     private var hasChildren: Bool { !children.isEmpty }
     private var isExpanded: Bool { expanded.contains(collection.id) }
     private var isSelected: Bool { selectedCollectionId == collection.id }
+    private var isEditing: Bool { editingCollectionId == collection.id }
 
-    /// Number of papers in this collection (including descendants).
     private var paperCount: Int {
         let ids = subtreeIds(for: collection.id)
         return papers.filter { $0.collectionIds.contains(where: ids.contains) }.count
@@ -463,10 +474,8 @@ private struct CollectionTreeRow: View {
 
     private func subtreeIds(for id: String) -> Set<String> {
         var result: Set<String> = [id]
-        if let children = childrenByParent[id] {
-            for child in children {
-                result.formUnion(subtreeIds(for: child.id))
-            }
+        for child in childrenByParent[id] ?? [] {
+            result.formUnion(subtreeIds(for: child.id))
         }
         return result
     }
@@ -482,8 +491,10 @@ private struct CollectionTreeRow: View {
                     expanded: $expanded,
                     selectedCollectionId: selectedCollectionId,
                     papers: papers,
+                    editingCollectionId: $editingCollectionId,
+                    editingCollectionName: $editingCollectionName,
                     onSelect: onSelect,
-                    onEdit: onEdit,
+                    onCommitRename: onCommitRename,
                     onAddSubfolder: onAddSubfolder,
                     onDelete: onDelete
                 )
@@ -494,43 +505,54 @@ private struct CollectionTreeRow: View {
     private var row: some View {
         HStack(spacing: 5) {
             disclosure
-            Button { onSelect(collection) } label: {
-                HStack(spacing: 8) {
-                    CollectionBadge(
-                        color: collection.resolvedColor,
-                        icon: collection.displayIcon,
-                        size: 22
-                    )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(collection.name)
-                            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.85))
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                        if let notes = collection.notes, !notes.isEmpty {
-                            Text(notes)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+            HStack(spacing: 8) {
+                CollectionBadge(color: collection.resolvedColor, size: 22)
+                if isEditing {
+                    TextField("", text: $editingCollectionName)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, weight: .semibold))
+                        .focused($renameFocused)
+                        .onSubmit { onCommitRename() }
+                        .onExitCommand { editingCollectionId = nil }
+                        .onChange(of: renameFocused) { _, focused in
+                            if focused {
+                                // Select all text once the field is first responder
+                                Task { @MainActor in
+                                    try? await Task.sleep(nanoseconds: 30_000_000)
+                                    NSApp.keyWindow?.selectAll(nil)
+                                }
+                            } else if editingCollectionId == collection.id {
+                                onCommitRename()
+                            }
                         }
-                    }
-                    Spacer(minLength: 0)
-                    if paperCount > 0 {
-                        Text("\(paperCount)")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.12), in: Capsule())
-                    }
+                        .task(id: isEditing) {
+                            if isEditing { renameFocused = true }
+                        }
+                } else {
+                    Text(collection.name)
+                        .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                        .foregroundStyle(isSelected ? Color.primary : Color.primary.opacity(0.85))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .onTapGesture(count: 2) {
+                            editingCollectionId = collection.id
+                            editingCollectionName = collection.name
+                        }
                 }
-                // Vertical padding lives inside the label so the button's hit
-                // area covers the full row height, not just the content height.
-                .padding(.vertical, 5)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                Spacer(minLength: 0)
+                if !isEditing && paperCount > 0 {
+                    Text("\(paperCount)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12), in: Capsule())
+                }
             }
-            .buttonStyle(.plain)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect(collection) }
         }
         .padding(.leading, CGFloat(depth) * 14)
         .padding(.trailing, 8)
@@ -573,8 +595,22 @@ private struct CollectionTreeRow: View {
     }
 
     @ViewBuilder private var contextMenu: some View {
-        Button("Edit…") { onEdit(collection) }
+        Button("Rename") {
+            editingCollectionId = collection.id
+            editingCollectionName = collection.name
+        }
         Button("New Subfolder…") { onAddSubfolder(collection) }
+        Menu("Color") {
+            ForEach(LabelColor.allCases) { c in
+                Button(c.title) {
+                    PaperStore.shared.setCollectionColor(id: collection.id, color: c.rawValue)
+                }
+            }
+            Divider()
+            Button("Default") {
+                PaperStore.shared.setCollectionColor(id: collection.id, color: nil)
+            }
+        }
         Divider()
         Button("Delete", role: .destructive) { onDelete(collection) }
     }

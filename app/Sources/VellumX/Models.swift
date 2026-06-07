@@ -9,17 +9,13 @@ struct PaperCollection: Identifiable, Equatable {
     var icon: String?
     /// Parent collection id; `nil` (or an unknown id) makes this a root folder.
     var parentId: String?
-    /// Optional one-line description shown as a subtitle in the sidebar.
-    var notes: String?
-
     init(id: String = UUID().uuidString, name: String, color: String? = nil,
-         icon: String? = nil, parentId: String? = nil, notes: String? = nil) {
+         icon: String? = nil, parentId: String? = nil) {
         self.id = id
         self.name = name
         self.color = color
         self.icon = icon
         self.parentId = parentId
-        self.notes = notes
     }
 }
 

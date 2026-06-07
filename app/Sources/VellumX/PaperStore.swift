@@ -911,7 +911,7 @@ class PaperStore {
     // MARK: - Collections
 
     var allCollections: [PaperCollection] {
-        let sql = "SELECT id, name, color, icon, parent_id, notes FROM collections ORDER BY lower(name), name"
+        let sql = "SELECT id, name, color, icon, parent_id FROM collections ORDER BY lower(name), name"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         defer { sqlite3_finalize(stmt) }
@@ -923,21 +923,19 @@ class PaperStore {
             let color = columnOptionalString(stmt, 2)
             let icon = columnOptionalString(stmt, 3)
             let parentId = columnOptionalString(stmt, 4)
-            let notes = columnOptionalString(stmt, 5)
-            rows.append(PaperCollection(id: id, name: name, color: color, icon: icon, parentId: parentId, notes: notes))
+            rows.append(PaperCollection(id: id, name: name, color: color, icon: icon, parentId: parentId))
         }
         return rows
     }
 
     @discardableResult
     func createCollection(name: String, color: String? = nil,
-                          icon: String? = nil, parentId: String? = nil,
-                          notes: String? = nil) -> PaperCollection? {
+                          icon: String? = nil, parentId: String? = nil) -> PaperCollection? {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else { return nil }
 
         let id = UUID().uuidString
-        let sql = "INSERT INTO collections (id, name, color, icon, parent_id, notes) VALUES (?, ?, ?, ?, ?, ?)"
+        let sql = "INSERT INTO collections (id, name, color, icon, parent_id) VALUES (?, ?, ?, ?, ?)"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return nil }
         defer { sqlite3_finalize(stmt) }
@@ -946,10 +944,9 @@ class PaperStore {
         bindOptionalText(stmt, 3, color)
         bindOptionalText(stmt, 4, icon)
         bindOptionalText(stmt, 5, parentId)
-        bindOptionalText(stmt, 6, notes)
         guard sqlite3_step(stmt) == SQLITE_DONE else { return nil }
         paperVersion += 1
-        return PaperCollection(id: id, name: trimmedName, color: color, icon: icon, parentId: parentId, notes: notes)
+        return PaperCollection(id: id, name: trimmedName, color: color, icon: icon, parentId: parentId)
     }
 
     func renameCollection(id: String, to newName: String) {
@@ -964,10 +961,6 @@ class PaperStore {
 
     func setCollectionColor(id: String, color: String?) {
         updateCollectionColumn(id: id, column: "color", value: color)
-    }
-
-    func setCollectionNotes(id: String, notes: String?) {
-        updateCollectionColumn(id: id, column: "notes", value: notes)
     }
 
     private func updateCollectionColumn(id: String, column: String, value: String?) {
