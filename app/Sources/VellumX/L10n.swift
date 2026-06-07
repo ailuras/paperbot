@@ -65,6 +65,7 @@ enum L10n {
         case clearFiltersToast
         case cmdExportBib
         case exportBibSuccess, exportBibFailed, exportBibEmpty
+        case cmdSurprise, surpriseEmpty
         case fetchConfirmTitle, fetchConfirmMessage
         case cmdDeletePaper, delete, deleteConfirmTitle, deleteConfirmMessage
         case cmdUpdatePaper
@@ -279,6 +280,8 @@ enum L10n {
         case .exportBibSuccess:   return ("Bibliography exported", "参考文献已导出")
         case .exportBibFailed:    return ("Bibliography export failed", "参考文献导出失败")
         case .exportBibEmpty:     return ("No papers in the current view to export.", "当前视图没有可导出的论文。")
+        case .cmdSurprise:        return ("Surprise Me", "随机一篇")
+        case .surpriseEmpty:      return ("No pending papers to pick from.", "没有可挑选的待读论文。")
         case .fetchConfirmTitle:  return ("Fetch New Papers?", "获取新论文？")
         case .fetchConfirmMessage:
             return ("This contacts OpenAlex and may take a while.",

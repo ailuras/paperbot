@@ -436,6 +436,8 @@ struct ContentView: View {
             !searchKeyword.isEmpty
         let clearFilters: (() -> Void)? = hasAnyFilter ? { resetFilters() } : nil
         let exportBib: (() -> Void)? = filteredPapers.isEmpty ? nil : { exportBibliography() }
+        let hasPending = store.papers.contains(where: { $0.status == .pending })
+        let surprise: (() -> Void)? = hasPending ? { surpriseMe() } : nil
         return PaperActions(
             selectView: selectView,
             selectPrevious: selectPrevious,
@@ -447,8 +449,39 @@ struct ContentView: View {
             copyBibtex: copyBibtex,
             openLink: openLink,
             clearFilters: clearFilters,
-            exportBibliography: exportBib
+            exportBibliography: exportBib,
+            surpriseMe: surprise
         )
+    }
+
+    /// Pick a random pending paper and jump to it. Clears filters first so
+    /// the selection always lands; the Pending sidebar tab becomes active.
+    private func surpriseMe() {
+        let pending = store.papers.filter { $0.status == .pending }
+        guard let pick = pending.randomElement() else {
+            NotificationCenter.shared.showToast(L10n.t(.surpriseEmpty), type: .warning)
+            return
+        }
+        resetFiltersSilently()
+        selectedCollectionId = nil
+        selectedSidebarItem = .pending
+        applyFilters()
+        if filteredPapers.contains(where: { $0.id == pick.id }) {
+            selectedPaperIds = [pick.id]
+            lastViewedPaperId = pick.id
+        }
+    }
+
+    /// Same as `resetFilters` but no toast — used when surprise picking so
+    /// the user isn't double-notified.
+    private func resetFiltersSilently() {
+        selectedTopic = nil
+        selectedFields = []
+        selectedTiers = []
+        includedTags = []
+        excludedTags = []
+        searchKeyword = ""
+        debouncedSearch = ""
     }
 
     private func exportBibliography() {

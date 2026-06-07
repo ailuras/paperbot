@@ -26,6 +26,7 @@ struct PaperActions {
     var openLink: (() -> Void)?
     var clearFilters: (() -> Void)?
     var exportBibliography: (() -> Void)?
+    var surpriseMe: (() -> Void)?
 }
 
 private struct PaperActionsKey: FocusedValueKey {
@@ -87,6 +88,9 @@ struct AppCommands: Commands {
             Button(L10n.t(.cmdRecommend)) { actions?.recommend?() }
                 .keyboardShortcut("t", modifiers: .command)
                 .disabled(actions?.recommend == nil)
+            Button(L10n.t(.cmdSurprise)) { actions?.surpriseMe?() }
+                .keyboardShortcut("r", modifiers: [.command, .shift])
+                .disabled(actions?.surpriseMe == nil)
 
             Divider()
 
