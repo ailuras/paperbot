@@ -21,7 +21,7 @@ enum L10n {
         case dailyRecommendations, dailyCount, qualitySlots, highScoreThreshold, recentWindow
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
         // Automation
-        case enableAutomation, monthlyFetch, dailyRecommend, scheduleDay
+        case enableAutomation, monthlyFetch, dailyRecommend
         // Rules
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, addTrack
@@ -139,7 +139,6 @@ enum L10n {
         case .enableAutomation:   return ("Enable automation", "启用自动化")
         case .monthlyFetch:       return ("Fetch monthly", "每月抓取")
         case .dailyRecommend:     return ("Recommend daily", "每日推荐")
-        case .scheduleDay:        return ("Day of month", "每月第几天")
         case .interestsTracks:    return ("Interests (Tracks)", "研究方向 (Tracks)")
         case .venueRatings:       return ("Venue Ratings", "会议评级")
         case .noTracks:           return ("No tracks yet. Add one below.", "暂无方向。点击下方按钮添加。")

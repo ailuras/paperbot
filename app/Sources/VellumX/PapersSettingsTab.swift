@@ -48,28 +48,29 @@ struct PapersSettingsTab: View {
                 Toggle(L10n.t(.enableAutomation), isOn: $automation.automationEnabled)
 
                 if automation.automationEnabled {
-                    Toggle(L10n.t(.monthlyFetch), isOn: $automation.autoFetchEnabled)
-                    if automation.autoFetchEnabled {
-                        HStack {
-                            Text(L10n.t(.scheduleDay))
+                    HStack {
+                        Toggle(L10n.t(.monthlyFetch), isOn: $automation.autoFetchEnabled)
+                        if automation.autoFetchEnabled {
                             Picker("", selection: $automation.fetchDay) {
                                 ForEach(1 ... 28, id: \.self) { d in
                                     Text("\(d)").tag(d)
                                 }
                             }
                             .labelsHidden()
-                            .frame(width: 60)
+                            .frame(width: 56)
                             DatePicker("", selection: $automation.fetchTime,
                                        displayedComponents: .hourAndMinute)
                                 .labelsHidden()
                         }
                     }
 
-                    Toggle(L10n.t(.dailyRecommend), isOn: $automation.autoRecommendEnabled)
-                    if automation.autoRecommendEnabled {
-                        DatePicker("", selection: $automation.recommendTime,
-                                   displayedComponents: .hourAndMinute)
-                            .labelsHidden()
+                    HStack {
+                        Toggle(L10n.t(.dailyRecommend), isOn: $automation.autoRecommendEnabled)
+                        if automation.autoRecommendEnabled {
+                            DatePicker("", selection: $automation.recommendTime,
+                                       displayedComponents: .hourAndMinute)
+                                .labelsHidden()
+                        }
                     }
                 }
             }
