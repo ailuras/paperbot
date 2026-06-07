@@ -148,7 +148,7 @@ enum L10n {
         case .field:              return ("Field", "领域")
         case .newField:           return ("New Field…", "新建领域…")
         case .venueChangesApplied:return ("Updated paper metadata:", "已更新论文元数据：")
-        case .applyChanges:       return ("Apply Changes", "应用更改")
+        case .applyChanges:       return ("Recompute Library", "重算全库")
         case .applyChangesHint:   return ("Recompute cached venue, tier, and score across the whole library to reflect your edited rules.",
                                           "重新计算整个论文库缓存的会议、评级和分数，使其反映你修改后的规则。")
 

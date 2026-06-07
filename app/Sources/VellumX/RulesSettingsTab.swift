@@ -46,8 +46,7 @@ struct RulesSettingsTab: View {
                     } label: {
                         Label(L10n.t(.applyChanges), systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
+                    .tint(.accentColor)
                     .disabled(!metadata.rulesDirty)
                     .help(L10n.t(.applyChangesHint))
 
