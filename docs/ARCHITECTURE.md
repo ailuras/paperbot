@@ -8,6 +8,9 @@ SQLite.
 ## Runtime Shape
 
 - `VellumXApp` creates the main window and AppKit menu bar controller.
+- `AutomationScheduler` checks local task timing while the app is running and
+  calls shared paper workflows when monthly fetch or daily recommendation is
+  due.
 - `ContentView` hosts the two-column workspace: filters and collections on the
   left, paper detail and reading workflow on the right.
 - `PaperStore` is the main `@MainActor` SQLite-backed observable store for
@@ -42,6 +45,8 @@ Translation API keys are stored as local plaintext in the active variant's
 
 - `OpenAlexFetcher` fetches paper metadata.
 - `RecommendEngine` and `VenueScorer` select and score recommendations.
+- `PaperWorkflowService` is the shared entrypoint for fetch and recommendation
+  runs used by buttons, menu bar actions, and automation.
 - `TranslationService` handles provider-backed abstract translation.
 - `PdfResolver` resolves open-access PDF URLs across multiple sources.
 - `CitationExporter` formats citations and BibTeX output.

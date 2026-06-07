@@ -71,9 +71,12 @@ struct VellumXApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBar: MenuBarController?
+    private var automationScheduler: AutomationScheduler?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         menuBar = MenuBarController(store: .shared, settings: .shared)
+        automationScheduler = AutomationScheduler()
+        automationScheduler?.start()
         // If restart.sh set the "open on right screen" flag, honour it once then clear it.
         if UserDefaults.standard.bool(forKey: "launchOnRightScreen") {
             UserDefaults.standard.removeObject(forKey: "launchOnRightScreen")
@@ -87,5 +90,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 window.setFrame(f, display: true)
             }
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        automationScheduler?.stop()
     }
 }

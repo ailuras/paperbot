@@ -245,11 +245,8 @@ struct MenuBarContentView: View {
     }
 
     private func runRecommendEngine() {
-        let cfg = ConfigManager.shared.effectiveConfig
-        let engine = RecommendEngine(config: cfg)
-        let selected = engine.recommend(papers: store.papers)
-        for r in selected {
-            store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
+        Task {
+            _ = await PaperWorkflowService.shared.recommendPapers()
         }
     }
 
@@ -362,4 +359,3 @@ private struct MenuBarPaperRow: View {
         }
     }
 }
-

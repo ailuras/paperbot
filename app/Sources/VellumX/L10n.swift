@@ -6,7 +6,7 @@ import Foundation
 enum L10n {
     enum Key {
         // Tabs
-        case general, api, papers, rules
+        case general, api, automation, papers, rules
         // General
         case storageLocation, currentLocation, change, restoreDefault, storageHint, pdfLocation
         case interface, showInMenuBar, language, menuBarHint
@@ -20,6 +20,9 @@ enum L10n {
         // Papers
         case dailyRecommendations, dailyCount, qualitySlots, highScoreThreshold, recentWindow
         case openAlexFetch, contactEmail, perPage, fetchDays, maxResults, topicFilter
+        // Automation
+        case automationTasks, automationHistory, enableAutomation, monthlyFetch, dailyRecommend
+        case lastMonthlyFetch, lastDailyRecommend, never
         // Rules
         case interestsTracks, venueRatings
         case noTracks, name, searchQuery, keywordsCSV, addTrack
@@ -77,6 +80,7 @@ enum L10n {
         switch key {
         case .general:            return ("General", "通用")
         case .api:                return ("API", "API")
+        case .automation:         return ("Automation", "自动化")
         case .papers:             return ("Papers", "论文")
         case .rules:              return ("Rules", "学术规则")
 
@@ -133,6 +137,14 @@ enum L10n {
         case .fetchDays:          return ("Fetch days", "抓取天数")
         case .maxResults:         return ("Max results", "最大结果数")
         case .topicFilter:        return ("Topic filter", "主题过滤")
+        case .automationTasks:    return ("Tasks", "任务")
+        case .automationHistory:  return ("History", "历史")
+        case .enableAutomation:   return ("Enable automation", "启用自动化")
+        case .monthlyFetch:       return ("Fetch monthly", "每月抓取")
+        case .dailyRecommend:     return ("Recommend daily", "每日推荐")
+        case .lastMonthlyFetch:   return ("Last monthly fetch", "上次每月抓取")
+        case .lastDailyRecommend: return ("Last daily recommendation", "上次每日推荐")
+        case .never:              return ("Never", "从未")
         case .interestsTracks:    return ("Interests (Tracks)", "研究方向 (Tracks)")
         case .venueRatings:       return ("Venue Ratings", "会议评级")
         case .noTracks:           return ("No tracks yet. Add one below.", "暂无方向。点击下方按钮添加。")

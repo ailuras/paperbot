@@ -6,6 +6,7 @@ struct ContentView: View {
     @State private var store = PaperStore.shared
     @State private var metadata = MetadataStore.shared
     @State private var windowOpener = MainWindowOpener.shared
+    @State private var workflows = PaperWorkflowService.shared
     private var settings = AppSettings.shared
 
     // Filter and Sort states
@@ -36,8 +37,6 @@ struct ContentView: View {
     @State private var addTagSignal: Int = 0
 
     // Async execution states
-    @State private var isFetching: Bool = false
-    @State private var isRecommending: Bool = false
     @State private var showImport: Bool = false
     @State private var isTranslating: Bool = false
     /// Paper IDs currently resolving their PDF; per-paper so switching detail
@@ -313,24 +312,24 @@ struct ContentView: View {
             ToolbarItem(placement: .automatic) {
                 ControlGroup {
                     Button(action: fetchPapers) {
-                        if isFetching {
+                        if workflows.isFetching {
                             ProgressView().controlSize(.small).frame(width: 22, height: 22)
                         } else {
                             toolbarIcon("arrow.clockwise")
                         }
                     }
-                    .disabled(isFetching || isRecommending)
+                    .disabled(workflows.isBusy)
                     .accessibilityLabel("Fetch new papers")
                     .help("Fetch new papers from OpenAlex")
 
                     Button(action: recommendPapers) {
-                        if isRecommending {
+                        if workflows.isRecommending {
                             ProgressView().controlSize(.small).frame(width: 22, height: 22)
                         } else {
                             toolbarIcon("wand.and.stars")
                         }
                     }
-                    .disabled(isFetching || isRecommending)
+                    .disabled(workflows.isBusy)
                     .accessibilityLabel("Generate recommendations")
                     .help("Generate daily paper recommendations")
 
@@ -364,6 +363,7 @@ struct ContentView: View {
                     .help("Sort papers")
                     .popover(isPresented: $showSortOptions, arrowEdge: .bottom) { sortPopover }
                 }
+                .fixedSize()
             }
 
             // ── Detail navigation + status (always visible; disabled when nothing is open) ──
@@ -397,6 +397,7 @@ struct ContentView: View {
                     .disabled(!canGoNext)
                     .help("Next paper")
                 }
+                .fixedSize()
             }
         }
         // Publish the runnable actions to the menu-bar commands (AppCommands).
@@ -408,7 +409,7 @@ struct ContentView: View {
     /// clears the collection selection. Kept out of `body` so the type-checker
     /// doesn't have to solve these closures inside the view tree.
     private var paperActions: PaperActions {
-        let busy = isFetching || isRecommending
+        let busy = workflows.isBusy
         let selectView: (SidebarItem) -> Void = { selectedSidebarItem = $0 }
         let selectPrevious: (() -> Void)? = canGoPrevious ? { selectPreviousPaper() } : nil
         let selectNext: (() -> Void)? = canGoNext ? { selectNextPaper() } : nil
@@ -793,7 +794,7 @@ struct ContentView: View {
 
     private func fetchPapers() {
         guard !ConfigManager.shared.effectiveConfig.tracks.isEmpty else {
-            NotificationCenter.shared.setStatus("No tracks configured — add one in Settings ▸ Papers", type: .error)
+            NotificationCenter.shared.setStatus("No tracks configured - add one in Settings > Rules", type: .error)
             return
         }
         // Fetching contacts OpenAlex and can be slow; confirm before running.
@@ -801,64 +802,17 @@ struct ContentView: View {
             title: L10n.t(.fetchConfirmTitle),
             message: L10n.t(.fetchConfirmMessage),
             actions: [
-                .confirm(L10n.t(.cmdFetch), action: performFetch),
+                .confirm(L10n.t(.cmdFetch), action: {
+                    Task { _ = await workflows.fetchPapers() }
+                }),
                 .cancel(L10n.t(.cancel))
             ],
             textFieldValue: nil, textFieldLabel: nil
         ))
     }
 
-    private func performFetch() {
-        let config = ConfigManager.shared.effectiveConfig
-        isFetching = true
-        NotificationCenter.shared.setStatus("Fetching OpenAlex papers...", type: .progress)
-
-        Task {
-            do {
-                let fetcher = OpenAlexFetcher(config: config, venues: metadata.venues)
-                let result = try await fetcher.fetch()
-                let stats = store.addOrUpdate(papers: result.papers)
-                let msg = fetchStatusMessage(
-                    inserted: stats.inserted,
-                    updated: stats.updated,
-                    failedTracks: result.failedTracks
-                )
-                NotificationCenter.shared.showToast(msg, type: .success)
-                NotificationCenter.shared.clearStatus()
-            } catch {
-                NotificationCenter.shared.showToast("Fetch failed: \(error.localizedDescription)", type: .error)
-                NotificationCenter.shared.clearStatus()
-            }
-            isFetching = false
-        }
-    }
-
-    private func fetchStatusMessage(inserted: Int, updated: Int, failedTracks: [String]) -> String {
-        let base = "Fetched! Added \(inserted) | Updated \(updated)"
-        guard !failedTracks.isEmpty else { return base }
-        return "\(base) | Failed: \(failedTracks.joined(separator: ", "))"
-    }
-
     private func recommendPapers() {
-        let config = ConfigManager.shared.effectiveConfig
-        isRecommending = true
-        NotificationCenter.shared.setStatus("Running recommendation engine...", type: .progress)
-
-        Task {
-            let engine = RecommendEngine(config: config)
-            let selected = engine.recommend(papers: store.papers)
-            for r in selected {
-                store.setPaperRecommended(id: r.paper.id, isRecommended: true, reason: r.reason)
-            }
-            NotificationCenter.shared.showToast(
-                selected.isEmpty
-                    ? "No new candidates to recommend."
-                    : "Added \(selected.count) new recommendations!",
-                type: selected.isEmpty ? .info : .success
-            )
-            NotificationCenter.shared.clearStatus()
-            isRecommending = false
-        }
+        Task { _ = await workflows.recommendPapers() }
     }
 
     private func translate(paper: Paper) {
