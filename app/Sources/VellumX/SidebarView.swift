@@ -449,13 +449,11 @@ private struct CollectionTreeRow: View {
     let onEdit: (PaperCollection) -> Void
     let onAddSubfolder: (PaperCollection) -> Void
     let onDelete: (PaperCollection) -> Void
-    @State private var isContextMenuPresented = false
 
     private var children: [PaperCollection] { childrenByParent[collection.id] ?? [] }
     private var hasChildren: Bool { !children.isEmpty }
     private var isExpanded: Bool { expanded.contains(collection.id) }
     private var isSelected: Bool { selectedCollectionId == collection.id }
-    private var showsSelectionFrame: Bool { isSelected && !isContextMenuPresented }
 
     /// Number of papers in this collection (including descendants).
     private var paperCount: Int {
@@ -528,25 +526,27 @@ private struct CollectionTreeRow: View {
                 }
             }
             .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .padding(.leading, CGFloat(depth) * 14)
         .padding(.vertical, 5)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            if showsSelectionFrame {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(Color.accentColor.opacity(0.07))
-            }
-        }
-        .overlay {
-            if showsSelectionFrame {
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .stroke(Color.accentColor.opacity(0.95), lineWidth: 1)
-            }
-        }
         .padding(.trailing, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu { contextMenu }
+        .listRowBackground(rowBackground)
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        if isSelected {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(collection.resolvedColor.opacity(0.15))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 1)
+        } else {
+            Color.clear
+        }
     }
 
     private var disclosure: some View {
@@ -572,8 +572,6 @@ private struct CollectionTreeRow: View {
 
     @ViewBuilder private var contextMenu: some View {
         Button("Edit…") { onEdit(collection) }
-            .onAppear { isContextMenuPresented = true }
-            .onDisappear { isContextMenuPresented = false }
         Button("New Subfolder…") { onAddSubfolder(collection) }
         Divider()
         Button("Delete", role: .destructive) { onDelete(collection) }
