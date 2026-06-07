@@ -50,8 +50,8 @@ final class AutomationScheduler {
         if preferences.autoFetchEnabled,
            Self.needsMonthlyRun(lastRun: preferences.lastAutoFetchAt, now: now, calendar: calendar),
            Self.shouldRunAtScheduledTime(
-               scheduledDate: preferences.fetchSchedule,
-               useDay: true,
+               day: preferences.fetchDay,
+               time: preferences.fetchTime,
                now: now, calendar: calendar
            ) {
             let result = await workflows.fetchPapers(notify: false)
@@ -63,8 +63,7 @@ final class AutomationScheduler {
         if preferences.autoRecommendEnabled,
            Self.needsDailyRun(lastRun: preferences.lastAutoRecommendAt, now: now, calendar: calendar),
            Self.shouldRunAtScheduledTime(
-               scheduledDate: preferences.recommendTime,
-               useDay: false,
+               time: preferences.recommendTime,
                now: now, calendar: calendar
            ) {
             if hasRecommendationToday(now: now) {
@@ -84,7 +83,8 @@ final class AutomationScheduler {
             _ = preferences.autoFetchEnabled
             _ = preferences.autoRecommendEnabled
             _ = preferences.recommendTime
-            _ = preferences.fetchSchedule
+            _ = preferences.fetchDay
+            _ = preferences.fetchTime
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.observePreferences()
@@ -113,29 +113,41 @@ final class AutomationScheduler {
         return last.era != current.era || last.year != current.year || last.month != current.month
     }
 
-    /// Returns true when `now` has reached or passed the scheduled time.
-    /// - `useDay`: true for monthly (respects day-of-month), false for daily (time only).
+    /// Daily: returns true when `now` has reached or passed the scheduled time.
     nonisolated static func shouldRunAtScheduledTime(
-        scheduledDate: Date,
-        useDay: Bool,
+        time: Date,
         now: Date,
         calendar: Calendar
     ) -> Bool {
-        let target = calendar.dateComponents(
-            useDay ? [.day, .hour, .minute] : [.hour, .minute],
-            from: scheduledDate
-        )
-        let current = calendar.dateComponents([.day, .hour, .minute], from: now)
-        let nowDay = current.day ?? 0, nowHour = current.hour ?? 0, nowMinute = current.minute ?? 0
-
-        if useDay, let targetDay = target.day {
-            if nowDay > targetDay { return true }
-            guard nowDay == targetDay else { return false }
-        }
-
+        let target = calendar.dateComponents([.hour, .minute], from: time)
+        let current = calendar.dateComponents([.hour, .minute], from: now)
+        let nowHour = current.hour ?? 0, nowMinute = current.minute ?? 0
         let targetHour = target.hour ?? 0
+
         if nowHour > targetHour { return true }
         guard nowHour == targetHour else { return false }
         return nowMinute >= (target.minute ?? 0)
+    }
+
+    /// Monthly: returns true when `now` has reached or passed the scheduled
+    /// day-of-month + time. If today is past the target day this month, runs
+    /// immediately (better late than never).
+    nonisolated static func shouldRunAtScheduledTime(
+        day: Int,
+        time: Date,
+        now: Date,
+        calendar: Calendar
+    ) -> Bool {
+        let targetTime = calendar.dateComponents([.hour, .minute], from: time)
+        let current = calendar.dateComponents([.day, .hour, .minute], from: now)
+        let nowDay = current.day ?? 0, nowHour = current.hour ?? 0, nowMinute = current.minute ?? 0
+
+        if nowDay > day { return true }
+        guard nowDay == day else { return false }
+
+        let targetHour = targetTime.hour ?? 0
+        if nowHour > targetHour { return true }
+        guard nowHour == targetHour else { return false }
+        return nowMinute >= (targetTime.minute ?? 0)
     }
 }

@@ -14,8 +14,10 @@ final class AutomationPreferences {
 
     /// Only hour / minute matter; the date part is a fixed reference.
     var recommendTime: Date { didSet { save(recommendTime, key: Keys.recommendTime) } }
-    /// Only day / hour / minute matter; month / year are fixed references.
-    var fetchSchedule: Date { didSet { save(fetchSchedule, key: Keys.fetchSchedule) } }
+    /// Day of month (1–28) for the monthly fetch.
+    var fetchDay: Int { didSet { save(fetchDay, key: Keys.fetchDay) } }
+    /// Only hour / minute matter for the monthly fetch.
+    var fetchTime: Date { didSet { save(fetchTime, key: Keys.fetchTime) } }
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let calendar: Calendar
@@ -28,11 +30,16 @@ final class AutomationPreferences {
         autoRecommendEnabled = defaults.object(forKey: Keys.autoRecommendEnabled) as? Bool ?? true
         lastAutoFetchAt = defaults.object(forKey: Keys.lastAutoFetchAt) as? Date
         lastAutoRecommendAt = defaults.object(forKey: Keys.lastAutoRecommendAt) as? Date
-        recommendTime = Self.readDate(defaults, key: Keys.recommendTime, calendar: calendar) ?? Self.defaultRecommendTime(calendar)
-        fetchSchedule = Self.readDate(defaults, key: Keys.fetchSchedule, calendar: calendar) ?? Self.defaultFetchSchedule(calendar)
+        recommendTime = Self.readDate(defaults, key: Keys.recommendTime, calendar: calendar) ?? Self.defaultTime(calendar)
+        fetchDay = defaults.object(forKey: Keys.fetchDay) as? Int ?? 1
+        fetchTime = Self.readDate(defaults, key: Keys.fetchTime, calendar: calendar) ?? Self.defaultTime(calendar)
     }
 
     private func save(_ value: Bool, key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    private func save(_ value: Int, key: String) {
         defaults.set(value, forKey: key)
     }
 
@@ -52,12 +59,8 @@ final class AutomationPreferences {
         defaults.object(forKey: key) as? Date
     }
 
-    private static func defaultRecommendTime(_ calendar: Calendar) -> Date {
+    private static func defaultTime(_ calendar: Calendar) -> Date {
         calendar.date(from: DateComponents(hour: 9, minute: 0)) ?? Date()
-    }
-
-    private static func defaultFetchSchedule(_ calendar: Calendar) -> Date {
-        calendar.date(from: DateComponents(day: 1, hour: 9, minute: 0)) ?? Date()
     }
 
     private enum Keys {
@@ -67,6 +70,7 @@ final class AutomationPreferences {
         static let lastAutoFetchAt = "automation.fetch.monthly.lastRun"
         static let lastAutoRecommendAt = "automation.recommend.daily.lastRun"
         static let recommendTime = "automation.recommend.daily.time"
-        static let fetchSchedule = "automation.fetch.monthly.schedule"
+        static let fetchDay = "automation.fetch.monthly.day"
+        static let fetchTime = "automation.fetch.monthly.time"
     }
 }

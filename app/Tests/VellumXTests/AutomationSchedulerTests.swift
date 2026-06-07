@@ -24,64 +24,64 @@ final class AutomationSchedulerTests: XCTestCase {
         XCTAssertTrue(AutomationScheduler.needsMonthlyRun(lastRun: lateJune, now: july, calendar: calendar))
     }
 
-    // MARK: - shouldRunAtScheduledTime (daily: useDay=false)
+    // MARK: - Daily (time only)
 
     func testDailyBeforeScheduledTime() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(hour: 14, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 14, minute: 0, calendar: calendar)
         let now = date("2026-06-07T13:30:00Z")
         XCTAssertFalse(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: false, now: now, calendar: calendar))
+            time: time, now: now, calendar: calendar))
     }
 
     func testDailyAtScheduledTime() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(hour: 14, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 14, minute: 0, calendar: calendar)
         let now = date("2026-06-07T14:00:00Z")
         XCTAssertTrue(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: false, now: now, calendar: calendar))
+            time: time, now: now, calendar: calendar))
     }
 
     func testDailyAfterScheduledTime() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(hour: 14, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 14, minute: 0, calendar: calendar)
         let now = date("2026-06-07T14:30:00Z")
         XCTAssertTrue(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: false, now: now, calendar: calendar))
+            time: time, now: now, calendar: calendar))
     }
 
-    // MARK: - shouldRunAtScheduledTime (monthly: useDay=true)
+    // MARK: - Monthly (day + time)
 
     func testMonthlyBeforeRequiredDay() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(day: 15, hour: 9, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 9, minute: 0, calendar: calendar)
         let now = date("2026-06-10T14:00:00Z")
         XCTAssertFalse(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: true, now: now, calendar: calendar))
+            day: 15, time: time, now: now, calendar: calendar))
     }
 
     func testMonthlyOnRequiredDayBeforeTime() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(day: 15, hour: 9, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 9, minute: 0, calendar: calendar)
         let now = date("2026-06-15T08:00:00Z")
         XCTAssertFalse(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: true, now: now, calendar: calendar))
+            day: 15, time: time, now: now, calendar: calendar))
     }
 
     func testMonthlyOnRequiredDayAtTime() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(day: 15, hour: 9, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 9, minute: 0, calendar: calendar)
         let now = date("2026-06-15T09:00:00Z")
         XCTAssertTrue(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: true, now: now, calendar: calendar))
+            day: 15, time: time, now: now, calendar: calendar))
     }
 
     func testMonthlyPastRequiredDayRunsImmediately() {
         let calendar = utcCalendar()
-        let scheduled = scheduledDate(day: 15, hour: 9, minute: 0, calendar: calendar)
+        let time = timeDate(hour: 9, minute: 0, calendar: calendar)
         let now = date("2026-06-16T06:00:00Z")
         XCTAssertTrue(AutomationScheduler.shouldRunAtScheduledTime(
-            scheduledDate: scheduled, useDay: true, now: now, calendar: calendar))
+            day: 15, time: time, now: now, calendar: calendar))
     }
 
     // MARK: - Helpers
@@ -96,11 +96,7 @@ final class AutomationSchedulerTests: XCTestCase {
         return calendar
     }
 
-    private func scheduledDate(day: Int? = nil, hour: Int, minute: Int, calendar: Calendar) -> Date {
-        var dc = DateComponents()
-        dc.hour = hour
-        dc.minute = minute
-        if let day { dc.day = day; dc.month = 6; dc.year = 2026 }
-        return calendar.date(from: dc)!
+    private func timeDate(hour: Int, minute: Int, calendar: Calendar) -> Date {
+        calendar.date(from: DateComponents(hour: hour, minute: minute))!
     }
 }
