@@ -27,6 +27,7 @@ struct PaperActions {
     var clearFilters: (() -> Void)?
     var exportBibliography: (() -> Void)?
     var surpriseMe: (() -> Void)?
+    var translateAbstract: (() -> Void)?
 }
 
 private struct PaperActionsKey: FocusedValueKey {
@@ -113,6 +114,9 @@ struct AppCommands: Commands {
             Button(L10n.t(.cmdAddTag)) { actions?.addTag?() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
                 .disabled(actions?.addTag == nil)
+            Button(L10n.t(.cmdTranslateAbstract)) { actions?.translateAbstract?() }
+                .keyboardShortcut("t", modifiers: [.command, .option])
+                .disabled(actions?.translateAbstract == nil)
 
             Divider()
 

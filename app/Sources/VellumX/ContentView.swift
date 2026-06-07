@@ -438,6 +438,9 @@ struct ContentView: View {
         let exportBib: (() -> Void)? = filteredPapers.isEmpty ? nil : { exportBibliography() }
         let hasPending = store.papers.contains(where: { $0.status == .pending })
         let surprise: (() -> Void)? = hasPending ? { surpriseMe() } : nil
+        let translate: (() -> Void)? = (selectedPaper?.abstract.isEmpty == false && !isTranslating)
+            ? { if let p = selectedPaper { self.translate(paper: p) } }
+            : nil
         return PaperActions(
             selectView: selectView,
             selectPrevious: selectPrevious,
@@ -450,7 +453,8 @@ struct ContentView: View {
             openLink: openLink,
             clearFilters: clearFilters,
             exportBibliography: exportBib,
-            surpriseMe: surprise
+            surpriseMe: surprise,
+            translateAbstract: translate
         )
     }
 
