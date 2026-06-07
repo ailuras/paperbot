@@ -419,6 +419,14 @@ struct ContentView: View {
         let addTag: (() -> Void)? = selectedPaper == nil ? nil : { addTagSignal += 1 }
         let fetch: (() -> Void)? = busy ? nil : { fetchPapers() }
         let recommend: (() -> Void)? = busy ? nil : { recommendPapers() }
+        let copyBibtex: (() -> Void)? = selectedPaper.map { paper in
+            { self.copyBibtex([paper]) }
+        }
+        let openLink: (() -> Void)? = selectedPaper.flatMap { paper in
+            paperLinkURL(paper).map { url in
+                { NSWorkspace.shared.open(url) }
+            }
+        }
         return PaperActions(
             selectView: selectView,
             selectPrevious: selectPrevious,
@@ -426,8 +434,23 @@ struct ContentView: View {
             setStatus: setStatus,
             addTag: addTag,
             fetch: fetch,
-            recommend: recommend
+            recommend: recommend,
+            copyBibtex: copyBibtex,
+            openLink: openLink
         )
+    }
+
+    /// Best clickable destination for a paper: DOI URL if known, else the
+    /// landing page from OpenAlex. Returns `nil` when neither is usable.
+    private func paperLinkURL(_ paper: Paper) -> URL? {
+        if let doi = paper.doi {
+            let bare = PdfResolver.stripDoiPrefix(doi)
+            if !bare.isEmpty, let url = URL(string: "https://doi.org/\(bare)") {
+                return url
+            }
+        }
+        let landing = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        return landing.isEmpty ? nil : URL(string: landing)
     }
 
     /// Reveal and select a paper requested from outside the window (e.g. the

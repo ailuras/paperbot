@@ -22,6 +22,8 @@ struct PaperActions {
     var addTag: (() -> Void)?
     var fetch: (() -> Void)?
     var recommend: (() -> Void)?
+    var copyBibtex: (() -> Void)?
+    var openLink: (() -> Void)?
 }
 
 private struct PaperActionsKey: FocusedValueKey {
@@ -99,6 +101,15 @@ struct AppCommands: Commands {
             Button(L10n.t(.cmdAddTag)) { actions?.addTag?() }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
                 .disabled(actions?.addTag == nil)
+
+            Divider()
+
+            Button(L10n.t(.cmdCopyBibtex)) { actions?.copyBibtex?() }
+                .keyboardShortcut("c", modifiers: [.command, .shift])
+                .disabled(actions?.copyBibtex == nil)
+            Button(L10n.t(.cmdOpenLink)) { actions?.openLink?() }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(actions?.openLink == nil)
         }
     }
 }
