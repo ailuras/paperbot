@@ -154,4 +154,45 @@ final class CitationExporterTests: XCTestCase {
         XCTAssertTrue(md.hasPrefix("- "))
         XCTAssertEqual(md.split(separator: "\n").count, 2)
     }
+
+    // MARK: - RIS
+
+    func testRisContainsCoreTags() {
+        let ris = CitationExporter.ris(for: makePaper())
+        XCTAssertTrue(ris.hasPrefix("TY  - JOUR"))
+        XCTAssertTrue(ris.contains("TI  - Attention Is All You Need"))
+        XCTAssertTrue(ris.contains("AU  - Ashish Vaswani"))
+        XCTAssertTrue(ris.contains("AU  - Noam Shazeer"))
+        XCTAssertTrue(ris.contains("PY  - 2017"))
+        XCTAssertTrue(ris.contains("JO  - NeurIPS"))
+        XCTAssertTrue(ris.contains("DO  - 10.5555/3295222"))
+        XCTAssertTrue(ris.hasSuffix("ER  - "))
+    }
+
+    func testRisOmitsMissingFields() {
+        let ris = CitationExporter.ris(for: makePaper(
+            authors: [], year: nil, venue: "", doi: nil, landing: ""
+        ))
+        XCTAssertFalse(ris.contains("AU  -"))
+        XCTAssertFalse(ris.contains("PY  -"))
+        XCTAssertFalse(ris.contains("JO  -"))
+        XCTAssertFalse(ris.contains("DO  -"))
+        XCTAssertFalse(ris.contains("UR  -"))
+        XCTAssertTrue(ris.contains("TI  -"))
+    }
+
+    func testRisFormatsDateField() {
+        var paper = makePaper()
+        paper.publicationDate = "2017-06-12"
+        let ris = CitationExporter.ris(for: paper)
+        XCTAssertTrue(ris.contains("DA  - 2017/06/12"))
+    }
+
+    func testRisMultiplePapersSeparatedByBlankLine() {
+        let p1 = makePaper(title: "First")
+        let p2 = makePaper(title: "Second")
+        let ris = CitationExporter.ris(for: [p1, p2])
+        XCTAssertEqual(ris.components(separatedBy: "TY  - JOUR").count - 1, 2)
+        XCTAssertTrue(ris.contains("\n\nTY  - JOUR"))
+    }
 }

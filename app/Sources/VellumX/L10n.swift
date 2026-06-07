@@ -47,6 +47,10 @@ enum L10n {
         case setPdfFromFile, removePdf, choosePdf, pdfSet, pdfRemoved, notAPdfFile, pdfSetFailed
         // Citation export
         case cite, copiedBibtex
+        case copyBibtex, copyApa, copyMarkdown, copyRis
+        case copiedApa, copiedMarkdown, copiedRis
+        case copyTitle, copyDoi, copyAuthors
+        case copiedTitle, copiedDoi, copiedAuthors
         // Related papers
         case relatedPapers, similarPapers, citedBy, addToLibrary, addedToLibrary
         case loadingRelated, noRelated
@@ -222,8 +226,21 @@ enum L10n {
         case .openVellumX:        return ("Open VellumX", "打开 VellumX")
         case .quit:               return ("Quit", "退出")
 
-        case .cite:               return ("Copy BibTeX", "复制 BibTeX")
+        case .cite:               return ("Copy Citation", "复制引用")
         case .copiedBibtex:       return ("BibTeX copied to clipboard", "BibTeX 已复制到剪贴板")
+        case .copyBibtex:         return ("Copy BibTeX", "复制 BibTeX")
+        case .copyApa:            return ("Copy APA", "复制 APA")
+        case .copyMarkdown:       return ("Copy Markdown", "复制 Markdown")
+        case .copyRis:            return ("Copy RIS", "复制 RIS")
+        case .copyTitle:          return ("Copy Title", "复制标题")
+        case .copyDoi:            return ("Copy DOI", "复制 DOI")
+        case .copyAuthors:        return ("Copy Authors", "复制作者")
+        case .copiedTitle:        return ("Title copied", "标题已复制")
+        case .copiedDoi:          return ("DOI copied", "DOI 已复制")
+        case .copiedAuthors:      return ("Authors copied", "作者已复制")
+        case .copiedApa:          return ("APA citation copied", "APA 引用已复制")
+        case .copiedMarkdown:     return ("Markdown citation copied", "Markdown 引用已复制")
+        case .copiedRis:          return ("RIS citation copied", "RIS 引用已复制")
 
         case .relatedPapers:      return ("Related Papers", "相关论文")
         case .similarPapers:      return ("Similar", "相似")

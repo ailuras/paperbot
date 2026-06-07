@@ -71,14 +71,18 @@ struct PaperDetailView: View {
 
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Title — max 3 lines; full title via tooltip
+            // Title — max 3 lines; full title via tooltip. Right-click copies
+            // the field directly so users can grab a title or DOI without
+            // opening the cite menu.
             Text(paper.title)
                 .font(.system(size: 22, weight: .bold, design: .serif))
                 .lineSpacing(3)
                 .lineLimit(3)
                 .truncationMode(.tail)
                 .foregroundStyle(.primary)
+                .textSelection(.enabled)
                 .help(paper.title)
+                .contextMenu { fieldCopyMenu }
 
             // Authors
             if !paper.authors.isEmpty {
@@ -86,12 +90,40 @@ struct PaperDetailView: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .lineSpacing(2)
+                    .textSelection(.enabled)
+                    .contextMenu { fieldCopyMenu }
             }
 
             metaCard
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 4)
+    }
+
+    @ViewBuilder
+    private var fieldCopyMenu: some View {
+        Button(L10n.t(.copyTitle)) {
+            copyField(paper.title, toast: L10n.t(.copiedTitle))
+        }
+        .disabled(paper.title.isEmpty)
+
+        Button(L10n.t(.copyAuthors)) {
+            copyField(paper.authors.joined(separator: ", "), toast: L10n.t(.copiedAuthors))
+        }
+        .disabled(paper.authors.isEmpty)
+
+        if let doi = paper.doi, !doi.isEmpty {
+            Button(L10n.t(.copyDoi)) {
+                copyField(PdfResolver.stripDoiPrefix(doi), toast: L10n.t(.copiedDoi))
+            }
+        }
+    }
+
+    private func copyField(_ text: String, toast: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        copyToPasteboard(trimmed)
+        NotificationCenter.shared.showToast(toast, type: .success)
     }
 
     private var pdfStatus: PdfStatus? {
@@ -162,13 +194,30 @@ struct PaperDetailView: View {
     }
 
     private var citeButton: some View {
-        Button {
-            copyToPasteboard(CitationExporter.bibtex(for: paper))
-            NotificationCenter.shared.showToast(L10n.t(.copiedBibtex), type: .success)
+        Menu {
+            Button(L10n.t(.copyBibtex)) {
+                copyToPasteboard(CitationExporter.bibtex(for: paper))
+                NotificationCenter.shared.showToast(L10n.t(.copiedBibtex), type: .success)
+            }
+            Button(L10n.t(.copyApa)) {
+                copyToPasteboard(CitationExporter.apa(for: paper))
+                NotificationCenter.shared.showToast(L10n.t(.copiedApa), type: .success)
+            }
+            Button(L10n.t(.copyMarkdown)) {
+                copyToPasteboard(CitationExporter.markdown(for: paper))
+                NotificationCenter.shared.showToast(L10n.t(.copiedMarkdown), type: .success)
+            }
+            Button(L10n.t(.copyRis)) {
+                copyToPasteboard(CitationExporter.ris(for: paper))
+                NotificationCenter.shared.showToast(L10n.t(.copiedRis), type: .success)
+            }
         } label: {
             Image(systemName: "text.quote")
         }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
         .buttonStyle(DetailActionButtonStyle())
+        .fixedSize()
         .help(L10n.t(.cite))
     }
 

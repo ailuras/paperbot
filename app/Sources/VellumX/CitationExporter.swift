@@ -138,6 +138,57 @@ enum CitationExporter {
         papers.map { "- \(markdown(for: $0))" }.joined(separator: "\n")
     }
 
+    // MARK: - RIS
+
+    /// RIS reference record, the Zotero / Mendeley / EndNote interchange
+    /// format. Each tag is two ASCII characters followed by "  - ", and the
+    /// record terminates with `ER  -`. Authors appear once per `AU` line.
+    static func ris(for paper: Paper) -> String {
+        var lines: [String] = ["TY  - JOUR"]
+
+        let title = paper.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty {
+            lines.append("TI  - \(title)")
+        }
+        for author in paper.authors {
+            let trimmed = author.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            lines.append("AU  - \(trimmed)")
+        }
+        if let year = paper.publicationYear {
+            lines.append("PY  - \(year)")
+        }
+        let dateField = paper.publicationDate.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !dateField.isEmpty {
+            // RIS DA uses YYYY/MM/DD; OpenAlex stores YYYY-MM-DD.
+            lines.append("DA  - \(dateField.replacingOccurrences(of: "-", with: "/"))")
+        }
+        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            lines.append("JO  - \(venue)")
+        }
+        let abstract = paper.abstract.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !abstract.isEmpty {
+            lines.append("AB  - \(abstract)")
+        }
+        if let doi = bareDoi(paper.doi) {
+            lines.append("DO  - \(doi)")
+        }
+        let landing = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !landing.isEmpty {
+            lines.append("UR  - \(landing)")
+        }
+
+        lines.append("ER  - ")
+        return lines.joined(separator: "\n")
+    }
+
+    /// RIS records separated by a blank line so reference managers can split
+    /// the input into individual entries.
+    static func ris(for papers: [Paper]) -> String {
+        papers.map { ris(for: $0) }.joined(separator: "\n\n")
+    }
+
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.
