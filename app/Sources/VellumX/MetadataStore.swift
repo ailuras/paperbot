@@ -536,7 +536,18 @@ final class MetadataStore {
     private func makeFields(from venues: [VenuePref]) -> [FieldPref] {
         let names = Set(venues.compactMap { Self.normalizedField($0.field) })
         return names.sorted().enumerated().map { index, name in
-            FieldPref(id: UUID().uuidString, name: name, color: nil, sortOrder: index)
+            FieldPref(id: UUID().uuidString, name: name, color: Self.defaultFieldColor(name), sortOrder: index)
+        }
+    }
+
+    static func defaultFieldColor(_ field: String?) -> String? {
+        switch field {
+        case "AI": return "pink"
+        case "AR": return "purple"
+        case "FM": return "red"
+        case "PL": return "orange"
+        case "SE": return "blue"
+        default: return nil
         }
     }
 
@@ -715,13 +726,16 @@ final class MetadataStore {
     static let defaultTracks: [TrackPref] = [
         TrackPref(name: "SAT", query: "SAT solver boolean satisfiability",
                   keywords: ["sat solver", "boolean satisfiability", "propositional satisfiability",
-                             "cdcl", "conflict-driven clause learning", "maxsat", "sat solving"]),
+                             "cdcl", "conflict-driven clause learning", "maxsat", "sat solving"],
+                  color: "purple", icon: "function"),
         TrackPref(name: "SMT", query: "satisfiability modulo theories SMT solver",
                   keywords: ["smt solver", "satisfiability modulo theories", "smt",
-                             "z3", "cvc5", "theory solver", "bit-vector"]),
+                             "z3", "cvc5", "theory solver", "bit-vector"],
+                  color: "indigo", icon: "cpu"),
         TrackPref(name: "CP", query: "constraint programming constraint satisfaction",
                   keywords: ["constraint programming", "constraint satisfaction", "constraint solver",
-                             "constraint propagation", "global constraint", "csp"])
+                             "constraint propagation", "global constraint", "csp"],
+                  color: "teal", icon: "chart.bar")
     ]
 
     /// Default venue ratings for a software-engineering + automated-reasoning

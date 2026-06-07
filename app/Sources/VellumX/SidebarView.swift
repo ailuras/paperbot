@@ -138,6 +138,7 @@ struct SidebarView: View {
                         childrenByParent: childrenByParent,
                         expanded: $expandedCollections,
                         selectedCollectionId: selectedCollectionId,
+                        papers: papers,
                         onSelect: selectCollection,
                         onRename: { startRename($0) },
                         onAddSubfolder: { startNewSubfolder($0) },
@@ -462,6 +463,7 @@ private struct CollectionTreeRow: View {
     let childrenByParent: [String: [PaperCollection]]
     @Binding var expanded: Set<String>
     let selectedCollectionId: String?
+    let papers: [Paper]
     let onSelect: (PaperCollection) -> Void
     let onRename: (PaperCollection) -> Void
     let onAddSubfolder: (PaperCollection) -> Void
@@ -474,6 +476,22 @@ private struct CollectionTreeRow: View {
     private var isSelected: Bool { selectedCollectionId == collection.id }
     private var showsSelectionFrame: Bool { isSelected && !isContextMenuPresented }
 
+    /// Number of papers in this collection (including descendants).
+    private var paperCount: Int {
+        let ids = subtreeIds(for: collection.id)
+        return papers.filter { $0.collectionIds.contains(where: ids.contains) }.count
+    }
+
+    private func subtreeIds(for id: String) -> Set<String> {
+        var result: Set<String> = [id]
+        if let children = childrenByParent[id] {
+            for child in children {
+                result.formUnion(subtreeIds(for: child.id))
+            }
+        }
+        return result
+    }
+
     var body: some View {
         row
         if hasChildren && isExpanded {
@@ -484,6 +502,7 @@ private struct CollectionTreeRow: View {
                     childrenByParent: childrenByParent,
                     expanded: $expanded,
                     selectedCollectionId: selectedCollectionId,
+                    papers: papers,
                     onSelect: onSelect,
                     onRename: onRename,
                     onAddSubfolder: onAddSubfolder,
@@ -497,13 +516,32 @@ private struct CollectionTreeRow: View {
         HStack(spacing: 5) {
             disclosure
             Button { onSelect(collection) } label: {
-                collectionLabel
+                HStack {
+                    Label {
+                        Text(collection.name)
+                            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    } icon: {
+                        Image(systemName: collection.icon ?? "folder")
+                            .font(.system(size: 14))
+                            .foregroundStyle(iconColor)
+                    }
+                    Spacer(minLength: 0)
+                    if paperCount > 0 {
+                        Text("\(paperCount)")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.secondary.opacity(0.12), in: Capsule())
+                    }
+                }
             }
             .buttonStyle(.plain)
-            Spacer(minLength: 0)
         }
         .padding(.leading, CGFloat(depth) * 14)
-        .padding(.vertical, 3)
+        .padding(.vertical, 5)
         .frame(maxWidth: .infinity, alignment: .leading)
         .foregroundStyle(isSelected ? .primary : .secondary)
         .background {
@@ -522,20 +560,6 @@ private struct CollectionTreeRow: View {
         .contextMenu { contextMenu }
     }
 
-    private var collectionLabel: some View {
-        HStack(spacing: 6) {
-            Image(systemName: collection.icon ?? "folder")
-                .font(.system(size: 12))
-                .foregroundStyle(iconColor)
-                .frame(width: 18)
-            Text(collection.name)
-                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-                .lineLimit(1)
-                .truncationMode(.tail)
-        }
-        .contentShape(Rectangle())
-    }
-
     private var disclosure: some View {
         Group {
             if hasChildren {
@@ -544,7 +568,7 @@ private struct CollectionTreeRow: View {
                     else { expanded.insert(collection.id) }
                 } label: {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                         .contentShape(Rectangle())
