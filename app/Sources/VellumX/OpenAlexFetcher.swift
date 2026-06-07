@@ -84,7 +84,7 @@ struct OpenAlexResponse: Decodable {
 
 // MARK: - Fetcher Class
 
-class OpenAlexFetcher {
+class OpenAlexFetcher: @unchecked Sendable {
     let config: AppConfig
     let scorer: VenueScorer
 
@@ -429,6 +429,63 @@ class OpenAlexFetcher {
         guard let work = await fetchWork(id: workId),
               let related = work.relatedWorks, !related.isEmpty else { return [] }
         return await fetchWorksByIds(Array(related.prefix(limit)))
+    }
+
+    // MARK: - Manual import helpers
+
+    /// Fetch a single work by DOI. Strips any "https://doi.org/" prefix before
+    /// sending to the OpenAlex `filter=doi:` parameter.
+    func fetchByDOI(_ doi: String) async -> Paper? {
+        let normalised = doi
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "https://doi.org/", with: "")
+            .replacingOccurrences(of: "http://doi.org/", with: "")
+            .replacingOccurrences(of: "doi.org/", with: "")
+        guard !normalised.isEmpty else { return nil }
+
+        var components = URLComponents(string: config.openalex.base_url)
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "filter", value: "doi:\(normalised)"),
+            URLQueryItem(name: "select", value: Self.displayFields)
+        ]
+        if !config.openalex.mailto.isEmpty {
+            items.append(URLQueryItem(name: "mailto", value: config.openalex.mailto))
+        }
+        components?.queryItems = items
+        guard let url = components?.url else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
+            return decodeWorks(from: data).first.map { parseWork($0, track: "") }
+        } catch {
+            print("OpenAlex fetchByDOI failed: \(error)")
+            return nil
+        }
+    }
+
+    /// Full-text title search returning up to `limit` results. Does not apply
+    /// date, type, or topic filters so it can surface older or non-article works.
+    func fetchByTitle(_ title: String, limit: Int = 5) async -> [Paper] {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        var components = URLComponents(string: config.openalex.base_url)
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "search", value: title),
+            URLQueryItem(name: "per_page", value: String(min(limit, 25))),
+            URLQueryItem(name: "select", value: Self.displayFields)
+        ]
+        if !config.openalex.mailto.isEmpty {
+            items.append(URLQueryItem(name: "mailto", value: config.openalex.mailto))
+        }
+        components?.queryItems = items
+        guard let url = components?.url else { return [] }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: makeRequest(url: url))
+            guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return [] }
+            return decodeWorks(from: data).map { parseWork($0, track: "") }
+        } catch {
+            print("OpenAlex fetchByTitle failed: \(error)")
+            return []
+        }
     }
 
     /// Papers citing the target work, most-cited first.
