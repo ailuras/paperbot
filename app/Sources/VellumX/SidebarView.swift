@@ -539,6 +539,7 @@ private struct CollectionTreeRow: View {
                 }
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
         }
         .padding(.leading, CGFloat(depth) * 14)
         .padding(.vertical, 5)
