@@ -49,7 +49,8 @@ struct PapersSettingsTab: View {
 
                 if automation.automationEnabled {
                     HStack {
-                        Toggle(L10n.t(.monthlyFetch), isOn: $automation.autoFetchEnabled)
+                        Text(L10n.t(.monthlyFetch))
+                        Spacer()
                         if automation.autoFetchEnabled {
                             Picker("", selection: $automation.fetchDay) {
                                 ForEach(1 ... 28, id: \.self) { d in
@@ -62,15 +63,18 @@ struct PapersSettingsTab: View {
                                        displayedComponents: .hourAndMinute)
                                 .labelsHidden()
                         }
+                        Toggle("", isOn: $automation.autoFetchEnabled).labelsHidden()
                     }
 
                     HStack {
-                        Toggle(L10n.t(.dailyRecommend), isOn: $automation.autoRecommendEnabled)
+                        Text(L10n.t(.dailyRecommend))
+                        Spacer()
                         if automation.autoRecommendEnabled {
                             DatePicker("", selection: $automation.recommendTime,
                                        displayedComponents: .hourAndMinute)
                                 .labelsHidden()
                         }
+                        Toggle("", isOn: $automation.autoRecommendEnabled).labelsHidden()
                     }
                 }
             }
