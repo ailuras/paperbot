@@ -79,4 +79,48 @@ final class CitationExporterTests: XCTestCase {
         XCTAssertTrue(bib.contains("title ="))
         XCTAssertTrue(bib.contains("year ="))
     }
+
+    // MARK: - APA
+
+    func testApaTwoAuthors() {
+        let s = CitationExporter.apa(for: makePaper())
+        XCTAssertEqual(
+            s,
+            "Vaswani, A., & Shazeer, N. (2017). Attention Is All You Need. NeurIPS. https://doi.org/10.5555/3295222"
+        )
+    }
+
+    func testApaSingleAuthorFallbackToLandingUrl() {
+        let s = CitationExporter.apa(for: makePaper(
+            authors: ["Jane Doe"], doi: nil, landing: "https://example.org/paper"
+        ))
+        XCTAssertEqual(
+            s,
+            "Doe, J. (2017). Attention Is All You Need. NeurIPS. https://example.org/paper"
+        )
+    }
+
+    func testApaSingleNameAuthorPreserved() {
+        let s = CitationExporter.apa(for: makePaper(authors: ["Plato"]))
+        XCTAssertTrue(s.hasPrefix("Plato. (2017)."))
+    }
+
+    func testApaNoYearUsesNd() {
+        let s = CitationExporter.apa(for: makePaper(year: nil))
+        XCTAssertTrue(s.contains("(n.d.)."))
+    }
+
+    func testApaCollapsesLongAuthorList() {
+        let many = (1...25).map { "Author\($0) Surname\($0)" }
+        let s = CitationExporter.apa(for: makePaper(authors: many))
+        XCTAssertTrue(s.contains("Surname1, A."))
+        XCTAssertTrue(s.contains("Surname19, A."))
+        XCTAssertTrue(s.contains("… Surname25, A."))
+        XCTAssertFalse(s.contains("Surname20, A."))
+    }
+
+    func testApaHyphenatedInitials() {
+        let s = CitationExporter.apa(for: makePaper(authors: ["Jean-Luc Picard"]))
+        XCTAssertTrue(s.hasPrefix("Picard, J.-L."))
+    }
 }

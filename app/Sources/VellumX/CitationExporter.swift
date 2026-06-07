@@ -61,6 +61,44 @@ enum CitationExporter {
         papers.map { bibtex(for: $0) }.joined(separator: "\n\n")
     }
 
+    // MARK: - APA
+
+    /// APA 7-style reference: "Surname, F. M., & Surname, F. (Year). Title.
+    /// *Venue*. https://doi.org/…". Missing pieces are dropped gracefully.
+    /// Author lists of 21+ collapse with "…" before the final author per APA 7.
+    static func apa(for paper: Paper) -> String {
+        var parts: [String] = []
+
+        if let authorList = apaAuthorList(paper.authors) {
+            parts.append(authorList)
+        }
+        if let year = paper.publicationYear {
+            parts.append("(\(year)).")
+        } else {
+            parts.append("(n.d.).")
+        }
+
+        let title = paper.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !title.isEmpty {
+            parts.append(title.hasSuffix(".") ? title : "\(title).")
+        }
+
+        let venue = paper.venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !venue.isEmpty {
+            parts.append("\(venue).")
+        }
+
+        if let url = canonicalUrl(for: paper) {
+            parts.append(url)
+        }
+
+        return parts.joined(separator: " ")
+    }
+
+    static func apa(for papers: [Paper]) -> String {
+        papers.map { apa(for: $0) }.joined(separator: "\n\n")
+    }
+
     // MARK: - Helpers
 
     /// BibTeX special characters that must be escaped with a backslash.
@@ -104,6 +142,57 @@ enum CitationExporter {
             return String(token)
         }
         return ""
+    }
+
+    /// Format an author list per APA 7: "Surname, F. M." per author, comma
+    /// separated, ", & " before the last. Lists of 21+ keep the first 19,
+    /// drop the middle with "…", then append the final author.
+    private static func apaAuthorList(_ authors: [String]) -> String? {
+        let formatted = authors
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map(apaAuthor(from:))
+        guard !formatted.isEmpty else { return nil }
+
+        let trailing: String
+        if formatted.count == 1 {
+            trailing = formatted[0]
+        } else if formatted.count <= 20 {
+            let head = formatted.dropLast().joined(separator: ", ")
+            trailing = "\(head), & \(formatted.last!)"
+        } else {
+            let head = formatted.prefix(19).joined(separator: ", ")
+            trailing = "\(head), … \(formatted.last!)"
+        }
+        return trailing.hasSuffix(".") ? trailing : "\(trailing)."
+    }
+
+    /// "Ashish Vaswani" → "Vaswani, A."; "J. R. R. Tolkien" → "Tolkien, J. R. R.".
+    /// Single-name authors are returned as-is.
+    private static func apaAuthor(from author: String) -> String {
+        let tokens = author
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .map(String.init)
+        guard tokens.count > 1, let surname = tokens.last else { return author }
+        let initials = tokens.dropLast().compactMap { token -> String? in
+            guard let first = token.first else { return nil }
+            // Preserve hyphenated initials ("Jean-Luc" → "J.-L.").
+            if token.contains("-") {
+                let pieces = token.split(separator: "-").compactMap { $0.first }
+                let joined = pieces.map { "\($0)." }.joined(separator: "-")
+                return joined.isEmpty ? nil : joined
+            }
+            return "\(first)."
+        }
+        let initialPart = initials.joined(separator: " ")
+        return initialPart.isEmpty ? surname : "\(surname), \(initialPart)"
+    }
+
+    /// Preferred clickable URL for a paper: DOI link first, then landing page.
+    private static func canonicalUrl(for paper: Paper) -> String? {
+        if let doi = bareDoi(paper.doi) { return "https://doi.org/\(doi)" }
+        let landing = paper.landingPageUrl.trimmingCharacters(in: .whitespacesAndNewlines)
+        return landing.isEmpty ? nil : landing
     }
 
     private static func asciiAlnum(_ s: String) -> String {
