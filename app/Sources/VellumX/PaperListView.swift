@@ -225,22 +225,17 @@ private struct PaperRowView: View {
                 .fill(fillColor)
         )
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            if showsStatusMarker {
+                StatusCornerMarker(color: status.iconColor, cornerRadius: cornerRadius)
+                    .frame(width: 18, height: 18)
+                    .help(status.displayName)
+            }
+        }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                 .stroke(borderColor, lineWidth: isSelected ? 1.5 : 1)
         )
-        // Status shown as a slim capsule on the leading edge (Recommend / All
-        // only). Drawn as an overlay so it never shifts the title across views.
-        .overlay(alignment: .leading) {
-            if showsStatusMarker {
-                Capsule(style: .continuous)
-                    .fill(status.iconColor)
-                    .frame(width: 3.5)
-                    .padding(.vertical, 8)
-                    .padding(.leading, 4)
-                    .help(status.displayName)
-            }
-        }
         .contentShape(Rectangle())
         .onHover { hovering in
             withAnimation(.easeOut(duration: 0.15)) { isHovering = hovering }
@@ -259,5 +254,33 @@ private struct PaperRowView: View {
         if isTodayRecommended { return todayColor.opacity(0.5) }
         if isHovering { return accent.opacity(0.30) }
         return Color.primary.opacity(0.08)
+    }
+}
+
+private struct StatusCornerMarker: View {
+    let color: Color
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        TopTrailingCorner(cornerRadius: cornerRadius)
+            .fill(color.opacity(0.72))
+    }
+}
+
+private struct TopTrailingCorner: Shape {
+    let cornerRadius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let radius = min(cornerRadius, rect.width, rect.height)
+        var path = Path()
+        path.move(to: CGPoint(x: rect.maxX - radius, y: rect.minY))
+        path.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY + radius),
+            control: CGPoint(x: rect.maxX, y: rect.minY)
+        )
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
