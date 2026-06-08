@@ -595,6 +595,13 @@ private struct CollectionTreeRow: View {
     private var isSelected: Bool { selectedCollectionIds.contains(collection.id) }
     private var isEditing: Bool { editingCollectionId == collection.id }
 
+    /// True when this row is part of a multi-folder selection — single-folder
+    /// actions (rename, subfolder, color) don't apply, so the menu narrows to
+    /// the batch-capable Clear/Delete.
+    private var isMultiSelected: Bool {
+        selectedCollectionIds.count > 1 && selectedCollectionIds.contains(collection.id)
+    }
+
     private var paperCount: Int {
         let ids = subtreeIds(for: collection.id)
         return papers.filter { $0.collectionIds.contains(where: ids.contains) }.count
@@ -733,24 +740,32 @@ private struct CollectionTreeRow: View {
     }
 
     @ViewBuilder private var contextMenu: some View {
-        Button("Rename") {
-            editingCollectionId = collection.id
-            editingCollectionName = collection.name
-        }
-        Button("New Subfolder…") { onAddSubfolder(collection) }
-        Menu("Color") {
-            ForEach(LabelColor.allCases) { c in
-                Button(c.title) {
-                    PaperStore.shared.setCollectionColor(id: collection.id, color: c.rawValue)
+        if isMultiSelected {
+            // Acts on the whole selection; single-folder actions don't apply.
+            Button("Clear \(selectedCollectionIds.count) Collections") { onClear(collection) }
+            Button("Delete \(selectedCollectionIds.count) Collections", role: .destructive) {
+                onDelete(collection)
+            }
+        } else {
+            Button("Rename") {
+                editingCollectionId = collection.id
+                editingCollectionName = collection.name
+            }
+            Button("New Subfolder…") { onAddSubfolder(collection) }
+            Menu("Color") {
+                ForEach(LabelColor.allCases) { c in
+                    Button(c.title) {
+                        PaperStore.shared.setCollectionColor(id: collection.id, color: c.rawValue)
+                    }
+                }
+                Divider()
+                Button("Default") {
+                    PaperStore.shared.setCollectionColor(id: collection.id, color: nil)
                 }
             }
             Divider()
-            Button("Default") {
-                PaperStore.shared.setCollectionColor(id: collection.id, color: nil)
-            }
+            Button("Clear") { onClear(collection) }
+            Button("Delete", role: .destructive) { onDelete(collection) }
         }
-        Divider()
-        Button("Clear") { onClear(collection) }
-        Button("Delete", role: .destructive) { onDelete(collection) }
     }
 }
