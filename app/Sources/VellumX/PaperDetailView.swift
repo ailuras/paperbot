@@ -392,7 +392,7 @@ struct PaperDetailView: View {
             } else {
                 FlowLayout(spacing: 7) {
                     ForEach(paper.tags, id: \.self) { tag in
-                        PaperTagChip(title: "#\(tag)")
+                        PaperTagChip(tag: tag)
                             .help(L10n.pick("Right-click to remove this tag", "右键以移除此标签"))
                             .contextMenu {
                                 Button("Remove Tag") {
@@ -909,24 +909,35 @@ private struct MemoLine: View {
 }
 
 private struct PaperTagChip: View {
-    let title: String
+    let tag: String
+
+    private var color: Color { LabelColor.forTag(tag) }
 
     var body: some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color.secondary.opacity(0.12))
-            .foregroundStyle(.primary.opacity(0.82))
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.gray.opacity(0.16), lineWidth: 0.5)
-            )
+        HStack(spacing: 3) {
+            Text("#")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(color.opacity(0.65))
+            Text(tag)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(color)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(color.opacity(0.14))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .stroke(color.opacity(0.25), lineWidth: 0.5)
+        )
     }
 }
 
-private struct FlowLayout: Layout {
+/// Wraps content-width chips onto as many rows as needed. Shared by the detail
+/// tag section and the sidebar tag filter so both wrap identically.
+struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {

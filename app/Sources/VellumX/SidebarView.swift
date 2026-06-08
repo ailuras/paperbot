@@ -114,20 +114,18 @@ struct SidebarView: View {
 
             if !tags.isEmpty {
                 Section("Tags") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 8)], alignment: .leading, spacing: 8) {
-                        TagFilterChip(
-                            title: "All",
-                            state: includedTags.isEmpty && excludedTags.isEmpty ? .include : .neutral
-                        ) {
+                    FlowLayout(spacing: 6) {
+                        AllTagsChip(isActive: includedTags.isEmpty && excludedTags.isEmpty) {
                             includedTags.removeAll()
                             excludedTags.removeAll()
                         }
                         ForEach(tags, id: \.self) { tag in
-                            TagFilterChip(title: "#\(tag)", state: tagState(tag)) {
+                            TagFilterChip(tag: tag, state: tagState(tag)) {
                                 cycleTag(tag)
                             }
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 3)
                 }
             }
@@ -332,52 +330,100 @@ enum TagFilterState {
     case exclude
 }
 
-private struct TagFilterChip: View {
-    let title: String
-    let state: TagFilterState
+/// The "show everything" reset chip. Neutral until no filter is active, then
+/// fills with the accent color — distinct from the per-tag colored chips so it
+/// reads as a control rather than a tag.
+private struct AllTagsChip: View {
+    let isActive: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
-                .strikethrough(state == .exclude)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .frame(maxWidth: .infinity)
-                .background(backgroundColor)
-                .foregroundStyle(foregroundColor)
-                .clipShape(RoundedRectangle(cornerRadius: 9))
+            Text("All")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isActive ? .white : .primary)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(isActive ? Color.accentColor : Color.secondary.opacity(0.14))
+                )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 9)
-                        .stroke(borderColor, lineWidth: state == .neutral ? 0.5 : 1)
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .stroke(isActive ? Color.accentColor : Color.secondary.opacity(0.20), lineWidth: 0.5)
                 )
         }
         .buttonStyle(.plain)
     }
+}
 
-    private var backgroundColor: Color {
+/// A per-tag colored filter chip in the FacetX style: a faded `#` prefix and
+/// the tag in its deterministic palette color. Cycling drives the three states
+/// — neutral (tinted), include (solid fill), exclude (dashed, struck through).
+private struct TagFilterChip: View {
+    let tag: String
+    let state: TagFilterState
+    let action: () -> Void
+
+    private var color: Color { LabelColor.forTag(tag) }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Text(state == .exclude ? "−" : "#")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(prefixColor)
+                Text(tag)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(textColor)
+                    .strikethrough(state == .exclude)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(fillColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(strokeColor,
+                            style: StrokeStyle(lineWidth: state == .exclude ? 1 : 0.5,
+                                               dash: state == .exclude ? [2.5, 2] : []))
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var prefixColor: Color {
         switch state {
-        case .neutral: return Color.secondary.opacity(0.16)
-        case .include: return Color.accentColor.opacity(0.20)
-        case .exclude: return Color.red.opacity(0.16)
+        case .include: return Color.white.opacity(0.85)
+        case .exclude: return color.opacity(0.85)
+        case .neutral: return color.opacity(0.70)
         }
     }
 
-    private var foregroundColor: Color {
+    private var textColor: Color {
         switch state {
-        case .neutral: return .primary.opacity(0.82)
-        case .include: return .accentColor
-        case .exclude: return .red.opacity(0.85)
+        case .include: return .white
+        case .exclude: return color.opacity(0.60)
+        case .neutral: return .primary
         }
     }
 
-    private var borderColor: Color {
+    private var fillColor: Color {
         switch state {
-        case .neutral: return Color.gray.opacity(0.18)
-        case .include: return Color.accentColor.opacity(0.45)
-        case .exclude: return Color.red.opacity(0.35)
+        case .include: return color
+        case .exclude: return color.opacity(0.06)
+        case .neutral: return color.opacity(0.14)
+        }
+    }
+
+    private var strokeColor: Color {
+        switch state {
+        case .include: return color
+        case .exclude: return color.opacity(0.55)
+        case .neutral: return color.opacity(0.20)
         }
     }
 }

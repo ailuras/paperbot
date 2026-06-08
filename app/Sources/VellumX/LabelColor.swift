@@ -31,6 +31,17 @@ enum LabelColor: String, CaseIterable, Identifiable {
         guard let name, let c = LabelColor(rawValue: name) else { return nil }
         return c.color
     }
+
+    /// Deterministic per-tag color: hashes the tag name into the vibrant palette
+    /// (gray excluded) so the same tag always renders the same hue across
+    /// launches. Lets free-form user tags read as colored categories instead of
+    /// one flat neutral pill.
+    static func forTag(_ tag: String) -> Color {
+        let palette = allCases.filter { $0 != .gray }
+        var hash = 5381
+        for byte in tag.utf8 { hash = ((hash << 5) &+ hash) &+ Int(byte) }
+        return palette[abs(hash) % palette.count].color
+    }
 }
 
 /// A curated palette of SF Symbols offered wherever the sidebar lets the user
