@@ -642,7 +642,7 @@ private struct CollectionTreeRow: View {
         HStack(spacing: 5) {
             disclosure
             HStack(spacing: 8) {
-                CollectionBadge(color: collection.resolvedColor, size: 18)
+                CollectionBadge(color: collection.resolvedColor, size: 18, selected: isSelected)
                 if isEditing {
                     TextField("", text: $editingCollectionName)
                         .textFieldStyle(.plain)
