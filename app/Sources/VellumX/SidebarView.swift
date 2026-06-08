@@ -635,7 +635,7 @@ private struct CollectionTreeRow: View {
         HStack(spacing: 5) {
             disclosure
             HStack(spacing: 8) {
-                CollectionBadge(color: collection.resolvedColor, size: 22)
+                CollectionBadge(color: collection.resolvedColor, size: 18)
                 if isEditing {
                     TextField("", text: $editingCollectionName)
                         .textFieldStyle(.plain)
@@ -687,7 +687,7 @@ private struct CollectionTreeRow: View {
                         )
                 }
             }
-            .padding(.vertical, 5)
+            .padding(.vertical, 3)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
             .onTapGesture { onSelect(collection) }
