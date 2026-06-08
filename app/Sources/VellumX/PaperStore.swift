@@ -997,12 +997,18 @@ class PaperStore {
         return ids
     }
 
-    /// Deletes the collection together with its whole subtree, dropping the
+    /// Deletes a collection together with its whole subtree, dropping the
     /// papers' memberships in those collections too (no orphaned rows left).
-    func deleteCollection(id: String) {
+    func deleteCollection(id: String) { deleteCollections(ids: [id]) }
+
+    /// Deletes several collections and their subtrees in one transaction with a
+    /// single reload — the batch form behind multi-select delete.
+    func deleteCollections(ids: [String]) {
+        guard !ids.isEmpty else { return }
+        let placeholders = ids.map { _ in "?" }.joined(separator: ",")
         let purge = """
         WITH RECURSIVE sub(id) AS (
-            SELECT id FROM collections WHERE id = ?1
+            SELECT id FROM collections WHERE id IN (\(placeholders))
             UNION ALL
             SELECT c.id FROM collections c JOIN sub ON c.parent_id = sub.id
         )
@@ -1018,7 +1024,9 @@ class PaperStore {
                 succeeded = false
                 break
             }
-            sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+            for (offset, id) in ids.enumerated() {
+                sqlite3_bind_text(stmt, Int32(offset + 1), id, -1, SQLITE_TRANSIENT)
+            }
             if sqlite3_step(stmt) != SQLITE_DONE { succeeded = false }
             sqlite3_finalize(stmt)
         }
@@ -1030,10 +1038,16 @@ class PaperStore {
     /// collections themselves (and the papers in the library) intact. Clears the
     /// whole subtree so the emptied folder matches what selecting it shows — its
     /// descendants' papers no longer surface under it either.
-    func clearCollection(id: String) {
+    func clearCollection(id: String) { clearCollections(ids: [id]) }
+
+    /// Empties several collections (and their subtrees) in one statement — the
+    /// batch form behind multi-select clear.
+    func clearCollections(ids: [String]) {
+        guard !ids.isEmpty else { return }
+        let placeholders = ids.map { _ in "?" }.joined(separator: ",")
         let purge = """
         WITH RECURSIVE sub(id) AS (
-            SELECT id FROM collections WHERE id = ?1
+            SELECT id FROM collections WHERE id IN (\(placeholders))
             UNION ALL
             SELECT c.id FROM collections c JOIN sub ON c.parent_id = sub.id
         )
@@ -1041,7 +1055,9 @@ class PaperStore {
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, purge, -1, &stmt, nil) == SQLITE_OK else { return }
-        sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+        for (offset, id) in ids.enumerated() {
+            sqlite3_bind_text(stmt, Int32(offset + 1), id, -1, SQLITE_TRANSIENT)
+        }
         let ok = sqlite3_step(stmt) == SQLITE_DONE
         sqlite3_finalize(stmt)
         if ok { loadPapers() }

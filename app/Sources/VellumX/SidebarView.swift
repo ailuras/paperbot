@@ -2,7 +2,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @Binding var selectedItem: SidebarItem?
-    @Binding var selectedCollectionId: String?
+    @Binding var selectedCollectionIds: Set<String>
     @Binding var selectedTopic: String?
     @Binding var includedTags: Set<String>
     @Binding var excludedTags: Set<String>
@@ -16,6 +16,8 @@ struct SidebarView: View {
     @State private var editingCollectionId: String? = nil
     @State private var editingCollectionName: String = ""
     @State private var archivedExpanded = false
+    /// Anchor for ⇧-click range selection across the visible folder order.
+    @State private var selectionAnchor: String? = nil
 
     private var activeTopics: [TrackPref] { metadata.topics.filter { !$0.archived } }
     private var archivedTopics: [TrackPref] { metadata.topics.filter { $0.archived } }
@@ -137,7 +139,7 @@ struct SidebarView: View {
                         depth: 0,
                         childrenByParent: childrenByParent,
                         expanded: $expandedCollections,
-                        selectedCollectionId: selectedCollectionId,
+                        selectedCollectionIds: selectedCollectionIds,
                         papers: papers,
                         editingCollectionId: $editingCollectionId,
                         editingCollectionName: $editingCollectionName,
@@ -279,8 +281,47 @@ struct SidebarView: View {
     // MARK: - Collections actions
 
     private func selectCollection(_ collection: PaperCollection) {
-        selectedCollectionId = collection.id
-        selectedItem = nil
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.command) {
+            // ⌘-click toggles this folder in/out of the selection.
+            if selectedCollectionIds.contains(collection.id) {
+                selectedCollectionIds.remove(collection.id)
+            } else {
+                selectedCollectionIds.insert(collection.id)
+                selectionAnchor = collection.id
+            }
+        } else if flags.contains(.shift), let anchor = selectionAnchor,
+                  let range = visibleRange(from: anchor, to: collection.id) {
+            // ⇧-click adds the contiguous run from the anchor to here.
+            selectedCollectionIds.formUnion(range)
+        } else {
+            selectedCollectionIds = [collection.id]
+            selectionAnchor = collection.id
+        }
+        if !selectedCollectionIds.isEmpty { selectedItem = nil }
+    }
+
+    /// The folder ids between two rows in the on-screen order (respecting which
+    /// folders are expanded), inclusive. `nil` if either id isn't visible.
+    private func visibleRange(from a: String, to b: String) -> ArraySlice<String>? {
+        let order = visibleCollectionOrder()
+        guard let i = order.firstIndex(of: a), let j = order.firstIndex(of: b) else { return nil }
+        return i <= j ? order[i...j] : order[j...i]
+    }
+
+    /// Folder ids flattened in display order, descending into expanded folders.
+    private func visibleCollectionOrder() -> [String] {
+        var order: [String] = []
+        func walk(_ cols: [PaperCollection]) {
+            for c in cols {
+                order.append(c.id)
+                if expandedCollections.contains(c.id) {
+                    walk(childrenByParent[c.id] ?? [])
+                }
+            }
+        }
+        walk(rootCollections)
+        return order
     }
 
     private func startNewRoot() {
@@ -305,16 +346,35 @@ struct SidebarView: View {
         editingCollectionId = nil
     }
 
-    private func confirmClear(_ target: PaperCollection) {
-        let subtree = PaperStore.shared.collectionSubtreeIds(target.id)
+    /// Finder-style action targets: the whole selection when the right-clicked
+    /// folder is part of a multi-selection, otherwise just that folder.
+    private func actionTargets(_ clicked: PaperCollection) -> [PaperCollection] {
+        if selectedCollectionIds.count > 1, selectedCollectionIds.contains(clicked.id) {
+            return collections.filter { selectedCollectionIds.contains($0.id) }
+        }
+        return [clicked]
+    }
+
+    /// Union of the subtrees of the given folders.
+    private func subtreeUnion(_ ids: [String]) -> Set<String> {
+        ids.reduce(into: Set<String>()) { $0.formUnion(PaperStore.shared.collectionSubtreeIds($1)) }
+    }
+
+    private func confirmClear(_ clicked: PaperCollection) {
+        let targets = actionTargets(clicked)
+        let ids = targets.map(\.id)
+        let subtree = subtreeUnion(ids)
         let count = papers.filter { $0.collectionIds.contains(where: subtree.contains) }.count
         guard count > 0 else { return }
+        let multi = targets.count > 1
+        let scope = multi ? "\(targets.count) collections" : "\"\(targets[0].name)\""
+        let where_ = multi ? "these collections and their subfolders" : "this collection and its subfolders"
         NotificationCenter.shared.present(AlertItem(
-            title: "Clear \"\(target.name)\"?",
-            message: "Removes all \(count) paper(s) from this collection and its subfolders. The papers stay in your library.",
+            title: "Clear \(scope)?",
+            message: "Removes all \(count) paper(s) from \(where_). The papers stay in your library.",
             actions: [
                 .confirm("Clear", isDestructive: true, action: {
-                    PaperStore.shared.clearCollection(id: target.id)
+                    PaperStore.shared.clearCollections(ids: ids)
                 }),
                 .cancel("Cancel")
             ],
@@ -323,17 +383,19 @@ struct SidebarView: View {
         ))
     }
 
-    private func confirmDelete(_ target: PaperCollection) {
+    private func confirmDelete(_ clicked: PaperCollection) {
+        let targets = actionTargets(clicked)
+        let ids = targets.map(\.id)
+        let multi = targets.count > 1
+        let scope = multi ? "\(targets.count) collections" : "\"\(targets[0].name)\""
+        let subfolders = multi ? "their subfolders" : "its subfolders"
         NotificationCenter.shared.present(AlertItem(
-            title: "Delete \"\(target.name)\"?",
-            message: "This also deletes its subfolders. Your papers stay in the library.",
+            title: "Delete \(scope)?",
+            message: "This also deletes \(subfolders). Your papers stay in the library.",
             actions: [
                 .confirm("Delete", isDestructive: true, action: {
-                    let subtree = PaperStore.shared.collectionSubtreeIds(target.id)
-                    if let sel = selectedCollectionId, subtree.contains(sel) {
-                        selectedCollectionId = nil
-                    }
-                    PaperStore.shared.deleteCollection(id: target.id)
+                    selectedCollectionIds.subtract(subtreeUnion(ids))
+                    PaperStore.shared.deleteCollections(ids: ids)
                 }),
                 .cancel("Cancel")
             ],
@@ -515,7 +577,7 @@ private struct CollectionTreeRow: View {
     let depth: Int
     let childrenByParent: [String: [PaperCollection]]
     @Binding var expanded: Set<String>
-    let selectedCollectionId: String?
+    let selectedCollectionIds: Set<String>
     let papers: [Paper]
     @Binding var editingCollectionId: String?
     @Binding var editingCollectionName: String
@@ -530,7 +592,7 @@ private struct CollectionTreeRow: View {
     private var children: [PaperCollection] { childrenByParent[collection.id] ?? [] }
     private var hasChildren: Bool { !children.isEmpty }
     private var isExpanded: Bool { expanded.contains(collection.id) }
-    private var isSelected: Bool { selectedCollectionId == collection.id }
+    private var isSelected: Bool { selectedCollectionIds.contains(collection.id) }
     private var isEditing: Bool { editingCollectionId == collection.id }
 
     private var paperCount: Int {
@@ -555,7 +617,7 @@ private struct CollectionTreeRow: View {
                     depth: depth + 1,
                     childrenByParent: childrenByParent,
                     expanded: $expanded,
-                    selectedCollectionId: selectedCollectionId,
+                    selectedCollectionIds: selectedCollectionIds,
                     papers: papers,
                     editingCollectionId: $editingCollectionId,
                     editingCollectionName: $editingCollectionName,

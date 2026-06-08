@@ -11,7 +11,7 @@ struct ContentView: View {
 
     // Filter and Sort states
     @State private var selectedSidebarItem: SidebarItem? = .recommended
-    @State private var selectedCollectionId: String? = nil
+    @State private var selectedCollectionIds: Set<String> = []
     @State private var searchKeyword: String = ""
     /// Debounced mirror of `searchKeyword` — drives the actual filtering so a
     /// burst of keystrokes triggers at most one `applyFilters` pass.
@@ -55,7 +55,7 @@ struct ContentView: View {
             settingsVersion: settings.configVersion,
             metadataVersion: metadata.metadataVersion,
             sidebarItem: selectedSidebarItem,
-            collectionId: selectedCollectionId,
+            collectionIds: selectedCollectionIds,
             topic: selectedTopic,
             includedTags: includedTags,
             excludedTags: excludedTags,
@@ -71,7 +71,7 @@ struct ContentView: View {
         var settingsVersion: Int
         var metadataVersion: Int
         var sidebarItem: SidebarItem?
-        var collectionId: String?
+        var collectionIds: Set<String>
         var topic: String?
         var includedTags: Set<String>
         var excludedTags: Set<String>
@@ -230,7 +230,7 @@ struct ContentView: View {
         NavigationSplitView {
             SidebarView(
                 selectedItem: $selectedSidebarItem,
-                selectedCollectionId: $selectedCollectionId,
+                selectedCollectionIds: $selectedCollectionIds,
                 selectedTopic: $selectedTopic,
                 includedTags: $includedTags,
                 excludedTags: $excludedTags,
@@ -244,8 +244,8 @@ struct ContentView: View {
                 papers: filteredPapers,
                 selectedPaperIds: $selectedPaperIds,
                 metadata: metadata,
-                highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionId == nil,
-                showsStatusMarker: (selectedSidebarItem == .recommended || selectedSidebarItem == .all) && selectedCollectionId == nil,
+                highlightsDailyRecommendations: selectedSidebarItem == .recommended && selectedCollectionIds.isEmpty,
+                showsStatusMarker: (selectedSidebarItem == .recommended || selectedSidebarItem == .all) && selectedCollectionIds.isEmpty,
                 onCancelRecommendation: cancelRecommendation,
                 onSelectionChange: handleSelectionChange,
                 onCopyBibtex: copyBibtex,
@@ -304,7 +304,7 @@ struct ContentView: View {
         }
         .onChange(of: windowOpener.requestedPaperId) { focusRequestedPaper() }
         .onChange(of: selectedSidebarItem) { _, new in
-            if new != nil { selectedCollectionId = nil }
+            if new != nil { selectedCollectionIds.removeAll() }
         }
         .searchable(text: $searchKeyword, placement: .toolbar, prompt: "Search title, abstract or authors...")
         .toolbar {
@@ -467,7 +467,7 @@ struct ContentView: View {
             return
         }
         resetFiltersSilently()
-        selectedCollectionId = nil
+        selectedCollectionIds = []
         selectedSidebarItem = .pending
         applyFilters()
         if filteredPapers.contains(where: { $0.id == pick.id }) {
@@ -570,10 +570,10 @@ struct ContentView: View {
         // If the paper belongs to any collection, switch to the first one.
         if let firstCollectionId = paper.collectionIds.first,
            store.allCollections.contains(where: { $0.id == firstCollectionId }) {
-            selectedCollectionId = firstCollectionId
+            selectedCollectionIds = [firstCollectionId]
             selectedSidebarItem = nil
         } else {
-            selectedCollectionId = nil
+            selectedCollectionIds = []
             selectedSidebarItem = sidebarItem(for: paper)
         }
 
@@ -605,8 +605,12 @@ struct ContentView: View {
 
         // 0. Collection view takes priority over sidebar status. A parent folder
         //    stands in for its whole subtree, so include descendants' papers too.
-        if let collectionId = selectedCollectionId {
-            let subtree = store.collectionSubtreeIds(collectionId)
+        //    With several folders selected, show the union of their subtrees.
+        if !selectedCollectionIds.isEmpty {
+            var subtree: Set<String> = []
+            for id in selectedCollectionIds {
+                subtree.formUnion(store.collectionSubtreeIds(id))
+            }
             result = result.filter { paper in paper.collectionIds.contains(where: subtree.contains) }
         }
 
