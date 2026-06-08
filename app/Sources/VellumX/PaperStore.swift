@@ -1026,6 +1026,27 @@ class PaperStore {
         if succeeded { loadPapers() }
     }
 
+    /// Removes every paper from a collection and its subfolders, leaving the
+    /// collections themselves (and the papers in the library) intact. Clears the
+    /// whole subtree so the emptied folder matches what selecting it shows — its
+    /// descendants' papers no longer surface under it either.
+    func clearCollection(id: String) {
+        let purge = """
+        WITH RECURSIVE sub(id) AS (
+            SELECT id FROM collections WHERE id = ?1
+            UNION ALL
+            SELECT c.id FROM collections c JOIN sub ON c.parent_id = sub.id
+        )
+        DELETE FROM collection_papers WHERE collection_id IN (SELECT id FROM sub)
+        """
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, purge, -1, &stmt, nil) == SQLITE_OK else { return }
+        sqlite3_bind_text(stmt, 1, id, -1, SQLITE_TRANSIENT)
+        let ok = sqlite3_step(stmt) == SQLITE_DONE
+        sqlite3_finalize(stmt)
+        if ok { loadPapers() }
+    }
+
     /// Permanently delete one or more papers and every associated row (cache,
     /// state, recommendation, note, tags, translation, pdf, topics, collection
     /// links) in a single transaction, with one reload at the end.

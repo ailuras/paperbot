@@ -144,6 +144,7 @@ struct SidebarView: View {
                         onSelect: selectCollection,
                         onCommitRename: commitCollectionRename,
                         onAddSubfolder: { startNewSubfolder($0) },
+                        onClear: { confirmClear($0) },
                         onDelete: { confirmDelete($0) }
                     )
                 }
@@ -302,6 +303,24 @@ struct SidebarView: View {
             PaperStore.shared.renameCollection(id: id, to: name)
         }
         editingCollectionId = nil
+    }
+
+    private func confirmClear(_ target: PaperCollection) {
+        let subtree = PaperStore.shared.collectionSubtreeIds(target.id)
+        let count = papers.filter { $0.collectionIds.contains(where: subtree.contains) }.count
+        guard count > 0 else { return }
+        NotificationCenter.shared.present(AlertItem(
+            title: "Clear \"\(target.name)\"?",
+            message: "Removes all \(count) paper(s) from this collection and its subfolders. The papers stay in your library.",
+            actions: [
+                .confirm("Clear", isDestructive: true, action: {
+                    PaperStore.shared.clearCollection(id: target.id)
+                }),
+                .cancel("Cancel")
+            ],
+            textFieldValue: nil,
+            textFieldLabel: nil
+        ))
     }
 
     private func confirmDelete(_ target: PaperCollection) {
@@ -503,6 +522,7 @@ private struct CollectionTreeRow: View {
     let onSelect: (PaperCollection) -> Void
     let onCommitRename: () -> Void
     let onAddSubfolder: (PaperCollection) -> Void
+    let onClear: (PaperCollection) -> Void
     let onDelete: (PaperCollection) -> Void
 
     @FocusState private var renameFocused: Bool
@@ -542,6 +562,7 @@ private struct CollectionTreeRow: View {
                     onSelect: onSelect,
                     onCommitRename: onCommitRename,
                     onAddSubfolder: onAddSubfolder,
+                    onClear: onClear,
                     onDelete: onDelete
                 )
             }
@@ -667,6 +688,7 @@ private struct CollectionTreeRow: View {
             }
         }
         Divider()
+        Button("Clear") { onClear(collection) }
         Button("Delete", role: .destructive) { onDelete(collection) }
     }
 }
