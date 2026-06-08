@@ -8,6 +8,8 @@ and helps attach or resolve PDFs for offline reading.
 The app is designed as a desktop workspace, not a hosted service. Your library,
 rules, settings, notes, and downloaded PDFs live on your Mac.
 
+![VellumX interface showcase](docs/assets/readme-showcase.png)
+
 ## What It Does
 
 - Browse a two-column paper workspace with sidebar views for recommendations,
