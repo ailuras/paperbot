@@ -562,10 +562,16 @@ private struct CollectionTreeRow: View {
                         .onExitCommand { editingCollectionId = nil }
                         .onChange(of: renameFocused) { _, focused in
                             if focused {
-                                // Select all text once the field is first responder
-                                Task { @MainActor in
-                                    try? await Task.sleep(nanoseconds: 30_000_000)
-                                    NSApp.keyWindow?.selectAll(nil)
+                                // Select all text once the field is first responder.
+                                // Use DispatchQueue rather than `Task { @MainActor }`:
+                                // spawning a main-actor task from inside SwiftUI's
+                                // synchronous action flush traps the concurrency
+                                // executor check on macOS 26 (EXC_BREAKPOINT).
+                                // Route selectAll: through the responder chain
+                                // (to: nil) — NSWindow itself doesn't implement it,
+                                // so sending it directly raised doesNotRecognizeSelector.
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) {
+                                    NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
                                 }
                             } else if editingCollectionId == collection.id {
                                 onCommitRename()
