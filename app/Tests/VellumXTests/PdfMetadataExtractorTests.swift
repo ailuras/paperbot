@@ -89,17 +89,8 @@ final class PdfMetadataExtractorTests: XCTestCase {
         let pdfData = createMockPDFData()
         XCTAssertFalse(pdfData.isEmpty)
         
-        // Write mock data to a temporary file
-        let tempDir = FileManager.default.temporaryDirectory
-        let fileURL = tempDir.appendingPathComponent("mock_paper_\(UUID().uuidString).pdf")
-        try? pdfData.write(to: fileURL)
-        
-        defer {
-            try? FileManager.default.removeItem(at: fileURL)
-        }
-        
         // Extract metadata using our extractor
-        let extracted = PdfMetadataExtractor.extract(from: fileURL)
+        let extracted = PdfMetadataExtractor.extract(from: pdfData)
         
         XCTAssertEqual(extracted.doi, "10.48550/arXiv.1706.03762")
         XCTAssertEqual(extracted.title, "Attention Is All You Need")

@@ -12,9 +12,9 @@ struct PdfMetadataExtractor {
         var year: Int?
     }
     
-    /// Extract metadata from a local PDF file.
-    static func extract(from fileURL: URL) -> ExtractedData {
-        guard let document = PDFDocument(url: fileURL) else { return ExtractedData() }
+    /// Extract metadata from PDF data in memory.
+    static func extract(from pdfData: Data) -> ExtractedData {
+        guard let document = PDFDocument(data: pdfData) else { return ExtractedData() }
         var data = ExtractedData()
         
         // 1. Extract plain text from the first 3 pages

@@ -482,34 +482,31 @@ struct PaperImportView: View {
 
     private func handlePDFFile(at url: URL) {
         let access = url.startAccessingSecurityScopedResource()
-        pdfFileUrl = url
+        let pdfData = try? Data(contentsOf: url)
+        if access {
+            url.stopAccessingSecurityScopedResource()
+        }
+
+        guard let data = pdfData else {
+            self.pdfImportState = .error("Failed to read PDF file data.")
+            return
+        }
+
+        handlePDFData(data, filename: url.lastPathComponent)
+    }
+
+    private func handlePDFData(_ data: Data, filename: String) {
         pdfImportState = .extracting
-        pendingPdfFilename = url.lastPathComponent
+        pendingPdfFilename = filename
+        pendingPdfData = data
+
+        guard PdfStorage.looksLikePdf(data) else {
+            self.pdfImportState = .error("The selected file does not appear to be a valid PDF document.")
+            return
+        }
 
         Task {
-            defer {
-                if access { url.stopAccessingSecurityScopedResource() }
-            }
-
-            guard let data = try? Data(contentsOf: url) else {
-                await MainActor.run {
-                    self.pdfImportState = .error("Failed to read PDF file data.")
-                }
-                return
-            }
-
-            guard PdfStorage.looksLikePdf(data) else {
-                await MainActor.run {
-                    self.pdfImportState = .error("The selected file does not appear to be a valid PDF document.")
-                }
-                return
-            }
-
-            await MainActor.run {
-                self.pendingPdfData = data
-            }
-
-            let extracted = PdfMetadataExtractor.extract(from: url)
+            let extracted = PdfMetadataExtractor.extract(from: data)
 
             if let doi = extracted.doi {
                 await MainActor.run {
@@ -528,7 +525,7 @@ struct PaperImportView: View {
                 } else {
                     await MainActor.run {
                         self.pdfImportState = .resolvedLocal(
-                            title: extracted.title ?? url.deletingPathExtension().lastPathComponent,
+                            title: extracted.title ?? filename.replacingOccurrences(of: ".pdf", with: "", options: .caseInsensitive),
                             authors: extracted.authors,
                             abstract: extracted.abstract ?? "",
                             year: extracted.year
@@ -538,7 +535,7 @@ struct PaperImportView: View {
             } else {
                 await MainActor.run {
                     self.pdfImportState = .resolvedLocal(
-                        title: extracted.title ?? url.deletingPathExtension().lastPathComponent,
+                        title: extracted.title ?? filename.replacingOccurrences(of: ".pdf", with: "", options: .caseInsensitive),
                         authors: extracted.authors,
                         abstract: extracted.abstract ?? "",
                         year: extracted.year
