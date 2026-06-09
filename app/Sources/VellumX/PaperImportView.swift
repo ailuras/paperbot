@@ -183,29 +183,14 @@ struct PaperImportView: View {
             switch pdfImportState {
             case .idle:
                 pdfUploadBox
-                    .onDrop(of: [.pdf, .fileURL], isTargeted: $isDragging) { providers in
-                        guard let provider = providers.first else { return false }
-                        
-                        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
-                            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                                var targetURL: URL? = nil
-                                if let url = item as? URL {
-                                    targetURL = url
-                                } else if let data = item as? Data {
-                                    targetURL = URL(dataRepresentation: data, relativeTo: nil)
-                                } else if let string = item as? String {
-                                    targetURL = URL(string: string)
-                                }
-                                
-                                if let url = targetURL {
-                                    DispatchQueue.main.async {
-                                        self.handlePDFFile(at: url)
-                                    }
-                                }
-                            }
+                    .dropDestination(for: URL.self) { urls, _ in
+                        if let url = urls.first {
+                            self.handlePDFFile(at: url)
                             return true
                         }
                         return false
+                    } isTargeted: { targeted in
+                        self.isDragging = targeted
                     }
                 Spacer()
                 

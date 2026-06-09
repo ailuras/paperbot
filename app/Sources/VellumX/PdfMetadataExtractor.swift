@@ -261,73 +261,86 @@ struct PdfMetadataExtractor {
     static func extractAuthors(pageText: String, title: String, abstractText: String) -> [String] {
         let normalizedPage = pageText.replacingOccurrences(of: "\r", with: "\n")
         
-        // Locate title boundary and abstract boundary in page text
-        guard let titleRange = normalizedPage.range(of: title, options: [.caseInsensitive]) else {
-            return []
-        }
-        
+        // Find Abstract boundary
         let abstractKeywords = ["abstract", "摘要"]
-        var searchEndIndex = normalizedPage.endIndex
+        var abstractIndex: String.Index?
         for kw in abstractKeywords {
             if let range = normalizedPage.range(of: kw, options: [.caseInsensitive]) {
-                searchEndIndex = range.lowerBound
+                abstractIndex = range.lowerBound
                 break
             }
         }
         
-        // Ensure search range makes sense
-        guard titleRange.upperBound < searchEndIndex else { return [] }
+        // Take everything before abstract, or fallback to first 12 lines
+        let candidateText: String
+        if let idx = abstractIndex {
+            candidateText = String(normalizedPage[..<idx])
+        } else {
+            let lines = normalizedPage.components(separatedBy: .newlines)
+            candidateText = lines.prefix(12).joined(separator: "\n")
+        }
         
-        let authorZone = String(normalizedPage[titleRange.upperBound..<searchEndIndex])
-        let lines = authorZone.components(separatedBy: .newlines)
+        let lines = candidateText.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+            
+        // Filter lines
+        var filteredLines: [String] = []
+        let titleLower = title.lowercased().replacingOccurrences(of: " ", with: "")
         
-        var candidates: [String] = []
-        
-        // Filtering patterns for institutional metadata
         let exclusions = [
             "university", "institute", "dept", "department", "school", "laboratory",
             "lab", "center", "centre", "corporation", "inc.", "co.", "ltd", "email",
-            "@", "abstract", "http", "www", "research", "technology"
+            "@", "abstract", "http", "www", "research", "technology", "sciences",
+            "china", "usa", "state", "national", "association", "society"
         ]
         
         for line in lines {
-            let lower = line.lowercased()
-            // Skip lines containing email, websites, or university indicators
-            var isInstitutional = false
-            for exclusion in exclusions {
-                if lower.contains(exclusion) {
-                    isInstitutional = true
-                    break
-                }
-            }
-            // Skip lines with too many numbers or special formatting (except commas/spaces/dots)
-            let allowedChars = CharacterSet.letters.union(CharacterSet(charactersIn: " ,.・-–—*1234567890†*‡§"))
-            let isClean = line.unicodeScalars.allSatisfy { allowedChars.contains($0) }
+            let lineLower = line.lowercased()
+            let lineNoSpace = lineLower.replacingOccurrences(of: " ", with: "")
             
-            // Skip lines containing too many digits (like Zip code, phone number)
-            let digitsCount = line.filter { $0.isNumber }.count
-            if isInstitutional || !isClean || digitsCount > 4 || line.count < 3 {
+            // 1. Skip if this line is part of the title
+            if titleLower.contains(lineNoSpace) || lineNoSpace.contains(titleLower) && lineNoSpace.count > 4 {
                 continue
             }
             
-            candidates.append(line)
+            // 2. Skip if it contains institutional keyword
+            var isExcluded = false
+            for exclusion in exclusions {
+                if lineLower.contains(exclusion) {
+                    isExcluded = true
+                    break
+                }
+            }
+            if isExcluded { continue }
+            
+            // 3. Skip if it looks like a header, page number or preprint tag (e.g. "Preprint", "arXiv:")
+            if lineLower.contains("preprint") || lineLower.contains("arxiv") || line.count < 3 {
+                continue
+            }
+            
+            // 4. Skip if it contains too many numbers (zip codes or phones)
+            let digits = line.filter { $0.isNumber }.count
+            if digits > 4 {
+                continue
+            }
+            
+            filteredLines.append(line)
         }
         
-        // Typically authors are in the first 1-2 lines of the remaining candidates
-        guard !candidates.isEmpty else { return [] }
+        // The first 1-2 lines remaining in filteredLines are most likely the author line
+        guard !filteredLines.isEmpty else { return [] }
         
-        // We will process the first candidate line (and potentially the second if it is close/looks like authors)
-        var authorLine = candidates[0]
-        if candidates.count > 1 && candidates[0].count < 15 && !candidates[1].contains(",") {
-            authorLine += ", " + candidates[1]
+        var authorLine = filteredLines[0]
+        // If the first line is short and there's a second line without institutional elements, join them
+        if filteredLines.count > 1 && filteredLines[0].count < 20 && !filteredLines[1].contains(",") {
+            authorLine += ", " + filteredLines[1]
         }
         
         // Clean out superscript indicators (*, 1, 2, †, ‡ etc.)
         let cleanAuthorLine = authorLine.replacingOccurrences(of: "[0-9*†‡§\\\\#]", with: "", options: .regularExpression)
         
-        // Split by commas, "and", "&"
+        // Split by commas, "and", "&", ";"
         let separators = [" and ", " & ", ",", ";"]
         var parsedAuthors: [String] = [cleanAuthorLine]
         
@@ -339,12 +352,9 @@ struct PdfMetadataExtractor {
             }
             parsedAuthors = temp
         }
-        
-        let cleanedAuthors = parsedAuthors
+        return parsedAuthors
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { $0.count >= 3 && !$0.lowercased().contains("and") }
-        
-        return cleanedAuthors
     }
     
     // MARK: - Year Heuristics
