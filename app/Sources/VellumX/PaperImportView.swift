@@ -1,13 +1,15 @@
 import SwiftUI
+import UniformTypeIdentifiers
+import PDFKit
 
-/// Sheet for adding a paper to the library manually — either by looking it up
-/// on OpenAlex (DOI or title) or by entering metadata by hand.
+/// Sheet for adding a paper to the library.
+/// Supports search (DOI/Title), automated PDF drag-and-drop/file parsing, and manual entry.
 struct PaperImportView: View {
     let onAdd: (Paper) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
-    enum Mode { case search, manual }
+    enum Mode { case search, pdf, manual }
     @State private var mode: Mode = .search
 
     // Search state
@@ -17,6 +19,23 @@ struct PaperImportView: View {
     @State private var selectedPaper: Paper?
     @State private var isSearching = false
 
+    // PDF state
+    @State private var pdfFileUrl: URL?
+    @State private var isDragging = false
+    @State private var showFilePicker = false
+    @State private var pendingPdfData: Data?
+    @State private var pendingPdfFilename: String?
+    @State private var pdfImportState: PDFImportState = .idle
+
+    enum PDFImportState {
+        case idle
+        case extracting
+        case queryingOpenAlex(doi: String)
+        case resolvedOpenAlex(Paper)
+        case resolvedLocal(title: String, authors: [String], abstract: String, year: Int?)
+        case error(String)
+    }
+
     // Manual entry state
     @State private var manualTitle = ""
     @State private var manualAuthors = ""
@@ -24,6 +43,7 @@ struct PaperImportView: View {
     @State private var manualVenue = ""
     @State private var manualDOI = ""
     @State private var manualURL = ""
+    @State private var manualAbstract = ""
 
     enum SearchState { case idle, searching, results, notFound, error(String) }
 
@@ -33,6 +53,7 @@ struct PaperImportView: View {
             Divider()
             Picker("", selection: $mode) {
                 Text("Search").tag(Mode.search)
+                Text("Import PDF").tag(Mode.pdf)
                 Text("Manual").tag(Mode.manual)
             }
             .pickerStyle(.segmented)
@@ -40,13 +61,30 @@ struct PaperImportView: View {
             .padding(.vertical, 12)
             Divider()
 
-            if mode == .search {
+            switch mode {
+            case .search:
                 searchPanel
-            } else {
+            case .pdf:
+                pdfPanel
+            case .manual:
                 manualPanel
             }
         }
         .frame(width: 520)
+        .fileImporter(
+            isPresented: $showFilePicker,
+            allowedContentTypes: [.pdf],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                if let url = urls.first {
+                    handlePDFFile(at: url)
+                }
+            case .failure(let error):
+                pdfImportState = .error("Failed to select file: \(error.localizedDescription)")
+            }
+        }
     }
 
     // MARK: - Header
@@ -138,19 +176,270 @@ struct PaperImportView: View {
         }
     }
 
+    // MARK: - PDF Panel
+
+    private var pdfPanel: some View {
+        VStack(spacing: 14) {
+            switch pdfImportState {
+            case .idle:
+                pdfUploadBox
+                    .onDrop(of: [.pdf, .fileURL], isTargeted: $isDragging) { providers in
+                        guard let provider = providers.first else { return false }
+                        _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                            if let url = url {
+                                DispatchQueue.main.async {
+                                    handlePDFFile(at: url)
+                                }
+                            }
+                        }
+                        return true
+                    }
+                Spacer()
+                
+            case .extracting:
+                loadingStateView(title: "Extracting text from PDF...")
+                
+            case .queryingOpenAlex(let doi):
+                loadingStateView(title: "Resolving metadata online...", subtitle: "DOI found: \(doi)")
+                
+            case .resolvedOpenAlex(let paper):
+                metadataPreviewBox(
+                    title: "Metadata Match Found",
+                    subtitle: "This paper is indexed in OpenAlex. We will save the PDF as an offline attachment.",
+                    infoView: VStack(alignment: .leading, spacing: 8) {
+                        previewField("Title", value: paper.title)
+                        previewField("Authors", value: paper.authors.joined(separator: ", "))
+                        if !paper.venue.isEmpty {
+                            previewField("Venue", value: paper.venue)
+                        }
+                        if let year = paper.publicationYear {
+                            previewField("Year", value: String(year))
+                        }
+                    },
+                    primaryAction: { importResolvedOpenAlex(paper) },
+                    primaryText: "Import & Attach PDF",
+                    secondaryAction: {
+                        // Transfer to manual for customization
+                        transferToManual(
+                            title: paper.title,
+                            authors: paper.authors.joined(separator: ", "),
+                            year: paper.publicationYear.map { String($0) } ?? "",
+                            venue: paper.venue,
+                            doi: paper.doi ?? "",
+                            url: paper.landingPageUrl,
+                            abstract: paper.abstract
+                        )
+                    },
+                    secondaryText: "Customize Manually"
+                )
+                
+            case .resolvedLocal(let title, let authors, let abstract, let year):
+                metadataPreviewBox(
+                    title: "No Online Match Found",
+                    subtitle: "Metadata extracted locally from PDF contents. Review or customize before saving.",
+                    infoView: VStack(alignment: .leading, spacing: 8) {
+                        previewField("Title", value: title)
+                        previewField("Authors", value: authors.isEmpty ? "Unknown" : authors.joined(separator: ", "))
+                        if let y = year {
+                            previewField("Year", value: String(y))
+                        }
+                        if !abstract.isEmpty {
+                            previewField("Abstract", value: abstract)
+                        }
+                    },
+                    primaryAction: { importResolvedLocal(title: title, authors: authors, abstract: abstract, year: year) },
+                    primaryText: "Import Local Paper",
+                    secondaryAction: {
+                        transferToManual(
+                            title: title,
+                            authors: authors.joined(separator: ", "),
+                            year: year.map { String($0) } ?? "",
+                            venue: "",
+                            doi: "",
+                            url: "",
+                            abstract: abstract
+                        )
+                    },
+                    secondaryText: "Edit Details"
+                )
+                
+            case .error(let msg):
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.red.opacity(0.8))
+                    Text(msg)
+                        .font(.system(size: 13, weight: .medium))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Button("Try Another PDF") {
+                        pdfImportState = .idle
+                        pendingPdfData = nil
+                        pdfFileUrl = nil
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .frame(height: 220)
+                Spacer()
+            }
+        }
+        .padding(20)
+    }
+
+    private var pdfUploadBox: some View {
+        VStack(spacing: 14) {
+            Image(systemName: isDragging ? "arrow.down.doc.fill" : "doc.badge.plus")
+                .font(.system(size: 38))
+                .foregroundStyle(isDragging ? Color.accentColor : Color.secondary.opacity(0.8))
+                .scaleEffect(isDragging ? 1.15 : 1.0)
+                .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isDragging)
+            
+            Text("Drag & Drop Paper PDF here")
+                .font(.system(size: 14, weight: .medium))
+            
+            Text("or click to select from Finder")
+                .font(.system(size: 11))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 180)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(
+                    isDragging ? Color.accentColor : Color.secondary.opacity(0.3),
+                    style: StrokeStyle(lineWidth: 2, dash: isDragging ? [] : [6, 4])
+                )
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isDragging ? Color.accentColor.opacity(0.05) : Color.black.opacity(0.02))
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            showFilePicker = true
+        }
+    }
+
+    private func loadingStateView(title: String, subtitle: String? = nil) -> some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .controlSize(.regular)
+            VStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                if let sub = subtitle {
+                    Text(sub)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 220)
+    }
+
+    private func metadataPreviewBox<V: View>(
+        title: String,
+        subtitle: String,
+        infoView: V,
+        primaryAction: @escaping () -> Void,
+        primaryText: String,
+        secondaryAction: @escaping () -> Void,
+        secondaryText: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+
+            ScrollView {
+                infoView
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                    .background(Color.secondary.opacity(0.05))
+                    .cornerRadius(8)
+            }
+            .frame(maxHeight: 260)
+
+            HStack {
+                Button("Reset / Upload Another") {
+                    pdfImportState = .idle
+                    pendingPdfData = nil
+                    pdfFileUrl = nil
+                }
+                Spacer()
+                Button(secondaryText) { secondaryAction() }
+                Button(primaryText) { primaryAction() }
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
+    private func previewField(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased())
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.secondary.opacity(0.75))
+            Text(value)
+                .font(.system(size: 12))
+                .lineLimit(label == "Abstract" ? 5 : 2)
+                .foregroundStyle(.primary)
+        }
+        .padding(.vertical, 2)
+    }
+
     // MARK: - Manual panel
 
     private var manualPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if pendingPdfData != nil {
+                HStack(spacing: 6) {
+                    Image(systemName: "paperclip")
+                    Text("Linked PDF: \(pendingPdfFilename ?? "Selected document.pdf")")
+                        .lineLimit(1)
+                    Spacer()
+                    Button("Remove File") {
+                        pendingPdfData = nil
+                        pendingPdfFilename = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                }
+                .font(.system(size: 11, weight: .semibold))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Color.accentColor.opacity(0.1))
+                .cornerRadius(6)
+            }
+
             manualField("Title *", placeholder: "Paper title", text: $manualTitle)
             manualField("Authors", placeholder: "Author A, Author B, …", text: $manualAuthors)
+            
             HStack(spacing: 12) {
                 manualField("Year", placeholder: "2024", text: $manualYear)
                     .frame(maxWidth: 90)
                 manualField("Venue", placeholder: "Conference or journal", text: $manualVenue)
             }
-            manualField("DOI", placeholder: "10.xxxx/…", text: $manualDOI)
-            manualField("URL", placeholder: "https://…", text: $manualURL)
+            
+            HStack(spacing: 12) {
+                manualField("DOI", placeholder: "10.xxxx/…", text: $manualDOI)
+                manualField("URL", placeholder: "https://…", text: $manualURL)
+            }
+            
+            VStack(alignment: .leading, spacing: 3) {
+                Text("ABSTRACT")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(.secondary.opacity(0.75))
+                TextEditor(text: $manualAbstract)
+                    .frame(height: 80)
+                    .border(Color.secondary.opacity(0.2), width: 1)
+                    .cornerRadius(4)
+            }
 
             Spacer()
 
@@ -177,6 +466,74 @@ struct PaperImportView: View {
     }
 
     // MARK: - Actions
+
+    private func handlePDFFile(at url: URL) {
+        let access = url.startAccessingSecurityScopedResource()
+        pdfFileUrl = url
+        pdfImportState = .extracting
+        pendingPdfFilename = url.lastPathComponent
+
+        Task {
+            defer {
+                if access { url.stopAccessingSecurityScopedResource() }
+            }
+
+            guard let data = try? Data(contentsOf: url) else {
+                await MainActor.run {
+                    self.pdfImportState = .error("Failed to read PDF file data.")
+                }
+                return
+            }
+
+            guard PdfStorage.looksLikePdf(data) else {
+                await MainActor.run {
+                    self.pdfImportState = .error("The selected file does not appear to be a valid PDF document.")
+                }
+                return
+            }
+
+            await MainActor.run {
+                self.pendingPdfData = data
+            }
+
+            let extracted = PdfMetadataExtractor.extract(from: url)
+
+            if let doi = extracted.doi {
+                await MainActor.run {
+                    self.pdfImportState = .queryingOpenAlex(doi: doi)
+                }
+
+                let fetcher = OpenAlexFetcher(
+                    config: ConfigManager.shared.effectiveConfig,
+                    venues: MetadataStore.shared.venues
+                )
+
+                if let paper = await fetcher.fetchByDOI(doi) {
+                    await MainActor.run {
+                        self.pdfImportState = .resolvedOpenAlex(paper)
+                    }
+                } else {
+                    await MainActor.run {
+                        self.pdfImportState = .resolvedLocal(
+                            title: extracted.title ?? url.deletingPathExtension().lastPathComponent,
+                            authors: extracted.authors,
+                            abstract: extracted.abstract ?? "",
+                            year: extracted.year
+                        )
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    self.pdfImportState = .resolvedLocal(
+                        title: extracted.title ?? url.deletingPathExtension().lastPathComponent,
+                        authors: extracted.authors,
+                        abstract: extracted.abstract ?? "",
+                        year: extracted.year
+                    )
+                }
+            }
+        }
+    }
 
     private func performSearch() {
         let query = searchInput.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -225,6 +582,72 @@ struct PaperImportView: View {
         dismiss()
     }
 
+    private func savePDFAndGetRelativePath(id: String) -> String? {
+        guard let data = pendingPdfData else { return nil }
+        do {
+            let relativePath = try PdfStorage.current().write(data, forPaperId: id)
+            return relativePath
+        } catch {
+            print("Failed to save PDF locally: \(error)")
+            return nil
+        }
+    }
+
+    private func importResolvedOpenAlex(_ paper: Paper) {
+        if let relativePath = savePDFAndGetRelativePath(id: paper.id) {
+            paper.pdfLocalPath = relativePath
+            paper.pdfStatus = PdfStatus.downloaded.rawValue
+        }
+        onAdd(paper)
+        dismiss()
+    }
+
+    private func importResolvedLocal(title: String, authors: [String], abstract: String, year: Int?) {
+        let paperId = UUID().uuidString
+        var pdfPath: String?
+        var pdfStatus: String?
+
+        if let relativePath = savePDFAndGetRelativePath(id: paperId) {
+            pdfPath = relativePath
+            pdfStatus = PdfStatus.downloaded.rawValue
+        }
+
+        let paper = Paper(
+            id: paperId,
+            doi: nil,
+            title: title,
+            authors: authors,
+            publicationDate: year.map { String($0) } ?? "",
+            publicationYear: year,
+            venue: "",
+            abstract: abstract,
+            pdfLocalPath: pdfPath,
+            pdfStatus: pdfStatus,
+            addedAt: Date()
+        )
+        onAdd(paper)
+        dismiss()
+    }
+
+    private func transferToManual(
+        title: String,
+        authors: String,
+        year: String,
+        venue: String,
+        doi: String,
+        url: String,
+        abstract: String
+    ) {
+        manualTitle = title
+        manualAuthors = authors
+        manualYear = year
+        manualVenue = venue
+        manualDOI = doi
+        manualURL = url
+        manualAbstract = abstract
+        mode = .manual
+    }
+
     private func addManual() {
         let title = manualTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
@@ -238,16 +661,29 @@ struct PaperImportView: View {
         let url = manualURL.trimmingCharacters(in: .whitespacesAndNewlines)
         let year = Int(manualYear.trimmingCharacters(in: .whitespacesAndNewlines))
         let venue = manualVenue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let abstract = manualAbstract.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let paperId = UUID().uuidString
+        var pdfPath: String?
+        var pdfStatus: String?
+
+        if let relativePath = savePDFAndGetRelativePath(id: paperId) {
+            pdfPath = relativePath
+            pdfStatus = PdfStatus.downloaded.rawValue
+        }
 
         let paper = Paper(
-            id: UUID().uuidString,
+            id: paperId,
             doi: doi.isEmpty ? nil : doi,
             title: title,
             authors: authors,
             publicationDate: year.map { "\($0)" } ?? "",
             publicationYear: year,
             venue: venue,
+            abstract: abstract,
             landingPageUrl: url.isEmpty ? "" : url,
+            pdfLocalPath: pdfPath,
+            pdfStatus: pdfStatus,
             addedAt: Date()
         )
         onAdd(paper)
