@@ -124,8 +124,22 @@ final class PdfMetadataExtractorTests: XCTestCase {
     
     private func createMockPDFData() -> Data {
         let pdfData = NSMutableData()
+        let calendar = Calendar(identifier: .gregorian)
+        let components = DateComponents(year: 2017, month: 6, day: 12)
+        let mockDate = calendar.date(from: components) ?? Date()
+        
+        let titleKey = "Title" as CFString
+        let authorKey = "Author" as CFString
+        let dateKey = "CreationDate" as CFString
+        
+        let info: [CFString: Any] = [
+            titleKey: "Attention Is All You Need" as CFString,
+            authorKey: "Ashish Vaswani, Noam Shazeer" as CFString,
+            dateKey: mockDate as CFDate
+        ]
+        
         guard let consumer = CGDataConsumer(data: pdfData as CFMutableData),
-              let context = CGContext(consumer: consumer, mediaBox: nil, nil) else {
+              let context = CGContext(consumer: consumer, mediaBox: nil, info as CFDictionary) else {
             return Data()
         }
         

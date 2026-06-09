@@ -34,21 +34,40 @@ struct PdfMetadataExtractor {
             data.doi = "10.48550/arXiv.\(arxivId)"
         }
         
-        // 3. Extract Title using typography size heuristics from page 0
-        if let firstPage = document.page(at: 0) {
+        // 3. Extract Title (Check attributes first, fallback to heuristics)
+        if let attrTitle = document.documentAttributes?[PDFDocumentAttribute.titleAttribute] as? String {
+            let cleaned = cleanString(attrTitle)
+            if isValidTitle(cleaned) {
+                data.title = cleaned
+            }
+        }
+        if data.title == nil, let firstPage = document.page(at: 0) {
             data.title = extractTitle(from: firstPage)
         }
         
         // 4. Extract Abstract
         data.abstract = extractAbstract(from: fullText)
         
-        // 5. Extract Authors using text between Title and Abstract
-        if let title = data.title, let firstPage = document.page(at: 0), let pageText = firstPage.string {
+        // 5. Extract Authors (Check attributes first, fallback to text heuristics)
+        if let attrAuthors = document.documentAttributes?[PDFDocumentAttribute.authorAttribute] as? String {
+            let cleaned = cleanString(attrAuthors)
+            if isValidAuthorString(cleaned) {
+                let parsed = parseAuthorList(cleaned)
+                if !parsed.isEmpty {
+                    data.authors = parsed
+                }
+            }
+        }
+        if data.authors.isEmpty, let title = data.title, let firstPage = document.page(at: 0), let pageText = firstPage.string {
             data.authors = extractAuthors(pageText: pageText, title: title, abstractText: fullText)
         }
         
-        // 6. Extract Year
-        data.year = extractYear(from: fullText)
+        // 6. Extract Year (Check text heuristics first, fallback to attributes)
+        if let textYear = extractYear(from: fullText) {
+            data.year = textYear
+        } else if let attrYear = extractYearFromAttributes(in: document) {
+            data.year = attrYear
+        }
         
         return data
     }
@@ -261,50 +280,84 @@ struct PdfMetadataExtractor {
     static func extractAuthors(pageText: String, title: String, abstractText: String) -> [String] {
         let normalizedPage = pageText.replacingOccurrences(of: "\r", with: "\n")
         
-        // Find Abstract boundary
-        let abstractKeywords = ["abstract", "摘要"]
+        var textAfterTitle = normalizedPage
+        
+        // Try to locate the title in the page text and slice after it
+        let titleCleaned = title.lowercased().replacingOccurrences(of: #"\s+"#, with: "", options: .regularExpression)
+        if !titleCleaned.isEmpty {
+            let titleWords = title.components(separatedBy: .whitespacesAndNewlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .filter { !$0.isEmpty }
+            
+            if titleWords.count >= 2 {
+                if let firstWord = titleWords.first,
+                   let firstWordRange = normalizedPage.range(of: firstWord, options: [.caseInsensitive]) {
+                    let searchRange = firstWordRange.upperBound..<normalizedPage.endIndex
+                    let maxSearchEnd = normalizedPage.index(searchRange.lowerBound, offsetBy: min(1000, normalizedPage.distance(from: searchRange.lowerBound, to: searchRange.upperBound)), limitedBy: normalizedPage.endIndex) ?? searchRange.upperBound
+                    
+                    if let lastWord = titleWords.last,
+                       let lastWordRange = normalizedPage.range(of: lastWord, options: [.backwards, .caseInsensitive], range: firstWordRange.upperBound..<maxSearchEnd) {
+                        textAfterTitle = String(normalizedPage[lastWordRange.upperBound...])
+                    }
+                }
+            }
+        }
+        
+        // Find Abstract boundary in the sliced text
+        let abstractKeywords = ["abstract", "摘要", "a b s t r a c t"]
         var abstractIndex: String.Index?
         for kw in abstractKeywords {
-            if let range = normalizedPage.range(of: kw, options: [.caseInsensitive]) {
+            if let range = textAfterTitle.range(of: kw, options: [.caseInsensitive]) {
                 abstractIndex = range.lowerBound
                 break
             }
         }
         
-        // Take everything before abstract, or fallback to first 12 lines
         let candidateText: String
         if let idx = abstractIndex {
-            candidateText = String(normalizedPage[..<idx])
+            candidateText = String(textAfterTitle[..<idx])
         } else {
-            let lines = normalizedPage.components(separatedBy: .newlines)
-            candidateText = lines.prefix(12).joined(separator: "\n")
+            let lines = textAfterTitle.components(separatedBy: .newlines)
+            candidateText = lines.prefix(8).joined(separator: "\n")
         }
         
         let lines = candidateText.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             
-        // Filter lines
-        var filteredLines: [String] = []
-        let titleLower = title.lowercased().replacingOccurrences(of: " ", with: "")
+        var authorLines: [String] = []
         
         let exclusions = [
             "university", "institute", "dept", "department", "school", "laboratory",
             "lab", "center", "centre", "corporation", "inc.", "co.", "ltd", "email",
             "@", "abstract", "http", "www", "research", "technology", "sciences",
-            "china", "usa", "state", "national", "association", "society"
+            "china", "usa", "state", "national", "association", "society",
+            "college", "academy", "group", "division", "faculty", "google", "microsoft",
+            "meta", "openai", "deepmind", "apple", "ibm", "amazon", "intel", "yahoo",
+            "california", "new york", "massachusetts", "london", "beijing", "toronto",
+            "cambridge", "oxford", "zurich", "tokyo", "paris", "berlin", "munich",
+            "vancouver", "seattle", "boston", "silicon", "zip", "postal", "road",
+            "street", "avenue", "building", "floor", "suite", "plaza", "drive",
+            "germany", "france", "united kingdom", "canada", "australia", "switzerland",
+            "japan", "india", "korea", "singapore", "netherlands", "sweden", "italy",
+            "spain", "brazil", "russia", "belgium", "austria", "denmark", "norway",
+            "january", "february", "march", "april", "may", "june", "july", "august",
+            "september", "october", "november", "december", "preprint", "under review",
+            "corresponding", "contribution", "contributed", "equal"
         ]
+        
+        let titleLower = title.lowercased().replacingOccurrences(of: " ", with: "")
         
         for line in lines {
             let lineLower = line.lowercased()
             let lineNoSpace = lineLower.replacingOccurrences(of: " ", with: "")
             
-            // 1. Skip if this line is part of the title
+            // Skip title lines
             if titleLower.contains(lineNoSpace) || lineNoSpace.contains(titleLower) && lineNoSpace.count > 4 {
                 continue
             }
             
-            // 2. Skip if it contains institutional keyword
+            // Skip institutional or other excluded keywords
             var isExcluded = false
             for exclusion in exclusions {
                 if lineLower.contains(exclusion) {
@@ -314,47 +367,36 @@ struct PdfMetadataExtractor {
             }
             if isExcluded { continue }
             
-            // 3. Skip if it looks like a header, page number or preprint tag (e.g. "Preprint", "arXiv:")
-            if lineLower.contains("preprint") || lineLower.contains("arxiv") || line.count < 3 {
-                continue
-            }
-            
-            // 4. Skip if it contains too many numbers (zip codes or phones)
+            // Skip lines with too many digits (e.g. zip codes, years, page numbers)
             let digits = line.filter { $0.isNumber }.count
             if digits > 4 {
                 continue
             }
             
-            filteredLines.append(line)
-        }
-        
-        // The first 1-2 lines remaining in filteredLines are most likely the author line
-        guard !filteredLines.isEmpty else { return [] }
-        
-        var authorLine = filteredLines[0]
-        // If the first line is short and there's a second line without institutional elements, join them
-        if filteredLines.count > 1 && filteredLines[0].count < 20 && !filteredLines[1].contains(",") {
-            authorLine += ", " + filteredLines[1]
-        }
-        
-        // Clean out superscript indicators (*, 1, 2, †, ‡ etc.)
-        let cleanAuthorLine = authorLine.replacingOccurrences(of: "[0-9*†‡§\\\\#]", with: "", options: .regularExpression)
-        
-        // Split by commas, "and", "&", ";"
-        let separators = [" and ", " & ", ",", ";"]
-        var parsedAuthors: [String] = [cleanAuthorLine]
-        
-        for sep in separators {
-            var temp: [String] = []
-            for item in parsedAuthors {
-                let parts = item.components(separatedBy: sep)
-                temp.append(contentsOf: parts)
+            // Ensure the line actually has some alphabetic characters
+            let letters = line.filter { $0.isLetter }.count
+            if letters < 3 {
+                continue
             }
-            parsedAuthors = temp
+            
+            // If letters are less than 40% of the line, it's probably institutional noise or math
+            if Double(letters) / Double(line.count) < 0.4 {
+                continue
+            }
+            
+            authorLines.append(line)
         }
-        return parsedAuthors
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { $0.count >= 3 && !$0.lowercased().contains("and") }
+        
+        // We take the first 1-2 lines as author lines
+        guard !authorLines.isEmpty else { return [] }
+        
+        // Join them and split by separators
+        var combinedAuthorLine = authorLines[0]
+        if authorLines.count > 1 && authorLines[0].count < 30 && !authorLines[1].contains(",") {
+            combinedAuthorLine += ", " + authorLines[1]
+        }
+        
+        return parseAuthorList(combinedAuthorLine)
     }
     
     // MARK: - Year Heuristics
@@ -372,29 +414,29 @@ struct PdfMetadataExtractor {
         }
         
         // 2. Try finding years in parentheses/brackets, e.g. "(2020)" or "[2020]"
-        let parenPattern = #"[\(\[](19\d{2}|20[0-2]\d)[\)\]]"#
+        let parenPattern = #"[\(\[](19\d{2}|20[0-3]\d)[\)\]]"#
         if let parenRegex = try? NSRegularExpression(pattern: parenPattern, options: []) {
             let matches = parenRegex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
             for match in matches {
                 let range = match.range(at: 1)
                 if range.location != NSNotFound {
                     let yearStr = (text as NSString).substring(with: range)
-                    if let val = Int(yearStr), val >= 1980 && val <= 2026 {
+                    if let val = Int(yearStr), val >= 1980 && val <= 2030 {
                         return val
                     }
                 }
             }
         }
         
-        // 3. Fallback to any 4-digit number between 1980 and 2026
-        let pattern = #"\b(19\d{2}|20[0-2]\d)\b"#
+        // 3. Fallback to any 4-digit number between 1980 and 2030
+        let pattern = #"\b(19\d{2}|20[0-3]\d)\b"#
         if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
             let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
             for match in matches {
                 let range = match.range(at: 0)
                 if range.location != NSNotFound {
                     let candidateStr = (text as NSString).substring(with: range)
-                    if let val = Int(candidateStr), val >= 1980 && val <= 2026 {
+                    if let val = Int(candidateStr), val >= 1980 && val <= 2030 {
                         return val
                     }
                 }
@@ -404,10 +446,129 @@ struct PdfMetadataExtractor {
         return nil
     }
     
+    // MARK: - Document Attribute Extractions & Validations
+    
+    static func extractYearFromAttributes(in document: PDFDocument) -> Int? {
+        if let creationDate = document.documentAttributes?[PDFDocumentAttribute.creationDateAttribute] as? Date {
+            let year = Calendar.current.component(.year, from: creationDate)
+            if year >= 1980 && year <= 2030 {
+                return year
+            }
+        }
+        if let modDate = document.documentAttributes?[PDFDocumentAttribute.modificationDateAttribute] as? Date {
+            let year = Calendar.current.component(.year, from: modDate)
+            if year >= 1980 && year <= 2030 {
+                return year
+            }
+        }
+        for key in [PDFDocumentAttribute.creationDateAttribute, PDFDocumentAttribute.modificationDateAttribute] {
+            if let dateStr = document.documentAttributes?[key] as? String {
+                let pattern = #"\b(19\d{2}|20[0-3]\d)\b"#
+                if let regex = try? NSRegularExpression(pattern: pattern, options: []),
+                   let match = regex.firstMatch(in: dateStr, options: [], range: NSRange(dateStr.startIndex..., in: dateStr)) {
+                    let nsStr = dateStr as NSString
+                    if let val = Int(nsStr.substring(with: match.range)) {
+                        return val
+                    }
+                }
+            }
+        }
+        return nil
+    }
+    
+    static func isValidTitle(_ title: String) -> Bool {
+        let t = title.lowercased()
+        guard t.count >= 8 else { return false }
+        guard t.contains(" ") else { return false }
+        
+        let invalidKeywords = [
+            ".pdf", ".docx", ".doc", "untitled", "template", "microsoft word",
+            "latex", "layout", "class file", "instructions for", "manuscript",
+            "author guidelines", "proceeding", "journal article", "formatting",
+            "paper format", "acm format", "ieee format", "springer format"
+        ]
+        for keyword in invalidKeywords {
+            if t.contains(keyword) {
+                return false
+            }
+        }
+        return true
+    }
+    
+    static func isValidAuthorString(_ author: String) -> Bool {
+        let a = author.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard a.count >= 3 else { return false }
+        
+        let invalidKeywords = [
+            "adobe", "distiller", "latex", "dvips", "author", "user", "admin",
+            "administrator", "desktop", "unknown", "publisher", "microsoft",
+            "word", "writer", "creator", "page", "frame", "canvas", "staff",
+            "placeholder", "none", "n/a", "no author", "created by", "modified by"
+        ]
+        for keyword in invalidKeywords {
+            if a.contains(keyword) {
+                return false
+            }
+        }
+        if a.contains("@") || a.contains("http") || a.contains("www") { return false }
+        
+        let letters = a.filter { $0.isLetter }.count
+        guard letters >= 3 else { return false }
+        
+        return true
+    }
+    
+    static func parseAuthorList(_ authorStr: String) -> [String] {
+        let separators = [" and ", " & ", ",", ";", "\n", "\r"]
+        var parsed: [String] = [authorStr]
+        for sep in separators {
+            var temp: [String] = []
+            for item in parsed {
+                let parts = item.components(separatedBy: sep)
+                temp.append(contentsOf: parts)
+            }
+            parsed = temp
+        }
+        return parsed
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { $0.count >= 2 && !isGenericName($0) }
+            .map { cleanAuthorName($0) }
+    }
+    
+    static func isGenericName(_ name: String) -> Bool {
+        let n = name.lowercased()
+        let generics = ["and", "or", "author", "unknown", "et al", "et al.", "others"]
+        return generics.contains(n)
+    }
+    
+    static func cleanAuthorName(_ name: String) -> String {
+        var cleaned = name
+        let parenPattern = #"\s*[\[(][0-9a-zA-Z,*†‡§#\s-]+[\])]"#
+        cleaned = cleaned.replacingOccurrences(of: parenPattern, with: "", options: .regularExpression)
+        
+        let charPattern = #"[0-9*†‡§#]"#
+        cleaned = cleaned.replacingOccurrences(of: charPattern, with: "", options: .regularExpression)
+        
+        cleaned = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        let words = cleaned.components(separatedBy: .whitespacesAndNewlines)
+            .filter { !$0.isEmpty }
+        
+        let formattedWords = words.map { word -> String in
+            let isAllLower = word == word.lowercased()
+            let isAllUpper = word == word.uppercased()
+            if isAllLower || isAllUpper {
+                return word.capitalized
+            }
+            return word
+        }
+        
+        return formattedWords.joined(separator: " ")
+    }
+    
     // MARK: - Helper Cleaners
     
     private static func cleanString(_ input: String) -> String {
-        // Replace multiple whitespace/linebreaks with a single space
         let spaced = input.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
         return spaced.trimmingCharacters(in: .whitespacesAndNewlines)
     }
