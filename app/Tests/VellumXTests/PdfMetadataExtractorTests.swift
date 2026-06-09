@@ -111,6 +111,24 @@ final class PdfMetadataExtractorTests: XCTestCase {
         XCTAssertTrue(extracted.authors.contains("Noam Shazeer"))
     }
     
+    // MARK: - OpenAlex Live Fetcher Test
+    
+    @MainActor
+    func testOpenAlexFetcherWithRealDOI() async {
+        let fetcher = OpenAlexFetcher(
+            config: ConfigManager.shared.effectiveConfig,
+            venues: []
+        )
+        let paper = await fetcher.fetchByDOI("10.1038/nature12373")
+        XCTAssertNotNil(paper)
+        if let paper = paper {
+            XCTAssertFalse(paper.title.isEmpty)
+            XCTAssertTrue(paper.title.lowercased().contains("thermometry") || paper.title.lowercased().contains("living"))
+            XCTAssertFalse(paper.authors.isEmpty)
+            XCTAssertEqual(paper.publicationYear, 2013)
+        }
+    }
+    
     // MARK: - Helper to Generate PDF
     
     private func createMockPDFData() -> Data {
