@@ -185,14 +185,27 @@ struct PaperImportView: View {
                 pdfUploadBox
                     .onDrop(of: [.pdf, .fileURL], isTargeted: $isDragging) { providers in
                         guard let provider = providers.first else { return false }
-                        _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                            if let url = url {
-                                DispatchQueue.main.async {
-                                    handlePDFFile(at: url)
+                        
+                        if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                                var targetURL: URL? = nil
+                                if let url = item as? URL {
+                                    targetURL = url
+                                } else if let data = item as? Data {
+                                    targetURL = URL(dataRepresentation: data, relativeTo: nil)
+                                } else if let string = item as? String {
+                                    targetURL = URL(string: string)
+                                }
+                                
+                                if let url = targetURL {
+                                    DispatchQueue.main.async {
+                                        self.handlePDFFile(at: url)
+                                    }
                                 }
                             }
+                            return true
                         }
-                        return true
+                        return false
                     }
                 Spacer()
                 
