@@ -480,6 +480,13 @@ struct PaperImportView: View {
         handlePDFData(data, filename: url.lastPathComponent)
     }
 
+    private func isSimilarTitle(_ a: String, _ b: String) -> Bool {
+        let cleanA = a.lowercased().replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+        let cleanB = b.lowercased().replacingOccurrences(of: "[^a-z0-9]", with: "", options: .regularExpression)
+        if cleanA.isEmpty || cleanB.isEmpty { return false }
+        return cleanA == cleanB || cleanA.contains(cleanB) || cleanB.contains(cleanA)
+    }
+
     private func handlePDFData(_ data: Data, filename: String) {
         pdfImportState = .extracting
         pendingPdfFilename = filename
@@ -492,40 +499,47 @@ struct PaperImportView: View {
 
         Task {
             let extracted = PdfMetadataExtractor.extract(from: data)
+            let fetcher = OpenAlexFetcher(
+                config: ConfigManager.shared.effectiveConfig,
+                venues: MetadataStore.shared.venues
+            )
 
+            // Step 1: Try by DOI if available
             if let doi = extracted.doi {
                 await MainActor.run {
                     self.pdfImportState = .queryingOpenAlex(doi: doi)
                 }
-
-                let fetcher = OpenAlexFetcher(
-                    config: ConfigManager.shared.effectiveConfig,
-                    venues: MetadataStore.shared.venues
-                )
-
                 if let paper = await fetcher.fetchByDOI(doi) {
                     await MainActor.run {
                         self.pdfImportState = .resolvedOpenAlex(paper)
                     }
-                } else {
-                    await MainActor.run {
-                        self.pdfImportState = .resolvedLocal(
-                            title: extracted.title ?? filename.replacingOccurrences(of: ".pdf", with: "", options: .caseInsensitive),
-                            authors: extracted.authors,
-                            abstract: extracted.abstract ?? "",
-                            year: extracted.year
-                        )
-                    }
+                    return
                 }
-            } else {
+            }
+
+            // Step 2: Try by Title search as a fallback if title is resolved
+            if let title = extracted.title, !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 await MainActor.run {
-                    self.pdfImportState = .resolvedLocal(
-                        title: extracted.title ?? filename.replacingOccurrences(of: ".pdf", with: "", options: .caseInsensitive),
-                        authors: extracted.authors,
-                        abstract: extracted.abstract ?? "",
-                        year: extracted.year
-                    )
+                    self.pdfImportState = .queryingOpenAlex(doi: "Title Search: \(title)")
                 }
+                let results = await fetcher.fetchByTitle(title, limit: 3)
+                // Look for a close match in title similarity
+                if let matchedPaper = results.first(where: { isSimilarTitle($0.title, title) }) {
+                    await MainActor.run {
+                        self.pdfImportState = .resolvedOpenAlex(matchedPaper)
+                    }
+                    return
+                }
+            }
+
+            // Step 3: Local heuristics fallback
+            await MainActor.run {
+                self.pdfImportState = .resolvedLocal(
+                    title: extracted.title ?? filename.replacingOccurrences(of: ".pdf", with: "", options: .caseInsensitive),
+                    authors: extracted.authors,
+                    abstract: extracted.abstract ?? "",
+                    year: extracted.year
+                )
             }
         }
     }

@@ -360,40 +360,48 @@ struct PdfMetadataExtractor {
     // MARK: - Year Heuristics
     
     static func extractYear(from text: String) -> Int? {
-        // Find 4 digit numbers representing years between 1990 and 2029
-        let pattern = #"\b(19\d{2}|20[0-2]\d)\b"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else { return nil }
-        
-        let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
-        
-        // Often the first matching year in header/footer represents the publication year.
-        // We evaluate candidates and prefer ones that appear early or are surrounded by parentheses (2021) or next to "received" / "published"
-        var candidates: [Int] = []
-        for match in matches {
-            let range = match.range
-            if range.location != NSNotFound {
-                let candidateStr = (text as NSString).substring(with: range)
-                if let val = Int(candidateStr) {
-                    candidates.append(val)
-                }
-            }
-        }
-        
-        // First, check if there's any year next to "journal" or inside parentheses (e.g. "(2020)")
-        let parenPattern = #"\((19\d{2}|20[0-2]\d)\)"#
-        if let parenRegex = try? NSRegularExpression(pattern: parenPattern, options: []),
-           let firstMatch = parenRegex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
+        // 1. Try finding context-rich years (e.g., Copyright 2020, Published 2021, Accepted 2019, © 2018)
+        let contextPattern = #"(?i)(?:copyright|published|accepted|received|proceedings|©)\s*(?:in|on|at)?\s*\b(19\d{2}|20[0-2]\d)\b"#
+        if let regex = try? NSRegularExpression(pattern: contextPattern, options: []),
+           let match = regex.firstMatch(in: text, options: [], range: NSRange(text.startIndex..., in: text)) {
             let nsMatched = text as NSString
-            let range = firstMatch.range(at: 1)
-            if range.location != NSNotFound {
-                if let val = Int(nsMatched.substring(with: range)) {
-                    return val
+            let range = match.range(at: 1)
+            if range.location != NSNotFound, let val = Int(nsMatched.substring(with: range)) {
+                return val
+            }
+        }
+        
+        // 2. Try finding years in parentheses/brackets, e.g. "(2020)" or "[2020]"
+        let parenPattern = #"[\(\[](19\d{2}|20[0-2]\d)[\)\]]"#
+        if let parenRegex = try? NSRegularExpression(pattern: parenPattern, options: []) {
+            let matches = parenRegex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
+            for match in matches {
+                let range = match.range(at: 1)
+                if range.location != NSNotFound {
+                    let yearStr = (text as NSString).substring(with: range)
+                    if let val = Int(yearStr), val >= 1980 && val <= 2026 {
+                        return val
+                    }
                 }
             }
         }
         
-        // Fallback to the first found candidate year
-        return candidates.first
+        // 3. Fallback to any 4-digit number between 1980 and 2026
+        let pattern = #"\b(19\d{2}|20[0-2]\d)\b"#
+        if let regex = try? NSRegularExpression(pattern: pattern, options: []) {
+            let matches = regex.matches(in: text, options: [], range: NSRange(text.startIndex..., in: text))
+            for match in matches {
+                let range = match.range(at: 0)
+                if range.location != NSNotFound {
+                    let candidateStr = (text as NSString).substring(with: range)
+                    if let val = Int(candidateStr), val >= 1980 && val <= 2026 {
+                        return val
+                    }
+                }
+            }
+        }
+        
+        return nil
     }
     
     // MARK: - Helper Cleaners
